@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
-import '../player/video_detail_screen.dart';
+import '../player/mini_player.dart';
+import '../player/player_screen.dart';
 
 /// Faz 1 kanıt ekranı: trend videoları listeler ve arama yapılmasına izin
 /// verir. Gerçek "TV/telefon adaptive" tasarım Faz 4'te gelecek — burada amaç
@@ -100,6 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          const MiniPlayer(),
         ],
       ),
     );
@@ -145,7 +147,7 @@ class _VideoTile extends StatelessWidget {
           ? null
           : () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => VideoDetailScreen(videoId: video.videoId!),
+                  builder: (_) => PlayerScreen(videoId: video.videoId!),
                 ),
               ),
     );

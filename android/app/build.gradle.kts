@@ -48,4 +48,12 @@ dependencies {
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // Oynatma: arka planda müzik/medya oturumu + video render (Faz 2)
+    implementation("androidx.media3:media3-exoplayer:1.11.0")
+    // Canlı yayınlar (7/24 radyo vb.) yalnızca HLS manifesti üzerinden gelir.
+    implementation("androidx.media3:media3-exoplayer-hls:1.11.0")
+    implementation("androidx.media3:media3-session:1.11.0")
+    implementation("androidx.media3:media3-ui:1.11.0")
+    implementation("androidx.media3:media3-datasource-okhttp:1.11.0")
 }

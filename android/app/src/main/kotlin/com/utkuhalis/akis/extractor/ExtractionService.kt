@@ -8,6 +8,7 @@ import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.StreamType
 import org.schabi.newpipe.extractor.stream.VideoStream
 
 /**
@@ -61,6 +62,14 @@ object ExtractionService {
             "durationSeconds" to info.duration,
             "viewCount" to info.viewCount,
             "description" to (info.description?.content ?: ""),
+            // Kategori, içeriğin müzik mi yoksa izlenecek bir video mu olduğunu
+            // ayırt etmek için kullanılıyor (bkz. Dart tarafındaki içerik türü tespiti).
+            "category" to info.category,
+            "tags" to info.tags,
+            // Canlı yayınlarda ayrık progressive stream bulunmaz; oynatma
+            // HLS manifesti üzerinden yapılmalıdır.
+            "isLive" to (info.streamType == StreamType.LIVE_STREAM ||
+                info.streamType == StreamType.AUDIO_LIVE_STREAM),
             "thumbnailUrl" to info.thumbnails.bestThumbnailUrl(),
             "hlsUrl" to info.hlsUrl,
             "dashMpdUrl" to info.dashMpdUrl,

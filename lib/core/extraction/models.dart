@@ -103,6 +103,12 @@ class VideoDetails {
   final int durationSeconds;
   final int viewCount;
   final String description;
+  final String? category;
+  final List<String> tags;
+
+  /// Canlı yayınlarda ayrık progressive akış yoktur; oynatma [hlsUrl]
+  /// üzerinden yapılmalıdır.
+  final bool isLive;
   final String? thumbnailUrl;
   final String? hlsUrl;
   final String? dashMpdUrl;
@@ -119,6 +125,9 @@ class VideoDetails {
     required this.durationSeconds,
     required this.viewCount,
     required this.description,
+    required this.category,
+    required this.tags,
+    required this.isLive,
     required this.thumbnailUrl,
     required this.hlsUrl,
     required this.dashMpdUrl,
@@ -144,6 +153,11 @@ class VideoDetails {
       durationSeconds: _asInt(map['durationSeconds']),
       viewCount: _asInt(map['viewCount']),
       description: _asString(map['description']) ?? '',
+      category: _asString(map['category']),
+      tags: (map['tags'] as List<Object?>? ?? const [])
+          .map((e) => e.toString())
+          .toList(growable: false),
+      isLive: map['isLive'] as bool? ?? false,
       thumbnailUrl: _asString(map['thumbnailUrl']),
       hlsUrl: _asString(map['hlsUrl']),
       dashMpdUrl: _asString(map['dashMpdUrl']),
