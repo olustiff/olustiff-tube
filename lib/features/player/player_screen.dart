@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
+import '../../core/playback/sleep_timer.dart';
+import '../../core/playback/ui_channel.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
-import 'video_surface.dart';
+import 'video_player_view.dart';
 
 /// Oynatma ekranı.
 ///
 /// Davranış sözleşmesi:
 /// - Müzik içeriği varsayılan olarak SESLİ modda açılır, video içeriği video
 ///   modunda. Bu tespit yalnızca açılışta yapılır.
-/// - Kullanıcı modu elle değiştirebilir; seçtiği mod kendiliğinden geri
-///   dönmez.
+/// - Kullanıcı modu elle değiştirebilir; seçtiği mod kendiliğinden geri dönmez.
 /// - Sesli moddayken video yüzeyi hiç oluşturulmaz ve video parçası hiç
 ///   indirilmez.
 ///
@@ -41,6 +44,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     if (!_coordinator.isCurrent(widget.videoId)) _start();
+    _applyKeepScreenOn();
+    _coordinator.addListener(_applyKeepScreenOn);
+  }
+
+  @override
+  void dispose() {
+    _coordinator.removeListener(_applyKeepScreenOn);
+    // Ekran kısıtı yalnızca video izlerken geçerli olmalı.
+    UiChannel.instance.setKeepScreenOn(false);
+    super.dispose();
+  }
+
+  /// Video izlenirken ekran kapanmasın; sesli modda telefon normal uyusun.
+  void _applyKeepScreenOn() {
+    UiChannel.instance.setKeepScreenOn(!_coordinator.audioOnly);
   }
 
   Future<void> _start() async {
@@ -52,29 +70,61 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  Future<void> _openFullscreen() async {
+    // Tam ekran = yatay + sistem çubukları gizli.
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FullscreenPlayerPage(playback: _playback),
+      ),
+    );
+
+    // Geri dönüldüğünde dikey düzen ve çubuklar geri gelsin.
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+  }
+
   Future<void> _addToPlaylist() async {
     final details = _coordinator.details;
     if (details == null) return;
     final store = LibraryStore.instance;
 
-    final name = await showModalBottomSheet<String>(
+    final selected = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => AnimatedBuilder(
+      builder: (sheetContext) => AnimatedBuilder(
         animation: store,
         builder: (context, _) => SafeArea(
           child: ListView(
             shrinkWrap: true,
             children: [
               const ListTile(title: Text('Çalma listesine ekle')),
+              // Liste yoksa kullanıcıyı başka ekrana göndermeden buradan
+              // oluşturmasına izin ver.
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('Yeni liste oluştur'),
+                onTap: () async {
+                  final name = await _promptPlaylistName(sheetContext);
+                  if (name == null) return;
+                  await store.createPlaylist(name);
+                  if (sheetContext.mounted) {
+                    Navigator.of(sheetContext).pop(name);
+                  }
+                },
+              ),
+              if (store.playlists.isNotEmpty) const Divider(height: 1),
               for (final name in store.playlists.keys)
                 ListTile(
                   leading: const Icon(Icons.queue_music),
                   title: Text(name),
-                  onTap: () => Navigator.of(context).pop(name),
-                ),
-              if (store.playlists.isEmpty)
-                const ListTile(
-                  subtitle: Text('Önce Kitaplık\'tan bir liste oluştur.'),
+                  subtitle: Text('${store.playlists[name]!.length} video'),
+                  onTap: () => Navigator.of(sheetContext).pop(name),
                 ),
             ],
           ),
@@ -82,9 +132,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
     );
 
-    if (name == null) return;
+    if (selected == null) return;
     await store.addToPlaylist(
-      name,
+      selected,
       VideoSummary(
         videoId: details.videoId,
         title: details.title,
@@ -97,9 +147,89 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
     );
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('"$name" listesine eklendi')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$selected" listesine eklendi')),
+      );
     }
+  }
+
+  Future<String?> _promptPlaylistName(BuildContext context) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Yeni çalma listesi'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Liste adı'),
+          onSubmitted: (v) =>
+              Navigator.of(context).pop(v.trim().isEmpty ? null : v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              Navigator.of(context).pop(value.isEmpty ? null : value);
+            },
+            child: const Text('Oluştur'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSleepTimer() async {
+    final timer = SleepTimer.instance;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Uyku zamanlayıcısı')),
+            for (final option in SleepTimer.options)
+              ListTile(
+                leading: const Icon(Icons.bedtime_outlined),
+                title: Text(
+                  option.inHours > 0
+                      ? '${option.inHours} saat'
+                      : '${option.inMinutes} dakika',
+                ),
+                onTap: () {
+                  timer.start(option);
+                  Navigator.of(context).pop();
+                },
+              ),
+            if (timer.isActive)
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Zamanlayıcıyı iptal et'),
+                onTap: () {
+                  timer.cancel();
+                  Navigator.of(context).pop();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _share() {
+    final details = _coordinator.details;
+    if (details == null) return;
+    SharePlus.instance.share(
+      ShareParams(
+        text: 'https://www.youtube.com/watch?v=${details.videoId}',
+        subject: details.title,
+      ),
+    );
   }
 
   @override
@@ -123,15 +253,49 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.playlist_add),
-                tooltip: 'Listeye ekle',
-                onPressed: details == null ? null : _addToPlaylist,
-              ),
-              IconButton(
                 tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
                 icon: Icon(
                     audioOnly ? Icons.videocam_outlined : Icons.headphones),
                 onPressed: details == null ? null : _coordinator.toggleMode,
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'playlist':
+                      _addToPlaylist();
+                    case 'sleep':
+                      _openSleepTimer();
+                    case 'share':
+                      _share();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'playlist',
+                    child: ListTile(
+                      leading: Icon(Icons.playlist_add),
+                      title: Text('Çalma listesine ekle'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'sleep',
+                    child: ListTile(
+                      leading: const Icon(Icons.bedtime_outlined),
+                      title: Text(
+                        SleepTimer.instance.isActive
+                            ? 'Uyku zamanlayıcısı (açık)'
+                            : 'Uyku zamanlayıcısı',
+                      ),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'share',
+                    child: ListTile(
+                      leading: Icon(Icons.share_outlined),
+                      title: Text('Paylaş'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -175,12 +339,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
               aspectRatio: audioOnly ? 16 / 9 : state.aspectRatio,
               child: audioOnly
                   ? _AudioModeArtwork(details: details)
-                  : const VideoSurface(),
+                  : VideoPlayerView(
+                      state: state,
+                      playback: _playback,
+                      isFullscreen: false,
+                      onToggleFullscreen: _openFullscreen,
+                      onEnterPip: () =>
+                          UiChannel.instance.enterPictureInPicture(),
+                    ),
             ),
-            _PlaybackControls(
+            _TransportBar(
               state: state,
               playback: _playback,
               coordinator: _coordinator,
+              showSeek: audioOnly,
             ),
             Expanded(
               child: ListView(
@@ -195,7 +367,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 8),
-                  _QuickSettings(state: state),
+                  _QuickSettings(state: state, coordinator: _coordinator),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.playlist_play),
@@ -210,16 +382,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     value: state.autoplay,
                     onChanged: _coordinator.setAutoplay,
                   ),
-                  if (audioOnly)
-                    const Card(
-                      child: ListTile(
-                        leading: Icon(Icons.headphones),
-                        title: Text('Sesli mod'),
-                        subtitle: Text(
-                          'Video indirilmiyor. Ekrandan çıksan bile çalmaya devam eder.',
-                        ),
-                      ),
-                    ),
                   const SizedBox(height: 8),
                   _QueueSection(coordinator: _coordinator),
                   const SizedBox(height: 16),
@@ -233,21 +395,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 }
 
-/// Oynatıcı içinden hız ve kalite değiştirme — ayarlara gitmeye gerek yok.
+/// Hız, kalite, tekrar ve karıştır — oynatıcıdan çıkmadan.
 class _QuickSettings extends StatelessWidget {
-  const _QuickSettings({required this.state});
+  const _QuickSettings({required this.state, required this.coordinator});
 
   final PlaybackState state;
+  final PlaybackCoordinator coordinator;
+
+  IconData get _repeatIcon => switch (state.repeatMode) {
+        'one' => Icons.repeat_one,
+        'all' => Icons.repeat_on_outlined,
+        _ => Icons.repeat,
+      };
+
+  String get _nextRepeatMode => switch (state.repeatMode) {
+        'off' => 'all',
+        'all' => 'one',
+        _ => 'off',
+      };
 
   @override
   Widget build(BuildContext context) {
     final settings = SettingsStore.instance;
     return AnimatedBuilder(
       animation: settings,
-      builder: (context, _) => Row(
+      builder: (context, _) => Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
         children: [
           const Icon(Icons.speed, size: 18),
-          const SizedBox(width: 8),
           DropdownButton<double>(
             value: settings.speed,
             underline: const SizedBox.shrink(),
@@ -261,9 +437,8 @@ class _QuickSettings extends StatelessWidget {
                 DropdownMenuItem(value: option, child: Text('${option}x')),
             ],
           ),
-          const Spacer(),
-          const Icon(Icons.high_quality_outlined, size: 18),
           const SizedBox(width: 8),
+          const Icon(Icons.high_quality_outlined, size: 18),
           DropdownButton<int?>(
             value: settings.maxHeight,
             underline: const SizedBox.shrink(),
@@ -278,14 +453,27 @@ class _QuickSettings extends StatelessWidget {
                 ),
             ],
           ),
+          IconButton(
+            icon: Icon(_repeatIcon),
+            tooltip: switch (state.repeatMode) {
+              'one' => 'Tek parçayı tekrarla',
+              'all' => 'Listeyi tekrarla',
+              _ => 'Tekrar kapalı',
+            },
+            onPressed: () => coordinator.setRepeatMode(_nextRepeatMode),
+          ),
+          IconButton(
+            icon: Icon(state.shuffle ? Icons.shuffle_on_outlined : Icons.shuffle),
+            tooltip: state.shuffle ? 'Karıştırma açık' : 'Karıştır',
+            onPressed: () => coordinator.setShuffle(!state.shuffle),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Sırada çalacaklar. Kuyruk, videoya hangi listeden girildiyse ondan ve
-/// ilgili videolardan karıştırılarak kurulur (bkz. QueueBuilder).
+/// Sırada çalacaklar ve kuyruğun nasıl kurulacağı.
 class _QueueSection extends StatelessWidget {
   const _QueueSection({required this.coordinator});
 
@@ -295,19 +483,48 @@ class _QueueSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final queue = coordinator.queue;
     final start = coordinator.queueIndex + 1;
-    if (start >= queue.length) return const SizedBox.shrink();
-
-    final upcoming = queue.sublist(start);
+    final upcoming = start < queue.length ? queue.sublist(start) : const [];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Sırada', style: Theme.of(context).textTheme.titleSmall),
-        for (var i = 0; i < upcoming.length; i++)
-          VideoTile(
-            video: upcoming[i],
-            onTap: () => coordinator.playQueueIndex(start + i),
+        const SizedBox(height: 8),
+        // Dar ekranlarda tek satıra sığmadığı için başlığın altına alındı;
+        // Row içinde kalsaydı segmentler kırpılıyordu.
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<QueueMode>(
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: const [
+              ButtonSegment(
+                value: QueueMode.listOrder,
+                icon: Icon(Icons.format_list_numbered),
+                label: Text('Aramaya göre'),
+              ),
+              ButtonSegment(
+                value: QueueMode.mixed,
+                icon: Icon(Icons.shuffle),
+                label: Text('Karışık'),
+              ),
+            ],
+            selected: {coordinator.queueMode},
+            onSelectionChanged: (selection) =>
+                coordinator.setQueueMode(selection.first),
           ),
+        ),
+        const SizedBox(height: 8),
+        if (upcoming.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('Sırada başka video yok.'),
+          )
+        else
+          for (var i = 0; i < upcoming.length; i++)
+            VideoTile(
+              video: upcoming[i],
+              onTap: () => coordinator.playQueueIndex(start + i),
+            ),
       ],
     );
   }
@@ -338,16 +555,20 @@ class _AudioModeArtwork extends StatelessWidget {
   }
 }
 
-class _PlaybackControls extends StatelessWidget {
-  const _PlaybackControls({
+/// Önceki/sonraki ve oynat-duraklat. Videoda ilerleme çubuğu görüntünün
+/// üstünde olduğu için burada yalnızca sesli modda gösterilir.
+class _TransportBar extends StatelessWidget {
+  const _TransportBar({
     required this.state,
     required this.playback,
     required this.coordinator,
+    required this.showSeek,
   });
 
   final PlaybackState state;
   final PlaybackClient playback;
   final PlaybackCoordinator coordinator;
+  final bool showSeek;
 
   String _fmt(Duration d) {
     final h = d.inHours;
@@ -358,19 +579,15 @@ class _PlaybackControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final duration = state.duration ?? Duration.zero;
-    final maxMs = duration.inMilliseconds.toDouble();
-    final positionMs =
-        state.position.inMilliseconds.clamp(0, duration.inMilliseconds);
-
-    // Canlı yayının bilinen bir süresi ve sarılabilir bir konumu yoktur.
-    final isLive = state.duration == null;
+    final duration = state.duration;
+    final isLive = duration == null;
+    final maxMs = (duration ?? Duration.zero).inMilliseconds.toDouble();
+    final positionMs = state.position.inMilliseconds
+        .clamp(0, (duration ?? Duration.zero).inMilliseconds);
 
     return Column(
       children: [
-        if (isLive)
-          const SizedBox(height: 16)
-        else
+        if (showSeek && !isLive)
           Slider(
             value: maxMs == 0 ? 0 : positionMs.toDouble(),
             max: maxMs == 0 ? 1 : maxMs,
@@ -391,7 +608,7 @@ class _PlaybackControls extends StatelessWidget {
                     const Text('CANLI'),
                   ],
                 )
-              else
+              else if (showSeek)
                 Text(_fmt(state.position)),
               const Spacer(),
               IconButton(
@@ -399,7 +616,7 @@ class _PlaybackControls extends StatelessWidget {
                 tooltip: 'Önceki',
                 onPressed: state.hasPrevious ? coordinator.playPrevious : null,
               ),
-              if (!isLive)
+              if (showSeek && !isLive)
                 IconButton(
                   icon: const Icon(Icons.replay_10),
                   onPressed: () => playback
@@ -417,7 +634,7 @@ class _PlaybackControls extends StatelessWidget {
                 onPressed: () =>
                     state.playWhenReady ? playback.pause() : playback.resume(),
               ),
-              if (!isLive)
+              if (showSeek && !isLive)
                 IconButton(
                   icon: const Icon(Icons.forward_10),
                   onPressed: () => playback
@@ -429,7 +646,7 @@ class _PlaybackControls extends StatelessWidget {
                 onPressed: state.hasNext ? coordinator.playNext : null,
               ),
               const Spacer(),
-              if (!isLive) Text(_fmt(duration)),
+              if (showSeek && !isLive) Text(_fmt(duration)),
             ],
           ),
         ),

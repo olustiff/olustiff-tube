@@ -2,6 +2,7 @@ package com.utkuhalis.akis.player
 
 import android.content.Context
 import android.net.Uri
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -69,7 +70,25 @@ object PlayerHolder {
     fun getPlayer(context: Context): ExoPlayer {
         exoPlayer?.let { return it }
         val appContext = context.applicationContext
-        return ExoPlayer.Builder(appContext).build().also { player ->
+        return ExoPlayer.Builder(appContext)
+            // Ses odağını Media3 yönetsin: başka bir uygulama (arama, video,
+            // navigasyon sesi) ses çaldığında otomatik duraklat/kıs, bitince
+            // geri dön.
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                /* handleAudioFocus= */ true
+            )
+            // Kulaklık/bluetooth çıkarıldığında duraklat — hoparlörden
+            // aniden çalmaya başlamasın.
+            .setHandleAudioBecomingNoisy(true)
+            // Ekran kapalıyken CPU ve Wi-Fi uyanık kalsın; aksi hâlde arka
+            // planda müzik kesilebilir.
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build()
+            .also { player ->
             exoPlayer = player
             // Otomatik geçiş NATIVE tarafta dinleniyor: ekran kapalıyken de
             // parça bitince sıradakine geçilmeli. Bu dinleyici Dart'ta olsaydı
@@ -123,6 +142,13 @@ object PlayerHolder {
     /** En son çalınan medyanın kalite etiketi (arayüzde gösterilir). */
     @Volatile
     var currentQualityLabel: String? = null
+
+    /**
+     * Ekranın uyanık tutulması gerekip gerekmediğini arayüze bildirir:
+     * video izlenirken ekran kapanmamalı, sesli modda ise kapanabilmeli.
+     */
+    @Volatile
+    var onKeepScreenOnChanged: ((Boolean) -> Unit)? = null
 
     /** Videonun en/boy oranı; arayüz kutuyu buna göre ölçekler. */
     @Volatile
@@ -199,9 +225,23 @@ object PlayerHolder {
      * Kullanıcı modu elle değiştirdiğinde çağrılır (ör. "sadece ses"e geç).
      * Oynatma konumu korunur — kullanıcı kaldığı yerden devam eder.
      */
-    fun setAudioOnly(context: Context, audioOnly: Boolean) {
-        val request = currentRequest ?: return
-        if (audioOnly == audioOnlyMode) return
+    fun setAudioOnly(
+        context: Context,
+        audioOnly: Boolean,
+        videoUrl: String? = null,
+        audioUrl: String? = null
+    ) {
+        val existing = currentRequest ?: return
+        if (audioOnly == audioOnlyMode && videoUrl == null && audioUrl == null) return
+
+        // Sesli modda kaynak yalnızca ses olarak çözülmüştü; videoya geçerken
+        // video kaynağı YENİDEN çözülüp verilmezse görüntü hiç gelmez.
+        val request = existing.copy(
+            videoUrl = videoUrl ?: existing.videoUrl,
+            audioUrl = audioUrl ?: existing.audioUrl
+        )
+        currentRequest = request
+
         val player = getPlayer(context)
         val position = player.currentPosition
         val wasPlaying = player.playWhenReady

@@ -134,6 +134,25 @@ class PlaybackController(
                 result.success(null)
             }
 
+            "setRepeatMode" -> {
+                val mode = call.argument<String>("mode") ?: "off"
+                PlaybackQueue.setRepeatMode(
+                    when (mode) {
+                        "one" -> PlaybackQueue.RepeatMode.ONE
+                        "all" -> PlaybackQueue.RepeatMode.ALL
+                        else -> PlaybackQueue.RepeatMode.OFF
+                    }
+                )
+                emitState()
+                result.success(null)
+            }
+
+            "setShuffle" -> {
+                PlaybackQueue.setShuffle(call.argument<Boolean>("enabled") ?: false)
+                emitState()
+                result.success(null)
+            }
+
             "setAutoplay" -> {
                 PlaybackQueue.setAutoplayEnabled(call.argument<Boolean>("enabled") ?: true)
                 result.success(null)
@@ -163,7 +182,12 @@ class PlaybackController(
 
             // Kullanıcının elle mod değiştirmesi — konumu koruyarak.
             "setAudioOnly" -> {
-                PlayerHolder.setAudioOnly(context, call.argument<Boolean>("audioOnly") ?: false)
+                PlayerHolder.setAudioOnly(
+                    context = context,
+                    audioOnly = call.argument<Boolean>("audioOnly") ?: false,
+                    videoUrl = call.argument<String>("videoUrl"),
+                    audioUrl = call.argument<String>("audioUrl")
+                )
                 emitState()
                 result.success(null)
             }
@@ -220,6 +244,8 @@ class PlaybackController(
                 "queueIndex" to PlaybackQueue.index,
                 "queueSize" to PlaybackQueue.size,
                 "autoplay" to PlaybackQueue.autoplay,
+                "repeatMode" to PlaybackQueue.repeatMode.name.lowercase(),
+                "shuffle" to PlaybackQueue.shuffle,
                 "qualityLabel" to PlayerHolder.currentQualityLabel,
                 "currentVideoId" to PlaybackQueue.current()?.videoId,
                 "videoWidth" to player.videoSize.width,

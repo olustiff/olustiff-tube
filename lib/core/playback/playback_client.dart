@@ -20,6 +20,8 @@ class PlaybackState {
   final int queueIndex;
   final int queueSize;
   final bool autoplay;
+  final String repeatMode;
+  final bool shuffle;
   final String? qualityLabel;
   final String? currentVideoId;
   final int videoWidth;
@@ -38,6 +40,8 @@ class PlaybackState {
     this.queueIndex = -1,
     this.queueSize = 0,
     this.autoplay = true,
+    this.repeatMode = 'off',
+    this.shuffle = false,
     this.qualityLabel,
     this.currentVideoId,
     this.videoWidth = 0,
@@ -71,6 +75,8 @@ class PlaybackState {
       queueIndex: (map['queueIndex'] as num?)?.toInt() ?? -1,
       queueSize: (map['queueSize'] as num?)?.toInt() ?? 0,
       autoplay: map['autoplay'] as bool? ?? true,
+      repeatMode: map['repeatMode'] as String? ?? 'off',
+      shuffle: map['shuffle'] as bool? ?? false,
       qualityLabel: map['qualityLabel'] as String?,
       currentVideoId: map['currentVideoId'] as String?,
       videoWidth: (map['videoWidth'] as num?)?.toInt() ?? 0,
@@ -130,8 +136,19 @@ class PlaybackClient {
   }
 
   /// Modu kullanıcının açık isteğiyle değiştirir; oynatma konumu korunur.
-  Future<void> setAudioOnly(bool audioOnly) =>
-      _method.invokeMethod<void>('setAudioOnly', {'audioOnly': audioOnly});
+  ///
+  /// Yeni kaynaklar da gönderilir: sesli modda çözülmüş bir medyanın video
+  /// adresi yoktur, videoya geçerken yeniden çözülüp verilmesi gerekir.
+  Future<void> setAudioOnly(
+    bool audioOnly, {
+    String? videoUrl,
+    String? audioUrl,
+  }) =>
+      _method.invokeMethod<void>('setAudioOnly', {
+        'audioOnly': audioOnly,
+        'videoUrl': videoUrl,
+        'audioUrl': audioUrl,
+      });
 
   Future<void> resume() => _method.invokeMethod<void>('resume');
 
@@ -168,4 +185,11 @@ class PlaybackClient {
 
   Future<void> playQueueIndex(int index) =>
       _method.invokeMethod<void>('playQueueIndex', {'index': index});
+
+  /// 'off' | 'one' | 'all'
+  Future<void> setRepeatMode(String mode) =>
+      _method.invokeMethod<void>('setRepeatMode', {'mode': mode});
+
+  Future<void> setShuffle(bool enabled) =>
+      _method.invokeMethod<void>('setShuffle', {'enabled': enabled});
 }

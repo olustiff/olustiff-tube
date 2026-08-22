@@ -26,6 +26,25 @@ object PlaybackQueue {
     @Volatile
     var autoplay: Boolean = true
 
+    /** Tekrar modu. */
+    enum class RepeatMode { OFF, ONE, ALL }
+
+    @Volatile
+    var repeatMode: RepeatMode = RepeatMode.OFF
+        private set
+
+    @Volatile
+    var shuffle: Boolean = false
+        private set
+
+    /**
+     * Karıştırma açıkken kullanılan çalma sırası (öğe indeksleri).
+     * Orijinal sıra bozulmaz; böylece karıştırma kapatılınca liste eski
+     * hâline döner.
+     */
+    @Volatile
+    private var order: List<Int> = emptyList()
+
     val size: Int get() = items.size
 
     fun snapshot(): List<Item> = items
@@ -35,29 +54,76 @@ object PlaybackQueue {
     fun set(newItems: List<Item>, startIndex: Int) {
         items = newItems
         index = startIndex
+        rebuildOrder()
     }
+
+    fun setRepeatMode(mode: RepeatMode) {
+        repeatMode = mode
+    }
+
+    /** Karıştırmayı açar/kapatır; çalan parça yerinde kalır. */
+    fun setShuffle(enabled: Boolean) {
+        shuffle = enabled
+        rebuildOrder()
+    }
+
+    private fun rebuildOrder() {
+        val indices = items.indices.toList()
+        order = if (!shuffle) {
+            indices
+        } else {
+            // Çalan parça başta kalsın, kalanlar karışsın.
+            val rest = indices.filter { it != index }.shuffled()
+            if (index in indices) listOf(index) + rest else rest
+        }
+    }
+
+    /** [index]'in çalma sırasındaki konumu. */
+    private fun positionInOrder(): Int = order.indexOf(index)
 
     fun setAutoplayEnabled(enabled: Boolean) {
         autoplay = enabled
     }
 
-    fun hasNext(): Boolean = index + 1 in items.indices
+    fun hasNext(): Boolean =
+        repeatMode == RepeatMode.ALL || nextIndex() != null
 
-    fun hasPrevious(): Boolean = index - 1 in items.indices
+    fun hasPrevious(): Boolean = previousIndex() != null
 
-    fun peekNext(): Item? = items.getOrNull(index + 1)
+    fun peekNext(): Item? = nextIndex()?.let { items.getOrNull(it) }
 
-    /** Sıradakine ilerler ve onu döner; kuyruk bittiyse null. */
+    private fun nextIndex(): Int? {
+        val position = positionInOrder()
+        if (position == -1) return order.firstOrNull()
+        val next = position + 1
+        return when {
+            next < order.size -> order[next]
+            // Liste tekrarı: sona gelince başa dön.
+            repeatMode == RepeatMode.ALL -> order.firstOrNull()
+            else -> null
+        }
+    }
+
+    private fun previousIndex(): Int? {
+        val position = positionInOrder()
+        if (position <= 0) return null
+        return order[position - 1]
+    }
+
+    /**
+     * Sıradakine ilerler ve onu döner; kuyruk bittiyse null.
+     *
+     * Tek parça tekrarında aynı öğe döner — çağıran taraf onu yeniden çalar.
+     */
     fun advance(): Item? {
-        val next = index + 1
-        if (next !in items.indices) return null
+        if (repeatMode == RepeatMode.ONE) return current()
+        val next = nextIndex() ?: return null
         index = next
         return items[next]
     }
 
     fun back(): Item? {
-        val previous = index - 1
-        if (previous !in items.indices) return null
+        val previous = previousIndex() ?: return null
         index = previous
         return items[previous]
     }
@@ -72,5 +138,6 @@ object PlaybackQueue {
     fun clear() {
         items = emptyList()
         index = -1
+        order = emptyList()
     }
 }

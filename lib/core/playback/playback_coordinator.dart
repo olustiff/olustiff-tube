@@ -32,6 +32,13 @@ class PlaybackCoordinator extends ChangeNotifier {
   List<VideoSummary> _queue = const [];
   int _index = -1;
 
+  /// Kuyruğun kurulduğu ham liste (arama sonuçları / akış). Filtre
+  /// değiştiğinde kuyruk bundan yeniden üretilir.
+  List<VideoSummary> _sourceList = const [];
+  QueueMode _queueMode = QueueMode.mixed;
+
+  QueueMode get queueMode => _queueMode;
+
   VideoDetails? get details => _details;
   bool get audioOnly => _audioOnly;
   String? get qualityLabel => _qualityLabel;
@@ -78,13 +85,13 @@ class PlaybackCoordinator extends ChangeNotifier {
     if (exactQueue != null) {
       // Çalma listesi gibi sırası kullanıcı tarafından belirlenmiş listeler
       // karıştırılmaz.
+      _sourceList = exactQueue;
+      _queueMode = QueueMode.listOrder;
       _queue = exactQueue;
       _index = index ?? exactQueue.indexWhere((v) => v.videoId == videoId);
     } else {
-      _queue = QueueBuilder.build(
-        seed: seed,
-        candidates: [...context, ...details.relatedItems],
-      );
+      _sourceList = context;
+      _queue = _buildQueue(seed, details);
       _index = 0;
     }
 
@@ -113,6 +120,43 @@ class PlaybackCoordinator extends ChangeNotifier {
     await _playback.setSpeed(_settings.speed);
     await _library.recordWatch(seed);
   }
+
+  List<VideoSummary> _buildQueue(VideoSummary seed, VideoDetails details) {
+    if (_queueMode == QueueMode.listOrder) {
+      // "Aramaya göre": kaynak listenin sırası korunur, çalan video başa alınır.
+      final rest = _sourceList
+          .where((v) => v.videoId != null && v.videoId != seed.videoId)
+          .toList();
+      return [seed, ...rest];
+    }
+    return QueueBuilder.build(
+      seed: seed,
+      candidates: [..._sourceList, ...details.relatedItems],
+    );
+  }
+
+  /// Kuyruk filtresini değiştirir: kaynak listenin sırası mı, karışık mı.
+  /// Çalan parça kesilmez, yalnızca sırası yeniden kurulur.
+  Future<void> setQueueMode(QueueMode mode) async {
+    if (_queueMode == mode) return;
+    _queueMode = mode;
+    final details = _details;
+    if (details == null) {
+      notifyListeners();
+      return;
+    }
+    _queue = _buildQueue(_summaryOf(details), details);
+    _index = 0;
+    notifyListeners();
+    await _playback.setQueue(
+      _queue.map(_queueItem).toList(growable: false),
+      _index,
+    );
+  }
+
+  Future<void> setRepeatMode(String mode) => _playback.setRepeatMode(mode);
+
+  Future<void> setShuffle(bool enabled) => _playback.setShuffle(enabled);
 
   /// Native taraf kuyrukta ilerlediğinde (parça bitti → sıradaki) arayüzü
   /// gerçekte çalanla eşitler.
@@ -145,7 +189,11 @@ class PlaybackCoordinator extends ChangeNotifier {
     );
     if (streams == null) return;
 
-    await _playback.setAudioOnly(next);
+    await _playback.setAudioOnly(
+      next,
+      videoUrl: streams.videoUrl,
+      audioUrl: streams.audioUrl,
+    );
     _audioOnly = next;
     _qualityLabel = streams.qualityLabel;
     notifyListeners();
@@ -189,4 +237,14 @@ class PlaybackCoordinator extends ChangeNotifier {
         'uploaderName': v.uploaderName,
         'thumbnailUrl': v.thumbnailUrl,
       };
+}
+
+/// "Sırada" listesinin nasıl kurulacağı.
+enum QueueMode {
+  /// Girilen listenin (arama sonuçları / akış) sırası korunur.
+  listOrder,
+
+  /// İlgili videolarla genişletilip aynı sanatçı yığılmayacak şekilde
+  /// karıştırılır.
+  mixed,
 }
