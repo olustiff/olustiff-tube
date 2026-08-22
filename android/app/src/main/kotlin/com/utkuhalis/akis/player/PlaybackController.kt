@@ -6,6 +6,11 @@ import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -20,11 +25,13 @@ import io.flutter.plugin.common.MethodChannel
 class PlaybackController(
     private val context: Context,
     methodChannel: MethodChannel,
-    eventChannel: EventChannel
+    eventChannel: EventChannel,
+    private val textureBridge: VideoTextureBridge
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var eventSink: EventChannel.EventSink? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** Konum ilerlemesini düzenli aralıkla Flutter'a bildiren tekrarlayan görev. */
     private val positionTicker = object : Runnable {
@@ -46,6 +53,10 @@ class PlaybackController(
 
     init {
         methodChannel.setMethodCallHandler { call, result -> handleMethod(call, result) }
+
+        // Native tarafta kuyruk ilerlediğinde (ör. parça bitti) arayüz açıksa
+        // hemen güncellensin.
+        PlayerHolder.onQueueAdvanced = { mainHandler.post { emitState() } }
 
         eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -92,6 +103,62 @@ class PlaybackController(
                     audioOnly = call.argument<Boolean>("audioOnly") ?: false
                 )
                 result.success(null)
+            }
+
+            // Video ekranı açıldığında dokuyu bağlar ve id'sini döner;
+            // Flutter bu id ile `Texture` widget'ını çizer.
+            "attachVideoTexture" -> result.success(textureBridge.attach())
+
+            // Video ekranı kapandığında yalnızca görüntü ayrılır; ses sürer.
+            "detachVideoTexture" -> {
+                textureBridge.detach()
+                result.success(null)
+            }
+
+            // Kuyruğu native tarafa yükler. Otomatik geçiş burada yaşadığı için
+            // ekran kapalıyken de sıradakine geçilir.
+            "setQueue" -> {
+                @Suppress("UNCHECKED_CAST")
+                val raw = call.argument<List<Map<String, Any?>>>("items").orEmpty()
+                PlaybackQueue.set(
+                    raw.map {
+                        PlaybackQueue.Item(
+                            videoId = it["videoId"] as? String ?: "",
+                            title = it["title"] as? String ?: "",
+                            uploaderName = it["uploaderName"] as? String,
+                            thumbnailUrl = it["thumbnailUrl"] as? String
+                        )
+                    }.filter { it.videoId.isNotEmpty() },
+                    startIndex = (call.argument<Number>("index") ?: -1).toInt()
+                )
+                result.success(null)
+            }
+
+            "setAutoplay" -> {
+                PlaybackQueue.setAutoplayEnabled(call.argument<Boolean>("enabled") ?: true)
+                result.success(null)
+            }
+
+            "next" -> {
+                scope.launch {
+                    PlayerHolder.playNext(context)
+                    result.success(null)
+                }
+            }
+
+            "previous" -> {
+                scope.launch {
+                    PlayerHolder.playPrevious(context)
+                    result.success(null)
+                }
+            }
+
+            "playQueueIndex" -> {
+                val index = (call.argument<Number>("index") ?: 0).toInt()
+                scope.launch {
+                    PlayerHolder.playAt(context, index)
+                    result.success(null)
+                }
             }
 
             // Kullanıcının elle mod değiştirmesi — konumu koruyarak.
@@ -149,20 +216,29 @@ class PlaybackController(
                 "isBuffering" to (player.playbackState == Player.STATE_BUFFERING),
                 "isEnded" to (player.playbackState == Player.STATE_ENDED),
                 "audioOnly" to PlayerHolder.audioOnlyMode,
-                "speed" to player.playbackParameters.speed
+                "speed" to player.playbackParameters.speed,
+                "queueIndex" to PlaybackQueue.index,
+                "queueSize" to PlaybackQueue.size,
+                "autoplay" to PlaybackQueue.autoplay,
+                "qualityLabel" to PlayerHolder.currentQualityLabel,
+                "currentVideoId" to PlaybackQueue.current()?.videoId,
+                "videoWidth" to player.videoSize.width,
+                "videoHeight" to player.videoSize.height
             )
         )
     }
 
     fun dispose() {
         mainHandler.removeCallbacks(positionTicker)
+        scope.cancel()
+        textureBridge.detach()
+        PlayerHolder.onQueueAdvanced = null
         eventSink = null
     }
 
     companion object {
         const val METHOD_CHANNEL = "akis/player"
         const val EVENT_CHANNEL = "akis/player_events"
-        const val VIEW_TYPE = "akis/player_view"
         private const val POSITION_UPDATE_INTERVAL_MS = 500L
     }
 }

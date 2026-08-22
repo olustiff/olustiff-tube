@@ -1,29 +1,51 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-/// Native ExoPlayer video yüzeyini Flutter ağacına gömer.
+import '../../core/playback/playback_client.dart';
+
+/// Native ExoPlayer'ın video çıktısını gösteren yüzey.
 ///
-/// Bu widget yalnızca bir görüntü penceresidir; ağaçtan kaldırıldığında
-/// oynatma DURMAZ, sadece yüzey ayrılır. Böylece video ekranından çıkıldığında
+/// Flutter'ın `Texture` katmanını kullanır (PlatformView değil): gömülü
+/// PlayerView bazı gerçek cihazlarda siyah kare olarak çiziliyordu.
+///
+/// Widget ağaçtan kaldırıldığında oynatma DURMAZ — yalnızca görüntü ayrılır,
 /// ses arka planda akmaya devam eder.
-class VideoSurface extends StatelessWidget {
+class VideoSurface extends StatefulWidget {
   const VideoSurface({super.key});
 
-  static const _viewType = 'akis/player_view';
+  @override
+  State<VideoSurface> createState() => _VideoSurfaceState();
+}
+
+class _VideoSurfaceState extends State<VideoSurface> {
+  final _playback = PlaybackClient.shared;
+  int? _textureId;
+
+  @override
+  void initState() {
+    super.initState();
+    _attach();
+  }
+
+  Future<void> _attach() async {
+    final id = await _playback.attachVideoTexture();
+    if (mounted) setState(() => _textureId = id);
+  }
+
+  @override
+  void dispose() {
+    // Yalnızca görüntü ayrılır; player'a dokunulmaz.
+    _playback.detachVideoTexture();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final id = _textureId;
     return ColoredBox(
       color: Colors.black,
-      child: AndroidView(
-        viewType: _viewType,
-        creationParamsCodec: const StandardMessageCodec(),
-        // Video yüzeyinin dokunmatik olayları tüketmesine gerek yok;
-        // kontroller Flutter tarafında çiziliyor.
-        gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
-      ),
+      child: id == null
+          ? const Center(child: CircularProgressIndicator())
+          : Texture(textureId: id),
     );
   }
 }

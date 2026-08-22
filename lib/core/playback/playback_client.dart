@@ -15,6 +15,16 @@ class PlaybackState {
   final bool audioOnly;
   final double speed;
 
+  /// Kuyruk durumu native tarafta tutulur (ekran kapalıyken de ilerlemeli),
+  /// bu yüzden arayüz onu buradan okur.
+  final int queueIndex;
+  final int queueSize;
+  final bool autoplay;
+  final String? qualityLabel;
+  final String? currentVideoId;
+  final int videoWidth;
+  final int videoHeight;
+
   const PlaybackState({
     this.position = Duration.zero,
     this.duration,
@@ -25,7 +35,20 @@ class PlaybackState {
     this.isEnded = false,
     this.audioOnly = false,
     this.speed = 1.0,
+    this.queueIndex = -1,
+    this.queueSize = 0,
+    this.autoplay = true,
+    this.qualityLabel,
+    this.currentVideoId,
+    this.videoWidth = 0,
+    this.videoHeight = 0,
   });
+
+  bool get hasNext => queueIndex + 1 < queueSize;
+  bool get hasPrevious => queueIndex > 0;
+
+  double get aspectRatio =>
+      (videoWidth > 0 && videoHeight > 0) ? videoWidth / videoHeight : 16 / 9;
 
   factory PlaybackState.fromMap(Map<Object?, Object?> map) {
     Duration ms(Object? value) =>
@@ -45,6 +68,13 @@ class PlaybackState {
       isEnded: map['isEnded'] as bool? ?? false,
       audioOnly: map['audioOnly'] as bool? ?? false,
       speed: (map['speed'] as num?)?.toDouble() ?? 1.0,
+      queueIndex: (map['queueIndex'] as num?)?.toInt() ?? -1,
+      queueSize: (map['queueSize'] as num?)?.toInt() ?? 0,
+      autoplay: map['autoplay'] as bool? ?? true,
+      qualityLabel: map['qualityLabel'] as String?,
+      currentVideoId: map['currentVideoId'] as String?,
+      videoWidth: (map['videoWidth'] as num?)?.toInt() ?? 0,
+      videoHeight: (map['videoHeight'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -114,4 +144,28 @@ class PlaybackClient {
       _method.invokeMethod<void>('setSpeed', {'speed': speed});
 
   Future<void> stop() => _method.invokeMethod<void>('stop');
+
+  /// Video ekranı açıldığında dokuyu bağlar; dönen id `Texture` widget'ına
+  /// verilir.
+  Future<int> attachVideoTexture() async =>
+      await _method.invokeMethod<int>('attachVideoTexture') ?? 0;
+
+  /// Görüntüyü ayırır; oynatma (ses) etkilenmez.
+  Future<void> detachVideoTexture() =>
+      _method.invokeMethod<void>('detachVideoTexture');
+
+  /// Kuyruğu native tarafa yükler. Otomatik geçiş orada yaşadığı için ekran
+  /// kapalıyken de sıradakine geçilir.
+  Future<void> setQueue(List<Map<String, Object?>> items, int index) =>
+      _method.invokeMethod<void>('setQueue', {'items': items, 'index': index});
+
+  Future<void> setAutoplay(bool enabled) =>
+      _method.invokeMethod<void>('setAutoplay', {'enabled': enabled});
+
+  Future<void> next() => _method.invokeMethod<void>('next');
+
+  Future<void> previous() => _method.invokeMethod<void>('previous');
+
+  Future<void> playQueueIndex(int index) =>
+      _method.invokeMethod<void>('playQueueIndex', {'index': index});
 }

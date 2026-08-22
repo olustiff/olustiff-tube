@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -12,6 +13,12 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.utkuhalis.akis.extractor.ExtractionService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
 /**
@@ -50,11 +57,100 @@ object PlayerHolder {
         val isLive: Boolean = false
     )
 
+    /** Kuyruk ilerlediğinde Flutter'a haber vermek için (UI açıksa günceller). */
+    @Volatile
+    var onQueueAdvanced: (() -> Unit)? = null
+
+    /** Otomatik geçiş sırasında yeni bir bitiş olayının araya girmesini önler. */
+    @Volatile
+    private var advancing = false
+
     @Synchronized
     fun getPlayer(context: Context): ExoPlayer {
-        return exoPlayer ?: ExoPlayer.Builder(context.applicationContext)
-            .build()
-            .also { exoPlayer = it }
+        exoPlayer?.let { return it }
+        val appContext = context.applicationContext
+        return ExoPlayer.Builder(appContext).build().also { player ->
+            exoPlayer = player
+            // Otomatik geçiş NATIVE tarafta dinleniyor: ekran kapalıyken de
+            // parça bitince sıradakine geçilmeli. Bu dinleyici Dart'ta olsaydı
+            // Flutter motoru askıya alındığında hiç tetiklenmezdi.
+            player.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState != Player.STATE_ENDED) return
+                    if (!PlaybackQueue.autoplay || advancing) return
+                    advancing = true
+                    scope.launch {
+                        try {
+                            playNext(appContext)
+                        } finally {
+                            advancing = false
+                        }
+                    }
+                }
+            })
+        }
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /**
+     * Kuyruktaki bir videoyu id'sinden çözüp çalar.
+     *
+     * Çözümleme (extraction) burada, native tarafta yapılıyor; böylece geçiş
+     * uygulamanın açık olmasına bağlı değil.
+     */
+    private suspend fun playQueueItem(context: Context, item: PlaybackQueue.Item) {
+        val info = withContext(Dispatchers.IO) {
+            ExtractionService.streamInfo(item.videoId)
+        }
+        val selection = StreamSelector.select(info, audioOnlyMode) ?: return
+        currentQualityLabel = selection.qualityLabel
+        play(
+            context,
+            PlayRequest(
+                videoUrl = selection.videoUrl,
+                audioUrl = selection.audioUrl,
+                title = info.name ?: item.title,
+                artist = info.uploaderName ?: item.uploaderName,
+                artworkUrl = item.thumbnailUrl,
+                isLive = selection.isLive
+            ),
+            audioOnlyMode
+        )
+        onQueueAdvanced?.invoke()
+    }
+
+    /** En son çalınan medyanın kalite etiketi (arayüzde gösterilir). */
+    @Volatile
+    var currentQualityLabel: String? = null
+
+    /** Videonun en/boy oranı; arayüz kutuyu buna göre ölçekler. */
+    @Volatile
+    var videoAspectRatio: Double = 16.0 / 9.0
+        private set
+
+    /**
+     * Video çıktısını verilen yüzeye yönlendirir. `null` verilirse yalnızca
+     * görüntü ayrılır; oynatma (ses) etkilenmez.
+     */
+    fun setVideoSurface(surface: android.view.Surface?) {
+        val player = exoPlayer ?: return
+        if (surface == null) player.clearVideoSurface() else player.setVideoSurface(surface)
+    }
+
+    suspend fun playNext(context: Context) {
+        val item = PlaybackQueue.advance() ?: return
+        playQueueItem(context, item)
+    }
+
+    suspend fun playPrevious(context: Context) {
+        val item = PlaybackQueue.back() ?: return
+        playQueueItem(context, item)
+    }
+
+    suspend fun playAt(context: Context, index: Int) {
+        val item = PlaybackQueue.jumpTo(index) ?: return
+        playQueueItem(context, item)
     }
 
     @Synchronized

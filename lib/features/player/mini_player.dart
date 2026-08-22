@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/playback/now_playing.dart';
+import '../../core/playback/playback_coordinator.dart';
 import '../../core/playback/playback_client.dart';
 import 'player_screen.dart';
 
@@ -17,9 +17,9 @@ class MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: NowPlaying.instance,
+      animation: PlaybackCoordinator.instance,
       builder: (context, _) {
-        final nowPlaying = NowPlaying.instance;
+        final nowPlaying = PlaybackCoordinator.instance;
         final details = nowPlaying.details;
         if (details == null) return const SizedBox.shrink();
 
@@ -95,8 +95,7 @@ class MiniPlayer extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () {
-                      _playback.stop();
-                      NowPlaying.instance.clear();
+                      PlaybackCoordinator.instance.stop();
                     },
                   ),
                 ],

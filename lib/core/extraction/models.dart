@@ -41,6 +41,53 @@ class VideoSummary {
   }
 }
 
+/// Sayfalanmış bir liste sonucu.
+///
+/// YouTube tek istekte yalnızca ~20 sonuç verir; [hasMore] true ise devamı
+/// `loadMore` ile alınabilir.
+class PagedVideos {
+  final List<VideoSummary> items;
+  final bool hasMore;
+
+  const PagedVideos({required this.items, required this.hasMore});
+
+  static const empty = PagedVideos(items: [], hasMore: false);
+
+  factory PagedVideos.fromMap(Map<Object?, Object?> map) {
+    final raw = map['items'] as List<Object?>? ?? const [];
+    return PagedVideos(
+      items: raw
+          .map((e) => VideoSummary.fromMap(e as Map<Object?, Object?>))
+          .toList(growable: false),
+      hasMore: map['hasMore'] as bool? ?? false,
+    );
+  }
+}
+
+/// Bir YouTube çalma listesi ve (ilk sayfa) videoları.
+class PlaylistDetails {
+  final String title;
+  final String? uploaderName;
+  final int streamCount;
+  final PagedVideos page;
+
+  const PlaylistDetails({
+    required this.title,
+    required this.uploaderName,
+    required this.streamCount,
+    required this.page,
+  });
+
+  factory PlaylistDetails.fromMap(Map<Object?, Object?> map) {
+    return PlaylistDetails(
+      title: _asString(map['title']) ?? '',
+      uploaderName: _asString(map['uploaderName']),
+      streamCount: _asInt(map['streamCount']),
+      page: PagedVideos.fromMap(map),
+    );
+  }
+}
+
 /// Oynatılabilir bir video (veya video-only) DASH/progressive stream'i.
 class VideoStreamInfo {
   final String url;

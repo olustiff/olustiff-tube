@@ -32,18 +32,32 @@ class ExtractionClient {
     }
   }
 
-  Future<List<VideoSummary>> search(String query) async {
-    final raw = await _invoke<List<Object?>>('search', {'query': query});
-    return raw
-        .map((e) => VideoSummary.fromMap(e as Map<Object?, Object?>))
-        .toList(growable: false);
+  /// Sayfalanabilir liste türleri — [loadMore] bunlarla çağrılır.
+  static const kindSearch = 'search';
+  static const kindTrending = 'trending';
+  static const kindPlaylist = 'playlist';
+
+  Future<PagedVideos> search(String query) async {
+    final raw = await _invoke<Map<Object?, Object?>>('search', {'query': query});
+    return PagedVideos.fromMap(raw);
   }
 
-  Future<List<VideoSummary>> trending() async {
-    final raw = await _invoke<List<Object?>>('trending');
-    return raw
-        .map((e) => VideoSummary.fromMap(e as Map<Object?, Object?>))
-        .toList(growable: false);
+  Future<PagedVideos> trending() async {
+    final raw = await _invoke<Map<Object?, Object?>>('trending');
+    return PagedVideos.fromMap(raw);
+  }
+
+  /// Açık listenin bir sonraki sayfasını getirir. Son sayfadan sonra boş
+  /// sonuç döner, bu yüzden sonsuz kaydırma güvenle durur.
+  Future<PagedVideos> loadMore(String kind) async {
+    final raw =
+        await _invoke<Map<Object?, Object?>>('loadMore', {'kind': kind});
+    return PagedVideos.fromMap(raw);
+  }
+
+  Future<PlaylistDetails> playlist(String url) async {
+    final raw = await _invoke<Map<Object?, Object?>>('playlist', {'url': url});
+    return PlaylistDetails.fromMap(raw);
   }
 
   Future<VideoDetails> videoDetails(String videoId) async {

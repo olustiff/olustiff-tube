@@ -2,7 +2,7 @@ package com.utkuhalis.akis
 
 import com.utkuhalis.akis.extractor.ExtractionService
 import com.utkuhalis.akis.player.PlaybackController
-import com.utkuhalis.akis.player.PlayerPlatformViewFactory
+import com.utkuhalis.akis.player.VideoTextureBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -28,15 +28,14 @@ class MainActivity : FlutterActivity() {
 
         val messenger = flutterEngine.dartExecutor.binaryMessenger
 
-        flutterEngine.platformViewsController.registry.registerViewFactory(
-            PlaybackController.VIEW_TYPE,
-            PlayerPlatformViewFactory()
-        )
-
+        // Video, PlatformView yerine Flutter'ın doku katmanına render ediliyor
+        // (bkz. VideoTextureBridge) — gömülü PlayerView bazı gerçek cihazlarda
+        // siyah kalıyordu.
         playbackController = PlaybackController(
             context = applicationContext,
             methodChannel = MethodChannel(messenger, PlaybackController.METHOD_CHANNEL),
-            eventChannel = EventChannel(messenger, PlaybackController.EVENT_CHANNEL)
+            eventChannel = EventChannel(messenger, PlaybackController.EVENT_CHANNEL),
+            textureBridge = VideoTextureBridge(flutterEngine.renderer)
         )
 
         MethodChannel(messenger, extractorChannelName)
@@ -54,6 +53,14 @@ class MainActivity : FlutterActivity() {
                             "videoDetails" -> {
                                 val videoId = call.argument<String>("videoId").orEmpty()
                                 result.success(ExtractionService.videoDetails(videoId))
+                            }
+                            "loadMore" -> {
+                                val kind = call.argument<String>("kind").orEmpty()
+                                result.success(ExtractionService.loadMore(kind))
+                            }
+                            "playlist" -> {
+                                val url = call.argument<String>("url").orEmpty()
+                                result.success(ExtractionService.playlist(url))
                             }
                             else -> result.notImplemented()
                         }
