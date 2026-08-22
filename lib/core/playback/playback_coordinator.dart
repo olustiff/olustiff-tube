@@ -67,7 +67,9 @@ class PlaybackCoordinator extends ChangeNotifier {
     final details = await _extraction.videoDetails(videoId);
 
     // Açılış modu içeriğin türünden belirlenir; sonrası yalnızca kullanıcının.
-    final audioOnly = detectContentKind(details) == ContentKind.music;
+    // Kullanıcı tercihi kapalıysa müzik de video modunda açılır.
+    final audioOnly = _settings.musicAsAudio &&
+        detectContentKind(details) == ContentKind.music;
     final streams = selectStreams(
       details,
       audioOnly: audioOnly,

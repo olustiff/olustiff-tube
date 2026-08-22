@@ -1,0 +1,72 @@
+package com.utkuhalis.akis.player
+
+import android.content.Context
+import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.Player
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+/**
+ * Medya oturumuna verilen player sarmalayıcısı.
+ *
+ * Neden gerekli: kuyruğumuz [PlaybackQueue]'da yaşıyor, ExoPlayer'ın kendi
+ * oynatma listesi ise tek öğeli. Media3'ün bildirim sağlayıcısı ileri/geri
+ * düğmelerini `COMMAND_SEEK_TO_NEXT/PREVIOUS` komutlarının varlığına bakarak
+ * çiziyor; sarmalamadan bu komutlar "yok" göründüğü için bildirimde ve kilit
+ * ekranında sonraki/önceki düğmeleri hiç çıkmıyordu.
+ *
+ * Burada komutları kuyruğun durumuna göre bildiriyor ve atlama isteklerini
+ * kendi kuyruğumuza yönlendiriyoruz.
+ */
+class QueueAwarePlayer(
+    private val context: Context,
+    player: Player
+) : ForwardingPlayer(player) {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    override fun getAvailableCommands(): Player.Commands {
+        return super.getAvailableCommands().buildUpon()
+            .addIf(Player.COMMAND_SEEK_TO_NEXT, PlaybackQueue.hasNext())
+            .addIf(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, PlaybackQueue.hasNext())
+            .addIf(Player.COMMAND_SEEK_TO_PREVIOUS, PlaybackQueue.hasPrevious())
+            .addIf(
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                PlaybackQueue.hasPrevious()
+            )
+            .build()
+    }
+
+    override fun isCommandAvailable(command: Int): Boolean =
+        availableCommands.contains(command)
+
+    override fun hasNextMediaItem(): Boolean = PlaybackQueue.hasNext()
+
+    override fun hasPreviousMediaItem(): Boolean = PlaybackQueue.hasPrevious()
+
+    override fun seekToNext() = goNext()
+
+    override fun seekToNextMediaItem() = goNext()
+
+    override fun seekToPrevious() = goPrevious()
+
+    override fun seekToPreviousMediaItem() = goPrevious()
+
+    private fun goNext() {
+        scope.launch { PlayerHolder.playNext(context) }
+    }
+
+    /**
+     * Parçanın başına sarma yerine gerçekten önceki parçaya geçer; kuyruğun
+     * başındaysak başa sarmak daha doğal olduğu için o davranışa düşeriz.
+     */
+    private fun goPrevious() {
+        if (!PlaybackQueue.hasPrevious()) {
+            seekTo(0)
+            return
+        }
+        scope.launch { PlayerHolder.playPrevious(context) }
+    }
+}

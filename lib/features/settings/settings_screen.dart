@@ -60,6 +60,16 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               SwitchListTile(
+                secondary: const Icon(Icons.headphones),
+                title: const Text('Müzikleri sesli modda başlat'),
+                subtitle: const Text(
+                  'Şarkı ve müzik videoları görüntü indirilmeden açılır. '
+                  'Kapatırsan her şey video olarak başlar.',
+                ),
+                value: settings.musicAsAudio,
+                onChanged: settings.setMusicAsAudio,
+              ),
+              SwitchListTile(
                 secondary: const Icon(Icons.playlist_play),
                 title: const Text('Otomatik oynatma'),
                 subtitle: const Text(

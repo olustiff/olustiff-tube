@@ -30,7 +30,12 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val session = MediaSession.Builder(this, PlayerHolder.getPlayer(this))
+        // Sarmalayıcı, bildirim ve kilit ekranındaki ileri/geri düğmelerini
+        // kendi kuyruğumuza bağlar (bkz. QueueAwarePlayer).
+        val session = MediaSession.Builder(
+            this,
+            QueueAwarePlayer(this, PlayerHolder.getPlayer(this))
+        )
             .setSessionActivity(sessionActivityIntent)
             .build()
         mediaSession = session

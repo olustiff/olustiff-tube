@@ -10,6 +10,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kMaxHeight = 'max_height';
   static const _kSpeed = 'playback_speed';
   static const _kAutoplay = 'autoplay';
+  static const _kMusicAsAudio = 'music_as_audio';
 
   /// Seçilebilir kalite tavanları. `null` = sınırsız (kaynağın en iyisi).
   static const qualityOptions = <int?>[null, 2160, 1440, 1080, 720, 480, 360];
@@ -23,9 +24,14 @@ class SettingsStore extends ChangeNotifier {
   double _speed = 1.0;
   bool _autoplay = true;
 
+  /// Müzik olarak tespit edilen içerikler sesli modda mı açılsın.
+  /// Kapatılırsa her şey video modunda başlar.
+  bool _musicAsAudio = true;
+
   int? get maxHeight => _maxHeight;
   double get speed => _speed;
   bool get autoplay => _autoplay;
+  bool get musicAsAudio => _musicAsAudio;
 
   String get qualityLabel => _maxHeight == null ? 'En yüksek' : '${_maxHeight}p';
 
@@ -36,6 +42,7 @@ class SettingsStore extends ChangeNotifier {
     _maxHeight = stored == null ? 1080 : (stored < 0 ? null : stored);
     _speed = prefs.getDouble(_kSpeed) ?? 1.0;
     _autoplay = prefs.getBool(_kAutoplay) ?? true;
+    _musicAsAudio = prefs.getBool(_kMusicAsAudio) ?? true;
     notifyListeners();
   }
 
@@ -48,6 +55,12 @@ class SettingsStore extends ChangeNotifier {
   Future<void> setSpeed(double value) async {
     _speed = value;
     await _prefs?.setDouble(_kSpeed, value);
+    notifyListeners();
+  }
+
+  Future<void> setMusicAsAudio(bool value) async {
+    _musicAsAudio = value;
+    await _prefs?.setBool(_kMusicAsAudio, value);
     notifyListeners();
   }
 
