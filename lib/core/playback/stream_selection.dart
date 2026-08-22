@@ -29,6 +29,20 @@ class SelectedStreams {
 /// izin vermek için çağrı yerinde [maxHeight] geçilebilir.
 const int defaultMaxHeight = 1080;
 
+/// Videonun gerçekten sunduğu çözünürlükler (yüksekten alçağa).
+///
+/// Kalite menüsü bundan üretilir; sabit bir liste kullanmak videoda olmayan
+/// seçenekleri (ör. 4K sunmayan bir videoda "2160p") göstermeye yol açar.
+List<int> availableHeights(VideoDetails details) {
+  final heights = <int>{};
+  for (final stream in [...details.videoOnlyStreams, ...details.videoStreams]) {
+    final height = parseResolution(stream.resolution);
+    if (height > 0) heights.add(height);
+  }
+  final sorted = heights.toList()..sort((a, b) => b.compareTo(a));
+  return sorted;
+}
+
 /// Çözünürlük etiketini ("1080p60", "720p") sıralanabilir bir sayıya çevirir.
 int parseResolution(String? resolution) {
   if (resolution == null) return 0;

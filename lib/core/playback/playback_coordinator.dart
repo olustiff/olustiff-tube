@@ -154,6 +154,33 @@ class PlaybackCoordinator extends ChangeNotifier {
     );
   }
 
+  /// Çalan videonun gerçekten sunduğu çözünürlükler. Kalite menüsü bunu
+  /// kullanır; sabit liste videoda olmayan seçenekler gösterirdi.
+  List<int> get availableQualities {
+    final details = _details;
+    return details == null ? const [] : availableHeights(details);
+  }
+
+  /// Kaliteyi değiştirir ve çalan videoya HEMEN uygular (konum korunur).
+  /// [maxHeight] null ise mevcut en yüksek kalite seçilir.
+  Future<void> setQuality(int? maxHeight) async {
+    await _settings.setMaxHeight(maxHeight);
+    final details = _details;
+    if (details == null || _audioOnly) {
+      notifyListeners();
+      return;
+    }
+    final streams =
+        selectStreams(details, audioOnly: false, maxHeight: maxHeight);
+    if (streams == null) return;
+    _qualityLabel = streams.qualityLabel;
+    notifyListeners();
+    await _playback.replaceSources(
+      videoUrl: streams.videoUrl,
+      audioUrl: streams.audioUrl,
+    );
+  }
+
   Future<void> setRepeatMode(String mode) => _playback.setRepeatMode(mode);
 
   Future<void> setShuffle(bool enabled) => _playback.setShuffle(enabled);

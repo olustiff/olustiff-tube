@@ -11,6 +11,7 @@ import '../../core/playback/sleep_timer.dart';
 import '../../core/playback/ui_channel.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
+import 'quality_menu.dart';
 import 'video_player_view.dart';
 
 /// Oynatma ekranı.
@@ -438,20 +439,12 @@ class _QuickSettings extends StatelessWidget {
             ],
           ),
           const SizedBox(width: 8),
-          const Icon(Icons.high_quality_outlined, size: 18),
-          DropdownButton<int?>(
-            value: settings.maxHeight,
-            underline: const SizedBox.shrink(),
-            // Kalite değişimi bir sonraki videoda geçerli olur; mevcut akışı
-            // yeniden kurmak oynatmayı kesintiye uğratırdı.
-            onChanged: settings.setMaxHeight,
-            items: [
-              for (final option in SettingsStore.qualityOptions)
-                DropdownMenuItem(
-                  value: option,
-                  child: Text(option == null ? 'En yüksek' : '${option}p'),
-                ),
-            ],
+          // Seçenekler videonun gerçek çözünürlüklerinden gelir ve seçim
+          // çalan videoya hemen uygulanır (konum korunur).
+          TextButton.icon(
+            icon: const Icon(Icons.high_quality_outlined, size: 18),
+            label: Text(coordinator.qualityLabel ?? settings.qualityLabel),
+            onPressed: () => showQualityMenu(context),
           ),
           IconButton(
             icon: Icon(_repeatIcon),

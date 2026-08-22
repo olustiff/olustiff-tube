@@ -154,6 +154,31 @@ void main() {
     });
   });
 
+  group('availableHeights', () {
+    test('yalnızca videonun sunduğu çözünürlükler listelenir', () {
+      // 4K sunmayan bir videoda kalite menüsünde 2160p çıkmamalı.
+      final details = buildDetails(
+        videoOnlyStreams: [video('1080p60'), video('720p')],
+        videoStreams: [video('360p', videoOnly: false)],
+        audioStreams: [audio(160)],
+      );
+
+      expect(availableHeights(details), [1080, 720, 360]);
+    });
+
+    test('aynı çözünürlüğün farklı formatları tekrarlanmaz', () {
+      final details = buildDetails(
+        videoOnlyStreams: [video('1080p60'), video('1080p'), video('720p')],
+      );
+
+      expect(availableHeights(details), [1080, 720]);
+    });
+
+    test('kaynak yoksa liste boştur', () {
+      expect(availableHeights(buildDetails()), isEmpty);
+    });
+  });
+
   group('detectContentKind', () {
     test('Music kategorisi sesli mod olarak tespit edilir', () {
       final details = buildDetails(category: 'Music');

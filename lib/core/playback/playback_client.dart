@@ -150,6 +150,13 @@ class PlaybackClient {
         'audioUrl': audioUrl,
       });
 
+  /// Kaynakları değiştirir (kalite seçimi); konum ve mod korunur.
+  Future<void> replaceSources({String? videoUrl, String? audioUrl}) =>
+      _method.invokeMethod<void>('replaceSources', {
+        'videoUrl': videoUrl,
+        'audioUrl': audioUrl,
+      });
+
   Future<void> resume() => _method.invokeMethod<void>('resume');
 
   Future<void> pause() => _method.invokeMethod<void>('pause');

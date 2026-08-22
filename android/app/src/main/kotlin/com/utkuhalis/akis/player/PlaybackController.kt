@@ -192,6 +192,17 @@ class PlaybackController(
                 result.success(null)
             }
 
+            // Kalite değişimi: kaynaklar değişir, konum ve mod korunur.
+            "replaceSources" -> {
+                PlayerHolder.replaceSources(
+                    context = context,
+                    videoUrl = call.argument<String>("videoUrl"),
+                    audioUrl = call.argument<String>("audioUrl")
+                )
+                emitState()
+                result.success(null)
+            }
+
             "resume" -> {
                 player().playWhenReady = true
                 result.success(null)

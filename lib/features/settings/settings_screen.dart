@@ -26,7 +26,8 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: Text(
                   settings.maxHeight == null
                       ? 'En yüksek (veri ve pil tüketimi yüksek)'
-                      : 'En fazla ${settings.qualityLabel}',
+                      : 'En fazla ${settings.qualityLabel} — video daha düşük '
+                          'çözünürlük sunuyorsa onunki geçerli olur',
                 ),
                 trailing: DropdownButton<int?>(
                   value: settings.maxHeight,

@@ -233,9 +233,28 @@ object PlayerHolder {
     ) {
         val existing = currentRequest ?: return
         if (audioOnly == audioOnlyMode && videoUrl == null && audioUrl == null) return
-
+        audioOnlyMode = audioOnly
         // Sesli modda kaynak yalnızca ses olarak çözülmüştü; videoya geçerken
         // video kaynağı YENİDEN çözülüp verilmezse görüntü hiç gelmez.
+        reload(context, existing, videoUrl, audioUrl, audioOnly)
+    }
+
+    /**
+     * Kaynakları değiştirir (ör. kalite seçimi) — mod aynı kalır ve oynatma
+     * konumu korunur, böylece kullanıcı kaldığı yerden izlemeye devam eder.
+     */
+    fun replaceSources(context: Context, videoUrl: String?, audioUrl: String?) {
+        val existing = currentRequest ?: return
+        reload(context, existing, videoUrl, audioUrl, audioOnlyMode)
+    }
+
+    private fun reload(
+        context: Context,
+        existing: PlayRequest,
+        videoUrl: String?,
+        audioUrl: String?,
+        audioOnly: Boolean
+    ) {
         val request = existing.copy(
             videoUrl = videoUrl ?: existing.videoUrl,
             audioUrl = audioUrl ?: existing.audioUrl
@@ -245,7 +264,6 @@ object PlayerHolder {
         val player = getPlayer(context)
         val position = player.currentPosition
         val wasPlaying = player.playWhenReady
-        audioOnlyMode = audioOnly
         applyAudioOnlyTrackSelection(player, request, audioOnly)
 
         // Canlı yayında kaynak değişmiyor (aynı HLS manifesti), yalnızca parça

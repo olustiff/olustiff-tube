@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/ui_channel.dart';
+import 'quality_menu.dart';
 import 'video_surface.dart';
 
 /// Videonun ekrana nasıl sığdırılacağı.
@@ -188,6 +189,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                   icon: Icons.lock_open_outlined,
                   tooltip: 'Kontrolleri kilitle',
                   onPressed: () => setState(() => _locked = true),
+                ),
+                // Kalite, tam ekrandan çıkmadan değiştirilebilsin.
+                _RoundButton(
+                  icon: Icons.high_quality_outlined,
+                  tooltip: 'Kalite',
+                  onPressed: () => showQualityMenu(context),
                 ),
                 _RoundButton(
                   icon: _fit == VideoFit.contain
