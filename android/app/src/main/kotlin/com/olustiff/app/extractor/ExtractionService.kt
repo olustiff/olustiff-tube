@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.extractor
+package com.olustiff.app.extractor
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

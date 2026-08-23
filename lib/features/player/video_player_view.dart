@@ -139,21 +139,39 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   }
 
   Widget _buildVideo() {
-    const surface = VideoSurface();
+    final state = widget.state;
 
-    // İlk kare henüz çizilmediyse yüzeyde ÖNCEKİ videonun karesi durur.
-    // Onu göstermek "eski video açıldı" izlenimi verdiği için üstünü
-    // kapatıyoruz.
-    // Yükleme göstergesi HER ZAMAN görsel alanın üstünde durur; oynat/duraklat
-    // butonunda ayrıca dönmesi (iki spinner) kafa karıştırıyordu.
-    if (!widget.state.hasVideoFrame || widget.state.isBuffering) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          const Offstage(child: surface),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Yüzey ağaçta SABİT tutulur ve yapısı hiç değişmez.
+        // Daha önce sığdır/doldur ve yükleme durumlarında farklı sarmalayıcılar
+        // kullanılıyordu; Flutter bunu farklı bir widget sayıp yüzeyi yok edip
+        // yeniden kuruyor, native video yüzeyi kopuyor ve görüntü hiç
+        // gelmiyordu. Tek yapı + değişen `fit` bunu önlüyor.
+        ClipRect(
+          child: FittedBox(
+            fit: _fit == VideoFit.contain ? BoxFit.contain : BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: state.aspectRatio * 1000,
+              height: 1000,
+              child: const VideoSurface(),
+            ),
+          ),
+        ),
+
+        // İlk kare gelene kadar yüzeyde ÖNCEKİ videonun karesi durur;
+        // onun yerine yeni videonun kapağı gösterilir.
+        if (!state.hasVideoFrame) ...[
           if (widget.posterUrl != null)
             Image.network(widget.posterUrl!, fit: BoxFit.cover),
           Container(color: Colors.black.withValues(alpha: 0.55)),
+        ],
+
+        // Yükleme göstergesi görüntünün üstünde; oynat/duraklat butonunda
+        // ayrıca dönmesi kafa karıştırıyordu.
+        if (!state.hasVideoFrame || state.isBuffering)
           const Center(
             child: SizedBox(
               width: 40,
@@ -164,29 +182,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
               ),
             ),
           ),
-        ],
-      );
-    }
-
-    if (_fit == VideoFit.contain) {
-      return Center(
-        child: AspectRatio(
-          aspectRatio: widget.state.aspectRatio,
-          child: surface,
-        ),
-      );
-    }
-    // "Doldur": en-boy oranını koruyup taşan kısmı kırpar.
-    return ClipRect(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        clipBehavior: Clip.hardEdge,
-        child: SizedBox(
-          width: widget.state.aspectRatio * 1000,
-          height: 1000,
-          child: surface,
-        ),
-      ),
+      ],
     );
   }
 

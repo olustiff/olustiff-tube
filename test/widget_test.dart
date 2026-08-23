@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:akis/core/data/library_store.dart';
-import 'package:akis/core/extraction/models.dart';
-import 'package:akis/core/data/settings_store.dart';
-import 'package:akis/features/home/home_screen.dart';
-import 'package:akis/features/search/search_screen.dart';
+import 'package:olustiff/core/data/library_store.dart';
+import 'package:olustiff/core/extraction/models.dart';
+import 'package:olustiff/core/data/settings_store.dart';
+import 'package:olustiff/features/home/home_screen.dart';
+import 'package:olustiff/features/search/search_screen.dart';
 
 Map<String, Object?> videoMap(String id, String title, {String? uploader}) => {
       'videoId': id,
@@ -21,8 +21,8 @@ Map<String, Object?> videoMap(String id, String title, {String? uploader}) => {
     };
 
 void main() {
-  const extractor = MethodChannel('akis/extractor');
-  const player = MethodChannel('akis/player');
+  const extractor = MethodChannel('olustiff/extractor');
+  const player = MethodChannel('olustiff/player');
 
   late int loadMoreCalls;
 

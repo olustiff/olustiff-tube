@@ -1,11 +1,11 @@
-package com.utkuhalis.akis.download
+package com.olustiff.app.download
 
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.utkuhalis.akis.extractor.ExtractionService
-import com.utkuhalis.akis.player.StreamSelector
+import com.olustiff.app.extractor.ExtractionService
+import com.olustiff.app.player.StreamSelector
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -148,7 +148,7 @@ class DownloadController(
     }
 
     companion object {
-        const val CHANNEL = "akis/downloads"
-        const val PROGRESS_CHANNEL = "akis/downloads_progress"
+        const val CHANNEL = "olustiff/downloads"
+        const val PROGRESS_CHANNEL = "olustiff/downloads_progress"
     }
 }

@@ -33,8 +33,8 @@ class UpdateService extends ChangeNotifier {
   static final UpdateService instance = UpdateService._();
 
   /// APK indirme ve kurulum native tarafta yapılır (Android paket yükleyici).
-  static const _channel = MethodChannel('akis/update');
-  static const _progressChannel = EventChannel('akis/update_progress');
+  static const _channel = MethodChannel('olustiff/update');
+  static const _progressChannel = EventChannel('olustiff/update_progress');
 
   static const _repo = 'olustiff/youtube';
 

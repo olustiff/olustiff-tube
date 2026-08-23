@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:akis/core/extraction/models.dart';
-import 'package:akis/core/playback/queue_builder.dart';
+import 'package:olustiff/core/extraction/models.dart';
+import 'package:olustiff/core/playback/queue_builder.dart';
 
 VideoSummary v(
   String id,

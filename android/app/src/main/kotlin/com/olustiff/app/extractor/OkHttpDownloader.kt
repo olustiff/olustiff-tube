@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.extractor
+package com.olustiff.app.extractor
 
 import okhttp3.OkHttpClient
 import okhttp3.Request as OkRequest

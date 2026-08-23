@@ -9,6 +9,7 @@ import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import '../settings/settings_screen.dart';
+import 'app_title.dart';
 import 'feed_tabs.dart';
 import 'home_feed.dart';
 
@@ -101,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('oLusTifF'),
+        title: const AppTitle(),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),

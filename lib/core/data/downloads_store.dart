@@ -66,8 +66,8 @@ class DownloadsStore extends ChangeNotifier {
 
   static final DownloadsStore instance = DownloadsStore._();
 
-  static const _channel = MethodChannel('akis/downloads');
-  static const _progressChannel = EventChannel('akis/downloads_progress');
+  static const _channel = MethodChannel('olustiff/downloads');
+  static const _progressChannel = EventChannel('olustiff/downloads_progress');
   static const _kItems = 'downloads';
 
   /// Seçilebilir MP3 kaliteleri (kbit/sn).

@@ -94,8 +94,8 @@ class PlaybackState {
 /// Native oynatma servisinin Dart yüzü.
 class PlaybackClient {
   PlaybackClient({MethodChannel? methodChannel, EventChannel? eventChannel})
-      : _method = methodChannel ?? const MethodChannel('akis/player'),
-        _events = eventChannel ?? const EventChannel('akis/player_events');
+      : _method = methodChannel ?? const MethodChannel('olustiff/player'),
+        _events = eventChannel ?? const EventChannel('olustiff/player_events');
 
   /// Uygulama genelinde paylaşılan örnek.
   ///
@@ -219,4 +219,20 @@ class PlaybackClient {
 
   Future<void> setShuffle(bool enabled) =>
       _method.invokeMethod<void>('setShuffle', {'enabled': enabled});
+
+  /// Bluetooth ses aygıtı bağlanınca otomatik çalma.
+  Future<void> setBluetoothAutoPlay(bool enabled) => _method
+      .invokeMethod<void>('setBluetoothAutoPlay', {'enabled': enabled});
+
+  /// Bluetooth bağlanınca çalacak parçayı kaydeder.
+  Future<void> rememberLastPlayed({
+    required String videoId,
+    required String title,
+    String? artist,
+  }) =>
+      _method.invokeMethod<void>('rememberLastPlayed', {
+        'videoId': videoId,
+        'title': title,
+        'artist': artist,
+      });
 }

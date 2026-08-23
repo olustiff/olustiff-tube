@@ -155,6 +155,13 @@ class PlaybackCoordinator extends ChangeNotifier {
 
     await _playback.setSpeed(_settings.speed);
     await _library.recordWatch(seed);
+
+    // Bluetooth bağlanınca bu parça kaldığı yerden çalabilsin.
+    await _playback.rememberLastPlayed(
+      videoId: videoId,
+      title: details.title,
+      artist: details.uploaderName,
+    );
   }
 
   List<VideoSummary> _buildQueue(VideoSummary seed, VideoDetails details) {
@@ -226,6 +233,14 @@ class PlaybackCoordinator extends ChangeNotifier {
   Future<void> syncFromNative(String videoId, int nativeIndex) async {
     if (_details?.videoId == videoId) return;
     _index = nativeIndex;
+
+    // Kuyruk kendiliğinden ilerlediğinde de ESKİ videonun başlığı/kapağı
+    // ekranda kalmasın: hazırlanıyor durumuna geç, kuyruktaki özeti göster.
+    _loading = true;
+    _pending = _queue.elementAtOrNull(nativeIndex);
+    _details = null;
+    notifyListeners();
+
     try {
       final details = await _extraction.videoDetails(videoId);
       _details = details;
@@ -237,6 +252,10 @@ class PlaybackCoordinator extends ChangeNotifier {
       // kalmaktansa kuyruktaki özeti gösterir.
       final fallback = _queue.elementAtOrNull(nativeIndex);
       if (fallback != null) notifyListeners();
+    } finally {
+      _loading = false;
+      _pending = null;
+      notifyListeners();
     }
   }
 

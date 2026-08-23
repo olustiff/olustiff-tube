@@ -1,10 +1,10 @@
-package com.utkuhalis.akis.player
+package com.olustiff.app.player
 
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.utkuhalis.akis.MainActivity
+import com.olustiff.app.MainActivity
 
 /**
  * Uygulama arka plana alınsa ya da video ekranı kapatılsa bile oynatmayı

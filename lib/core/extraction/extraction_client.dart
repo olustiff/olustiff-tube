@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 import 'models.dart';
 
-/// Native Kotlin tarafındaki [MainActivity]'de kaydedilen `akis/extractor`
+/// Native Kotlin tarafındaki [MainActivity]'de kaydedilen `olustiff/extractor`
 /// MethodChannel'ının Dart yüzü. Tüm çağrılar native tarafta IO thread'inde
 /// koşuyor (bkz. ExtractionService.kt) — burada asla UI donmaz.
 class ExtractionException implements Exception {
@@ -17,7 +17,7 @@ class ExtractionException implements Exception {
 
 class ExtractionClient {
   ExtractionClient({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel('akis/extractor');
+      : _channel = channel ?? const MethodChannel('olustiff/extractor');
 
   final MethodChannel _channel;
 

@@ -16,6 +16,22 @@ Future<void> main() async {
   await DownloadsStore.instance.load();
   await UpdateService.instance.load();
 
+  // Bluetooth bağlanınca ne çalacağını hazırla. Hiç bir şey çalınmadıysa
+  // favorilerden (yoksa geçmişten) ilk parça yedek olarak ayarlanır;
+  // ikisi de boşsa bir şey çalmaz — rastgele içerikle rahatsız etmeyiz.
+  final settings = SettingsStore.instance;
+  await PlaybackClient.shared
+      .setBluetoothAutoPlay(settings.bluetoothAutoPlay);
+  final library = LibraryStore.instance;
+  final fallback = library.favorites.firstOrNull ?? library.watched.firstOrNull;
+  if (fallback?.videoId != null) {
+    await PlaybackClient.shared.rememberLastPlayed(
+      videoId: fallback!.videoId!,
+      title: fallback.title,
+      artist: fallback.uploaderName,
+    );
+  }
+
   // Native taraf kuyrukta kendi başına ilerleyebildiği için (ekran kapalıyken
   // de) arayüzü gerçekte çalanla eşitliyoruz.
   PlaybackClient.shared.stateStream.listen((state) {

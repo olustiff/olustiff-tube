@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.player
+package com.olustiff.app.player
 
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo

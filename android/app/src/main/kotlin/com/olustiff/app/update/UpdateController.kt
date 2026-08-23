@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.update
+package com.olustiff.app.update
 
 import android.content.Context
 import android.content.Intent
@@ -145,7 +145,7 @@ class UpdateController(
     }
 
     companion object {
-        const val CHANNEL = "akis/update"
-        const val PROGRESS_CHANNEL = "akis/update_progress"
+        const val CHANNEL = "olustiff/update"
+        const val PROGRESS_CHANNEL = "olustiff/update_progress"
     }
 }

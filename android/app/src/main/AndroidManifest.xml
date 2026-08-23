@@ -9,6 +9,11 @@
     <!-- Uygulama içi güncelleme: indirilen APK'nın kurulumunu başlatmak için.
          Kurulumu sistem yapar, kullanıcı onaylar. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- Bluetooth ses aygıtı bağlanınca çalmaya devam etmek için.
+         BLUETOOTH_CONNECT Android 12+ karşılığıdır. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
 
     <!-- Telefon + Android TV her ikisinde de kurulabilsin diye dokunmatik ekran ZORUNLU değil -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
@@ -66,6 +71,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
         </provider>
+
+        <!-- Uygulama tamamen kapalıyken de tetiklenir: sistem uygulamayı
+             yalnızca bu alıcı için ayağa kaldırır, ekran açılmaz. -->
+        <receiver
+            android:name=".player.BluetoothAutoPlayReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED"/>
+            </intent-filter>
+        </receiver>
 
         <!-- Arka planda müzik/video oynatma: aktivite kapansa/uygulama minimize
              olsa bile çalmaya devam eden, bildirimden kontrol edilebilen medya oturumu. -->

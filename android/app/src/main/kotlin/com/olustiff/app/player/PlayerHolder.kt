@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.player
+package com.olustiff.app.player
 
 import android.content.Context
 import android.net.Uri
@@ -14,7 +14,7 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import com.utkuhalis.akis.extractor.ExtractionService
+import com.olustiff.app.extractor.ExtractionService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

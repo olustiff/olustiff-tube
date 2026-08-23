@@ -7,7 +7,7 @@ class UiChannel {
 
   static final UiChannel instance = UiChannel._();
 
-  static const _channel = MethodChannel('akis/ui');
+  static const _channel = MethodChannel('olustiff/ui');
 
   /// Video izlenirken ekranın kapanmasını engeller. Sesli modda kapatılır ki
   /// telefon normal şekilde uyuyabilsin.

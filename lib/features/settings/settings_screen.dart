@@ -71,6 +71,19 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: settings.setMusicAsAudio,
               ),
               SwitchListTile(
+                secondary: const Icon(Icons.bluetooth_audio),
+                title: const Text('Bluetooth\'a bağlanınca çal'),
+                subtitle: const Text(
+                  'Kulaklık/hoparlör bağlanınca son dinlediğin başlar. '
+                  'Uygulamayı açmaz, sadece müziği başlatır.',
+                ),
+                value: settings.bluetoothAutoPlay,
+                onChanged: (value) async {
+                  await settings.setBluetoothAutoPlay(value);
+                  await PlaybackClient.shared.setBluetoothAutoPlay(value);
+                },
+              ),
+              SwitchListTile(
                 secondary: const Icon(Icons.playlist_play),
                 title: const Text('Otomatik oynatma'),
                 subtitle: const Text(

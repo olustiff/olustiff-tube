@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.player
+package com.olustiff.app.player
 
 import android.graphics.SurfaceTexture
 import android.view.Surface

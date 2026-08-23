@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:akis/core/update/update_service.dart';
+import 'package:olustiff/core/update/update_service.dart';
 
 void main() {
   group('isNewer', () {

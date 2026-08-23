@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.player
+package com.olustiff.app.player
 
 import android.content.Context
 import android.content.Intent
@@ -172,6 +172,29 @@ class PlaybackController(
                 result.success(null)
             }
 
+            // Bluetooth aygıtı bağlanınca otomatik çalma tercihi.
+            "setBluetoothAutoPlay" -> {
+                BluetoothAutoPlayReceiver.setEnabled(
+                    context, call.argument<Boolean>("enabled") ?: false
+                )
+                result.success(null)
+            }
+
+            // Bluetooth bağlanınca neyin çalacağı: son çalınan (yoksa
+            // arayüzün verdiği yedek — favori ya da geçmişteki ilk parça).
+            "rememberLastPlayed" -> {
+                val videoId = call.argument<String>("videoId")
+                if (!videoId.isNullOrBlank()) {
+                    BluetoothAutoPlayReceiver.rememberLastPlayed(
+                        context = context,
+                        videoId = videoId,
+                        title = call.argument<String>("title") ?: "",
+                        artist = call.argument<String>("artist")
+                    )
+                }
+                result.success(null)
+            }
+
             "setAutoplay" -> {
                 PlaybackQueue.setAutoplayEnabled(call.argument<Boolean>("enabled") ?: true)
                 result.success(null)
@@ -294,8 +317,8 @@ class PlaybackController(
     }
 
     companion object {
-        const val METHOD_CHANNEL = "akis/player"
-        const val EVENT_CHANNEL = "akis/player_events"
+        const val METHOD_CHANNEL = "olustiff/player"
+        const val EVENT_CHANNEL = "olustiff/player_events"
         private const val POSITION_UPDATE_INTERVAL_MS = 500L
     }
 }

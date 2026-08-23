@@ -1,16 +1,16 @@
-package com.utkuhalis.akis
+package com.olustiff.app
 
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
 import android.view.WindowManager
-import com.utkuhalis.akis.download.DownloadController
-import com.utkuhalis.akis.update.UpdateController
-import com.utkuhalis.akis.extractor.ExtractionService
-import com.utkuhalis.akis.player.PlayerHolder
-import com.utkuhalis.akis.player.PlaybackController
-import com.utkuhalis.akis.player.VideoTextureBridge
+import com.olustiff.app.download.DownloadController
+import com.olustiff.app.update.UpdateController
+import com.olustiff.app.extractor.ExtractionService
+import com.olustiff.app.player.PlayerHolder
+import com.olustiff.app.player.PlaybackController
+import com.olustiff.app.player.VideoTextureBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -23,8 +23,8 @@ import kotlinx.coroutines.launch
 
 class MainActivity : FlutterActivity() {
 
-    private val extractorChannelName = "akis/extractor"
-    private val uiChannelName = "akis/ui"
+    private val extractorChannelName = "olustiff/extractor"
+    private val uiChannelName = "olustiff/ui"
 
     // Sonuçlar her zaman ana thread'e (Dispatchers.Main) dönerek result.success/error
     // çağrılıyor — MethodChannel.Result yalnızca platform thread'inden çağrılabilir.

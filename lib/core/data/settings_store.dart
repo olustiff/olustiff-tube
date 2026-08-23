@@ -11,6 +11,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kSpeed = 'playback_speed';
   static const _kAutoplay = 'autoplay';
   static const _kMusicAsAudio = 'music_as_audio';
+  static const _kBluetoothAutoPlay = 'bluetooth_autoplay';
 
   /// Seçilebilir kalite tavanları. `null` = sınırsız (kaynağın en iyisi).
   static const qualityOptions = <int?>[null, 2160, 1440, 1080, 720, 480, 360];
@@ -28,10 +29,14 @@ class SettingsStore extends ChangeNotifier {
   /// Kapatılırsa her şey video modunda başlar.
   bool _musicAsAudio = true;
 
+  /// Bluetooth ses aygıtı bağlanınca son çalınan otomatik başlasın mı.
+  bool _bluetoothAutoPlay = false;
+
   int? get maxHeight => _maxHeight;
   double get speed => _speed;
   bool get autoplay => _autoplay;
   bool get musicAsAudio => _musicAsAudio;
+  bool get bluetoothAutoPlay => _bluetoothAutoPlay;
 
   String get qualityLabel => _maxHeight == null ? 'En yüksek' : '${_maxHeight}p';
 
@@ -43,6 +48,7 @@ class SettingsStore extends ChangeNotifier {
     _speed = prefs.getDouble(_kSpeed) ?? 1.0;
     _autoplay = prefs.getBool(_kAutoplay) ?? true;
     _musicAsAudio = prefs.getBool(_kMusicAsAudio) ?? true;
+    _bluetoothAutoPlay = prefs.getBool(_kBluetoothAutoPlay) ?? false;
     notifyListeners();
   }
 
@@ -61,6 +67,12 @@ class SettingsStore extends ChangeNotifier {
   Future<void> setMusicAsAudio(bool value) async {
     _musicAsAudio = value;
     await _prefs?.setBool(_kMusicAsAudio, value);
+    notifyListeners();
+  }
+
+  Future<void> setBluetoothAutoPlay(bool value) async {
+    _bluetoothAutoPlay = value;
+    await _prefs?.setBool(_kBluetoothAutoPlay, value);
     notifyListeners();
   }
 

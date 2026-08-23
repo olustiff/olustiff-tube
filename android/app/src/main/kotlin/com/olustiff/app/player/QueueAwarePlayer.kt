@@ -1,4 +1,4 @@
-package com.utkuhalis.akis.player
+package com.olustiff.app.player
 
 import android.content.Context
 import androidx.media3.common.ForwardingPlayer

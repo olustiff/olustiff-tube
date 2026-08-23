@@ -17,4 +17,4 @@
 -dontwarn org.schabi.newpipe.extractor.**
 
 # Uygulamanın kendi native köprü sınıfları Flutter tarafından adla çağrılır.
--keep class com.utkuhalis.akis.** { *; }
+-keep class com.olustiff.app.** { *; }

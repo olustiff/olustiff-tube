@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:akis/core/extraction/models.dart';
-import 'package:akis/core/playback/content_kind.dart';
-import 'package:akis/core/playback/stream_selection.dart';
+import 'package:olustiff/core/extraction/models.dart';
+import 'package:olustiff/core/playback/content_kind.dart';
+import 'package:olustiff/core/playback/stream_selection.dart';
 
 VideoDetails buildDetails({
   String title = 'Bir video',
