@@ -352,12 +352,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
             AspectRatio(
               aspectRatio: audioOnly ? 16 / 9 : state.aspectRatio,
               child: audioOnly
-                  ? _AudioModeArtwork(details: details)
+                  ? _AudioModeArtwork(
+                      details: details,
+                      isBuffering: state.isBuffering,
+                    )
                   : VideoPlayerView(
                       state: state,
                       playback: _playback,
                       isFullscreen: false,
                       onToggleFullscreen: _openFullscreen,
+                      posterUrl: details.thumbnailUrl,
                       onEnterPip: () =>
                           UiChannel.instance.enterPictureInPicture(),
                     ),
@@ -539,24 +543,37 @@ class _QueueSection extends StatelessWidget {
 /// Sesli modda video yüzeyi yerine kapak görseli gösterilir — video katmanı
 /// hiç oluşturulmadığı için "kazara videoya dönme" mümkün değildir.
 class _AudioModeArtwork extends StatelessWidget {
-  const _AudioModeArtwork({required this.details});
+  const _AudioModeArtwork({required this.details, required this.isBuffering});
 
   final VideoDetails details;
+  final bool isBuffering;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: details.thumbnailUrl == null
-          ? const Center(child: Icon(Icons.music_note, size: 48))
-          : Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.network(details.thumbnailUrl!, fit: BoxFit.cover),
-                Container(color: Colors.black54),
-                const Center(child: Icon(Icons.headphones, size: 48)),
-              ],
-            ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (details.thumbnailUrl != null)
+            Image.network(details.thumbnailUrl!, fit: BoxFit.cover),
+          Container(color: Colors.black54),
+          Center(
+            child: isBuffering
+                // Yükleme göstergesi kapağın üstünde; kontrol butonunda
+                // ayrıca dönmesine gerek yok.
+                ? const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.headphones, size: 48),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -628,27 +645,18 @@ class _TransportBar extends StatelessWidget {
                   onPressed: () => playback
                       .seekTo(state.position - const Duration(seconds: 10)),
                 ),
-              if (state.isBuffering)
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  ),
-                )
-              else
-                IconButton(
-                  iconSize: 40,
-                  icon: Icon(
-                    state.playWhenReady
-                        ? Icons.pause_circle_filled
-                        : Icons.play_circle_filled,
-                  ),
-                  onPressed: () => state.playWhenReady
-                      ? playback.pause()
-                      : playback.resume(),
+              // Yükleme göstergesi görüntü/kapak alanında gösterildiği için
+              // burada ayrıca dönmez; buton hep oynat/duraklat kalır.
+              IconButton(
+                iconSize: 40,
+                icon: Icon(
+                  state.playWhenReady
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_filled,
                 ),
+                onPressed: () =>
+                    state.playWhenReady ? playback.pause() : playback.resume(),
+              ),
               if (showSeek && !isLive)
                 IconButton(
                   icon: const Icon(Icons.forward_10),

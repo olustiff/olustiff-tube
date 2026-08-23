@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/playback/playback_client.dart';
+import 'update_section.dart';
 
 /// Oynatma tercihleri: kalite tavanı, hız ve otomatik oynatma.
 class SettingsScreen extends StatelessWidget {
@@ -81,6 +82,9 @@ class SettingsScreen extends StatelessWidget {
                   await PlaybackClient.shared.setAutoplay(value);
                 },
               ),
+              const Divider(),
+              const _SectionHeader('Uygulama'),
+              const UpdateSection(),
               const Divider(),
               const _SectionHeader('Veriler'),
               ListTile(

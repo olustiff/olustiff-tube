@@ -29,6 +29,7 @@ class VideoPlayerView extends StatefulWidget {
     required this.isFullscreen,
     required this.onToggleFullscreen,
     this.onEnterPip,
+    this.posterUrl,
   });
 
   final PlaybackState state;
@@ -36,6 +37,9 @@ class VideoPlayerView extends StatefulWidget {
   final bool isFullscreen;
   final VoidCallback onToggleFullscreen;
   final VoidCallback? onEnterPip;
+
+  /// İlk kare gelene kadar gösterilecek kapak.
+  final String? posterUrl;
 
   @override
   State<VideoPlayerView> createState() => _VideoPlayerViewState();
@@ -135,7 +139,35 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   }
 
   Widget _buildVideo() {
-    final surface = const VideoSurface();
+    const surface = VideoSurface();
+
+    // İlk kare henüz çizilmediyse yüzeyde ÖNCEKİ videonun karesi durur.
+    // Onu göstermek "eski video açıldı" izlenimi verdiği için üstünü
+    // kapatıyoruz.
+    // Yükleme göstergesi HER ZAMAN görsel alanın üstünde durur; oynat/duraklat
+    // butonunda ayrıca dönmesi (iki spinner) kafa karıştırıyordu.
+    if (!widget.state.hasVideoFrame || widget.state.isBuffering) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          const Offstage(child: surface),
+          if (widget.posterUrl != null)
+            Image.network(widget.posterUrl!, fit: BoxFit.cover),
+          Container(color: Colors.black.withValues(alpha: 0.55)),
+          const Center(
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     if (_fit == VideoFit.contain) {
       return Center(
         child: AspectRatio(
@@ -217,27 +249,19 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
             ),
           ),
 
-          // Orta: oynat/duraklat (tamponlanırken dairesel gösterge)
+          // Orta: oynat/duraklat. Yükleme göstergesi görüntünün üstünde
+          // olduğu için burada ayrıca dönmez.
           Center(
-            child: state.isBuffering
-                ? const SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      color: Colors.white,
-                    ),
-                  )
-                : _RoundButton(
-                    icon: state.playWhenReady ? Icons.pause : Icons.play_arrow,
-                    size: 44,
-                    onPressed: () {
-                      state.playWhenReady
-                          ? widget.playback.pause()
-                          : widget.playback.resume();
-                      _scheduleHide();
-                    },
-                  ),
+            child: _RoundButton(
+              icon: state.playWhenReady ? Icons.pause : Icons.play_arrow,
+              size: 44,
+              onPressed: () {
+                state.playWhenReady
+                    ? widget.playback.pause()
+                    : widget.playback.resume();
+                _scheduleHide();
+              },
+            ),
           ),
 
           // Alt sıra: konum, ilerleme çubuğu, tam ekran

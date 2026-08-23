@@ -6,6 +6,7 @@ import android.os.Build
 import android.util.Rational
 import android.view.WindowManager
 import com.utkuhalis.akis.download.DownloadController
+import com.utkuhalis.akis.update.UpdateController
 import com.utkuhalis.akis.extractor.ExtractionService
 import com.utkuhalis.akis.player.PlayerHolder
 import com.utkuhalis.akis.player.PlaybackController
@@ -31,6 +32,7 @@ class MainActivity : FlutterActivity() {
 
     private var playbackController: PlaybackController? = null
     private var downloadController: DownloadController? = null
+    private var updateController: UpdateController? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -52,6 +54,13 @@ class MainActivity : FlutterActivity() {
             channel = MethodChannel(messenger, DownloadController.CHANNEL),
             progressChannel =
                 EventChannel(messenger, DownloadController.PROGRESS_CHANNEL)
+        )
+
+        updateController = UpdateController(
+            context = applicationContext,
+            channel = MethodChannel(messenger, UpdateController.CHANNEL),
+            progressChannel =
+                EventChannel(messenger, UpdateController.PROGRESS_CHANNEL)
         )
 
         // Ekranı açık tutma ve resim-içinde-resim yalnızca aktivite üzerinden
@@ -149,6 +158,8 @@ class MainActivity : FlutterActivity() {
         playbackController = null
         downloadController?.dispose()
         downloadController = null
+        updateController?.dispose()
+        updateController = null
         super.onDestroy()
     }
 }

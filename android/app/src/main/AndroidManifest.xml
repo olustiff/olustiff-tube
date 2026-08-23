@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Uygulama içi güncelleme: indirilen APK'nın kurulumunu başlatmak için.
+         Kurulumu sistem yapar, kullanıcı onaylar. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
     <!-- Telefon + Android TV her ikisinde de kurulabilsin diye dokunmatik ekran ZORUNLU değil -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
@@ -14,11 +17,11 @@
     <!-- tools:replace: LAME kütüphanesi kendi uygulama etiketini bildiriyor,
          bizimki geçerli olmalı. -->
     <application
-        android:label="Akış"
+        android:label="oLusTifF"
         tools:replace="android:label"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:banner="@mipmap/ic_launcher">
+        android:banner="@drawable/tv_banner">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -53,6 +56,16 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"/>
+        </provider>
 
         <!-- Arka planda müzik/video oynatma: aktivite kapansa/uygulama minimize
              olsa bile çalmaya devam eden, bildirimden kontrol edilebilen medya oturumu. -->

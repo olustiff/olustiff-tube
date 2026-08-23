@@ -27,6 +27,10 @@ class PlaybackState {
   final int videoWidth;
   final int videoHeight;
 
+  /// Geçerli medyanın ilk karesi çizildi mi. false ise yüzeyde hâlâ ÖNCEKİ
+  /// videonun karesi durur; arayüz onun yerine kapak göstermeli.
+  final bool hasVideoFrame;
+
   const PlaybackState({
     this.position = Duration.zero,
     this.duration,
@@ -46,6 +50,7 @@ class PlaybackState {
     this.currentVideoId,
     this.videoWidth = 0,
     this.videoHeight = 0,
+    this.hasVideoFrame = false,
   });
 
   bool get hasNext => queueIndex + 1 < queueSize;
@@ -81,6 +86,7 @@ class PlaybackState {
       currentVideoId: map['currentVideoId'] as String?,
       videoWidth: (map['videoWidth'] as num?)?.toInt() ?? 0,
       videoHeight: (map['videoHeight'] as num?)?.toInt() ?? 0,
+      hasVideoFrame: map['hasVideoFrame'] as bool? ?? false,
     );
   }
 }

@@ -35,7 +35,7 @@ class FeedTabs extends StatelessWidget {
           Expanded(
             child: _TabChip(
               icon: Icons.auto_awesome,
-              label: 'Sana',
+              label: 'Sana özel',
               isSelected: selected == HomeTab.forYou,
               onTap: () => onChanged(HomeTab.forYou),
             ),

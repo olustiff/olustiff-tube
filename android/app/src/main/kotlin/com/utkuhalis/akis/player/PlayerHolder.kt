@@ -62,6 +62,17 @@ object PlayerHolder {
     @Volatile
     var onQueueAdvanced: (() -> Unit)? = null
 
+    /**
+     * Geçerli medyanın ilk video karesi çizildi mi.
+     *
+     * Yeni bir medya yüklenirken ExoPlayer yüzeyde ESKİ videonun son karesini
+     * tutar; arayüz bunu göstermek yerine kapak + yükleme göstergesi çizsin
+     * diye bu bayrağı izler.
+     */
+    @Volatile
+    var hasVideoFrame: Boolean = false
+        private set
+
     /** Otomatik geçiş sırasında yeni bir bitiş olayının araya girmesini önler. */
     @Volatile
     private var advancing = false
@@ -94,6 +105,11 @@ object PlayerHolder {
             // parça bitince sıradakine geçilmeli. Bu dinleyici Dart'ta olsaydı
             // Flutter motoru askıya alındığında hiç tetiklenmezdi.
             player.addListener(object : Player.Listener {
+                override fun onRenderedFirstFrame() {
+                    hasVideoFrame = true
+                    onQueueAdvanced?.invoke()
+                }
+
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState != Player.STATE_ENDED) return
                     if (!PlaybackQueue.autoplay || advancing) return
@@ -198,6 +214,8 @@ object PlayerHolder {
         val player = getPlayer(context)
         currentRequest = request
         audioOnlyMode = audioOnly
+        // Yeni medya: eski karenin "yeni video" sanılmaması için bayrak sıfırlanır.
+        hasVideoFrame = false
         applyAudioOnlyTrackSelection(player, request, audioOnly)
         player.setMediaSource(buildSource(request, audioOnly))
         player.prepare()
@@ -255,6 +273,7 @@ object PlayerHolder {
         val player = getPlayer(context)
         audioOnlyMode = audioOnly
         currentQualityLabel = null
+        hasVideoFrame = false
 
         val metadata = MediaMetadata.Builder()
             .setTitle(title)

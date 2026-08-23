@@ -278,6 +278,7 @@ class PlaybackController(
                 "shuffle" to PlaybackQueue.shuffle,
                 "qualityLabel" to PlayerHolder.currentQualityLabel,
                 "currentVideoId" to PlaybackQueue.current()?.videoId,
+                "hasVideoFrame" to PlayerHolder.hasVideoFrame,
                 "videoWidth" to player.videoSize.width,
                 "videoHeight" to player.videoSize.height
             )

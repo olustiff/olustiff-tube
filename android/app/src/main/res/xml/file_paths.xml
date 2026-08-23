@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- İndirilen APK'yı sistem paket yükleyicisine verebilmek için gerekli:
+     başka bir uygulamaya dosya yolu değil content:// adresi verilir. -->
+<paths>
+    <cache-path name="updates" path="updates/"/>
+</paths>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/data/downloads_store.dart';
 import 'core/data/library_store.dart';
+import 'core/update/update_service.dart';
 import 'core/data/settings_store.dart';
 import 'core/playback/playback_client.dart';
 import 'core/playback/playback_coordinator.dart';
@@ -13,6 +14,7 @@ Future<void> main() async {
   await LibraryStore.instance.load();
   await SettingsStore.instance.load();
   await DownloadsStore.instance.load();
+  await UpdateService.instance.load();
 
   // Native taraf kuyrukta kendi başına ilerleyebildiği için (ekran kapalıyken
   // de) arayüzü gerçekte çalanla eşitliyoruz.
@@ -32,7 +34,7 @@ class AkisApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Akış',
+      title: 'oLusTifF',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
