@@ -11,6 +11,7 @@ import '../../core/playback/sleep_timer.dart';
 import '../../core/playback/ui_channel.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
+import 'download_menu.dart';
 import 'quality_menu.dart';
 import 'video_player_view.dart';
 
@@ -262,6 +263,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
               PopupMenuButton<String>(
                 onSelected: (value) {
                   switch (value) {
+                    case 'download':
+                      showDownloadMenu(context);
                     case 'playlist':
                       _addToPlaylist();
                     case 'sleep':
@@ -271,6 +274,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   }
                 },
                 itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'download',
+                    child: ListTile(
+                      leading: Icon(Icons.download_outlined),
+                      title: Text('MP3 indir'),
+                    ),
+                  ),
                   const PopupMenuItem(
                     value: 'playlist',
                     child: ListTile(

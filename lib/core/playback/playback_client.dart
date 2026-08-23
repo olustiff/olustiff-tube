@@ -150,6 +150,20 @@ class PlaybackClient {
         'audioUrl': audioUrl,
       });
 
+  /// İndirilmiş bir dosyayı oynatır.
+  Future<void> playLocal({
+    required String path,
+    required String title,
+    String? artist,
+    required bool audioOnly,
+  }) =>
+      _method.invokeMethod<void>('playLocal', {
+        'path': path,
+        'title': title,
+        'artist': artist,
+        'audioOnly': audioOnly,
+      });
+
   /// Kaynakları değiştirir (kalite seçimi); konum ve mod korunur.
   Future<void> replaceSources({String? videoUrl, String? audioUrl}) =>
       _method.invokeMethod<void>('replaceSources', {

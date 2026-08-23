@@ -7,6 +7,7 @@ import '../player/mini_player.dart';
 import '../player/player_screen.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
+import 'downloads_tab.dart';
 
 /// Kitaplık: izleme geçmişi, arama geçmişi ve kullanıcının çalma listeleri.
 class LibraryScreen extends StatelessWidget {
@@ -15,12 +16,14 @@ class LibraryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Kitaplık'),
           bottom: const TabBar(
+            isScrollable: true,
             tabs: [
+              Tab(text: 'İndirilenler'),
               Tab(text: 'Geçmiş'),
               Tab(text: 'Listelerim'),
               Tab(text: 'Aramalar'),
@@ -32,6 +35,7 @@ class LibraryScreen extends StatelessWidget {
             const Expanded(
               child: TabBarView(
                 children: [
+                  DownloadsTab(),
                   _WatchHistoryTab(),
                   _PlaylistsTab(),
                   _SearchHistoryTab(),

@@ -115,6 +115,25 @@ class PlaybackController(
                 result.success(null)
             }
 
+            // İndirilmiş bir dosyayı oynatır. Ağ yok, kuyruk yok — tek dosya.
+            "playLocal" -> {
+                val path = call.argument<String>("path")
+                if (path.isNullOrBlank()) {
+                    result.error("BAD_ARGS", "path zorunlu", null)
+                    return
+                }
+                context.startService(Intent(context, PlaybackService::class.java))
+                PlaybackQueue.clear()
+                PlayerHolder.playLocal(
+                    context = context,
+                    path = path,
+                    title = call.argument<String>("title") ?: "",
+                    artist = call.argument<String>("artist"),
+                    audioOnly = call.argument<Boolean>("audioOnly") ?: false
+                )
+                result.success(null)
+            }
+
             // Kuyruğu native tarafa yükler. Otomatik geçiş burada yaşadığı için
             // ekran kapalıyken de sıradakine geçilir.
             "setQueue" -> {

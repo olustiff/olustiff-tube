@@ -240,6 +240,51 @@ object PlayerHolder {
     }
 
     /**
+     * İndirilmiş bir dosyayı oynatır.
+     *
+     * Yerel dosyada video ve ses zaten tek kapta olduğu için birleştirme
+     * yapılmaz; sesli mod, video parçasını devre dışı bırakarak uygulanır.
+     */
+    fun playLocal(
+        context: Context,
+        path: String,
+        title: String,
+        artist: String?,
+        audioOnly: Boolean
+    ) {
+        val player = getPlayer(context)
+        audioOnlyMode = audioOnly
+        currentQualityLabel = null
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(artist)
+            .build()
+
+        currentRequest = PlayRequest(
+            videoUrl = null,
+            audioUrl = path,
+            title = title,
+            artist = artist,
+            artworkUrl = null
+        )
+
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, audioOnly)
+            .build()
+
+        player.setMediaItem(
+            MediaItem.Builder()
+                .setUri(Uri.fromFile(java.io.File(path)))
+                .setMediaMetadata(metadata)
+                .build()
+        )
+        player.prepare()
+        player.playWhenReady = true
+    }
+
+    /**
      * Kaynakları değiştirir (ör. kalite seçimi) — mod aynı kalır ve oynatma
      * konumu korunur, böylece kullanıcı kaldığı yerden izlemeye devam eder.
      */

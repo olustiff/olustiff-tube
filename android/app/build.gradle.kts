@@ -59,4 +59,10 @@ dependencies {
     implementation("androidx.media3:media3-session:1.11.0")
     implementation("androidx.media3:media3-ui:1.11.0")
     implementation("androidx.media3:media3-datasource-okhttp:1.11.0")
+    // MP3 kodlama: Android'in kendi kodlayıcılarında MP3 YOKTUR (yalnızca
+    // çözücü var), bu yüzden LAME'in Android derlemesini gömüyoruz.
+    // isTransitive=false: kütüphane eski com.android.support paketlerini
+    // sürüklüyor ve AndroidX ile çakışıyor. Bize yalnızca LAME sınıfları ve
+    // native kütüphane gerekiyor.
+    implementation("com.github.naman14:TAndroidLame:1.1") { isTransitive = false }
 }

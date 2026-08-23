@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
 import android.view.WindowManager
+import com.utkuhalis.akis.download.DownloadController
 import com.utkuhalis.akis.extractor.ExtractionService
 import com.utkuhalis.akis.player.PlayerHolder
 import com.utkuhalis.akis.player.PlaybackController
@@ -29,6 +30,7 @@ class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var playbackController: PlaybackController? = null
+    private var downloadController: DownloadController? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -43,6 +45,13 @@ class MainActivity : FlutterActivity() {
             methodChannel = MethodChannel(messenger, PlaybackController.METHOD_CHANNEL),
             eventChannel = EventChannel(messenger, PlaybackController.EVENT_CHANNEL),
             textureBridge = VideoTextureBridge(flutterEngine.renderer)
+        )
+
+        downloadController = DownloadController(
+            context = applicationContext,
+            channel = MethodChannel(messenger, DownloadController.CHANNEL),
+            progressChannel =
+                EventChannel(messenger, DownloadController.PROGRESS_CHANNEL)
         )
 
         // Ekranı açık tutma ve resim-içinde-resim yalnızca aktivite üzerinden
@@ -138,6 +147,8 @@ class MainActivity : FlutterActivity() {
         // BIRAKILMAZ — aktivite kapansa da arka planda oynatma sürsün.
         playbackController?.dispose()
         playbackController = null
+        downloadController?.dispose()
+        downloadController = null
         super.onDestroy()
     }
 }
