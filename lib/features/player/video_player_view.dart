@@ -217,20 +217,27 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
             ),
           ),
 
-          // Orta: oynat/duraklat
+          // Orta: oynat/duraklat (tamponlanırken dairesel gösterge)
           Center(
-            child: _RoundButton(
-              icon: state.isBuffering
-                  ? Icons.hourglass_empty
-                  : (state.playWhenReady ? Icons.pause : Icons.play_arrow),
-              size: 44,
-              onPressed: () {
-                state.playWhenReady
-                    ? widget.playback.pause()
-                    : widget.playback.resume();
-                _scheduleHide();
-              },
-            ),
+            child: state.isBuffering
+                ? const SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Colors.white,
+                    ),
+                  )
+                : _RoundButton(
+                    icon: state.playWhenReady ? Icons.pause : Icons.play_arrow,
+                    size: 44,
+                    onPressed: () {
+                      state.playWhenReady
+                          ? widget.playback.pause()
+                          : widget.playback.resume();
+                      _scheduleHide();
+                    },
+                  ),
           ),
 
           // Alt sıra: konum, ilerleme çubuğu, tam ekran

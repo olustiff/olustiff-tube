@@ -254,6 +254,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   MaterialPageRoute(builder: (_) => const SearchScreen()),
                 ),
               ),
+              _FavoriteButton(details: details),
               IconButton(
                 tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
                 icon: Icon(
@@ -336,7 +337,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     if (details == null) {
-      return const Center(child: CircularProgressIndicator());
+      // Yeni medya hazırlanıyor: eski videonun karesi yerine, dokunulan
+      // içeriğin başlığıyla birlikte yükleme durumu gösterilir.
+      return _PreparingView(pending: _coordinator.pending);
     }
 
     return StreamBuilder<PlaybackState>(
@@ -625,18 +628,27 @@ class _TransportBar extends StatelessWidget {
                   onPressed: () => playback
                       .seekTo(state.position - const Duration(seconds: 10)),
                 ),
-              IconButton(
-                iconSize: 40,
-                icon: Icon(
-                  state.isBuffering
-                      ? Icons.hourglass_empty
-                      : (state.playWhenReady
-                          ? Icons.pause_circle_filled
-                          : Icons.play_circle_filled),
+              if (state.isBuffering)
+                const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(strokeWidth: 3),
+                  ),
+                )
+              else
+                IconButton(
+                  iconSize: 40,
+                  icon: Icon(
+                    state.playWhenReady
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_filled,
+                  ),
+                  onPressed: () => state.playWhenReady
+                      ? playback.pause()
+                      : playback.resume(),
                 ),
-                onPressed: () =>
-                    state.playWhenReady ? playback.pause() : playback.resume(),
-              ),
               if (showSeek && !isLive)
                 IconButton(
                   icon: const Icon(Icons.forward_10),
@@ -653,6 +665,107 @@ class _TransportBar extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Videoyu favorilere ekleyip çıkarır.
+class _FavoriteButton extends StatelessWidget {
+  const _FavoriteButton({required this.details});
+
+  final VideoDetails? details;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = LibraryStore.instance;
+    final video = details;
+
+    return AnimatedBuilder(
+      animation: store,
+      builder: (context, _) {
+        final isFavorite =
+            video != null && store.isFavorite(video.videoId);
+        return IconButton(
+          tooltip: isFavorite ? 'Favorilerden çıkar' : 'Favorilere ekle',
+          icon: Icon(
+            isFavorite ? Icons.favorite : Icons.favorite_border,
+            color: isFavorite ? Theme.of(context).colorScheme.primary : null,
+          ),
+          onPressed: video == null
+              ? null
+              : () => store.toggleFavorite(
+                    VideoSummary(
+                      videoId: video.videoId,
+                      title: video.title,
+                      url: 'https://www.youtube.com/watch?v=${video.videoId}',
+                      uploaderName: video.uploaderName,
+                      durationSeconds: video.durationSeconds,
+                      viewCount: video.viewCount,
+                      textualUploadDate: null,
+                      thumbnailUrl: video.thumbnailUrl,
+                    ),
+                  ),
+        );
+      },
+    );
+  }
+}
+
+/// Yeni medya hazırlanırken gösterilir.
+///
+/// Eski videonun son karesini ekranda bırakmak "tıkladım ama bir şey olmadı"
+/// hissi veriyordu; burada dokunulan içeriğin kapağı ve başlığı hemen görünür.
+class _PreparingView extends StatelessWidget {
+  const _PreparingView({required this.pending});
+
+  final VideoSummary? pending;
+
+  @override
+  Widget build(BuildContext context) {
+    final video = pending;
+
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (video?.thumbnailUrl != null)
+                Image.network(video!.thumbnailUrl!, fit: BoxFit.cover)
+              else
+                ColoredBox(color: Theme.of(context).colorScheme.surfaceDim),
+              Container(color: Colors.black54),
+              const Center(
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (video != null)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(video.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Text(video.uploaderName ?? '',
+                    style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
       ],
     );
   }

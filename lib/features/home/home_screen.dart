@@ -9,16 +9,8 @@ import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import '../settings/settings_screen.dart';
+import 'feed_tabs.dart';
 import 'home_feed.dart';
-
-/// Ana sayfadaki liste türü.
-enum HomeTab {
-  /// Aramalardan ve izlenenlerden üretilen kişisel akış.
-  forYou,
-
-  /// Geçmişte en çok tekrar edilenler.
-  mostPlayed,
-}
 
 /// Ana ekran: kullanıcının arama ve izleme geçmişinden üretilen kişisel akış.
 ///
@@ -91,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<VideoSummary> get _currentList =>
-      _tab == HomeTab.forYou ? _videos : _library.mostPlayed;
+      _tab == HomeTab.forYou ? _videos : _library.favorites;
 
   void _open(int index) {
     final list = _currentList;
@@ -146,32 +138,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTabs() {
-    // Geçmiş yokken filtre göstermek anlamsız.
-    if (!_feed.hasHistory) return const SizedBox.shrink();
+    // Geçmiş de favori de yokken filtre göstermek anlamsız.
+    if (!_feed.hasHistory && _library.favorites.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: SizedBox(
-        width: double.infinity,
-        child: SegmentedButton<HomeTab>(
-          style: const ButtonStyle(visualDensity: VisualDensity.compact),
-          segments: const [
-            ButtonSegment(
-              value: HomeTab.forYou,
-              icon: Icon(Icons.explore_outlined),
-              label: Text('Sana özel'),
-            ),
-            ButtonSegment(
-              value: HomeTab.mostPlayed,
-              icon: Icon(Icons.repeat),
-              label: Text('En çok dinlediklerin'),
-            ),
-          ],
-          selected: {_tab},
-          onSelectionChanged: (selection) =>
-              setState(() => _tab = selection.first),
-        ),
-      ),
+    return FeedTabs(
+      selected: _tab,
+      favoriteCount: _library.favorites.length,
+      onChanged: (tab) => setState(() => _tab = tab),
     );
   }
 
@@ -180,16 +155,16 @@ class _HomeScreenState extends State<HomeScreen> {
       return _EmptyFeed(onSearch: _openSearch);
     }
 
-    if (_tab == HomeTab.mostPlayed) {
+    if (_tab == HomeTab.favorites) {
       return VideoList(
-        videos: _library.mostPlayed,
+        videos: _library.favorites,
         loading: false,
         hasMore: false,
         onLoadMore: () {},
         onTap: _open,
         emptyMessage:
-            'Henüz tekrar dinlediğin bir şey yok.\n'
-            'Bir şarkıyı ikinci kez açtığında burada görünür.',
+            'Henüz favorin yok.\n'
+            'Oynatırken kalbe dokunarak ekleyebilirsin.',
       );
     }
 

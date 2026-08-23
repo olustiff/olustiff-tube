@@ -19,6 +19,7 @@ class LibraryStore extends ChangeNotifier {
   static const _kWatched = 'watch_history';
   static const _kPlaylists = 'playlists';
   static const _kPlayCounts = 'play_counts';
+  static const _kFavorites = 'favorites';
 
   static const _maxSearches = 40;
   static const _maxWatched = 200;
@@ -32,24 +33,34 @@ class LibraryStore extends ChangeNotifier {
   Map<String, int> _playCounts = {};
   Map<String, List<VideoSummary>> _playlists = {};
 
+  /// Kullanıcının kalple işaretlediği içerikler (en yeni başta).
+  List<VideoSummary> _favorites = [];
+
   List<String> get searches => List.unmodifiable(_searches);
   List<VideoSummary> get watched => List.unmodifiable(_watched);
 
   int playCountOf(String videoId) => _playCounts[videoId] ?? 0;
 
-  /// Geçmişte en çok tekrar edilen içerikler (çoktan aza).
-  ///
-  /// Tek kez açılanlar "en çok dinlenen" sayılmaz; liste anlamlı kalsın diye
-  /// en az iki kez oynatılmış olanlar gösterilir.
-  List<VideoSummary> get mostPlayed {
-    final repeated = _watched
-        .where((v) => v.videoId != null && playCountOf(v.videoId!) > 1)
-        .toList();
-    repeated.sort(
-      (a, b) => playCountOf(b.videoId!).compareTo(playCountOf(a.videoId!)),
-    );
-    return List.unmodifiable(repeated);
+  List<VideoSummary> get favorites => List.unmodifiable(_favorites);
+
+  bool isFavorite(String videoId) =>
+      _favorites.any((v) => v.videoId == videoId);
+
+  /// En çok dinlenen kanallar (çoktan aza). Ana sayfa önerileri bunları
+  /// tohum olarak kullanır: sık dinlenen sanatçı daha isabetli öneri verir.
+  List<String> get topChannels {
+    final counts = <String, int>{};
+    for (final video in _watched) {
+      final channel = video.uploaderName;
+      final id = video.videoId;
+      if (channel == null || channel.isEmpty || id == null) continue;
+      counts[channel] = (counts[channel] ?? 0) + playCountOf(id);
+    }
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.map((e) => e.key).toList();
   }
+
   Map<String, List<VideoSummary>> get playlists => Map.unmodifiable(_playlists);
 
   Future<void> load() async {
@@ -63,6 +74,8 @@ class LibraryStore extends ChangeNotifier {
       _playCounts = (jsonDecode(rawCounts) as Map<String, dynamic>)
           .map((key, value) => MapEntry(key, (value as num).toInt()));
     }
+
+    _favorites = _decodeVideos(prefs.getString(_kFavorites));
 
     final rawPlaylists = prefs.getString(_kPlaylists);
     if (rawPlaylists != null) {
@@ -126,6 +139,30 @@ class LibraryStore extends ChangeNotifier {
     _playCounts = {};
     await _prefs?.setString(_kWatched, _encodeVideos(_watched));
     await _prefs?.setString(_kPlayCounts, jsonEncode(_playCounts));
+    notifyListeners();
+  }
+
+  // --- Favoriler ---
+
+  /// Favoriye ekler ya da çıkarır; sonuç yeni durumdur.
+  Future<bool> toggleFavorite(VideoSummary video) async {
+    final videoId = video.videoId;
+    if (videoId == null) return false;
+
+    final wasFavorite = isFavorite(videoId);
+    if (wasFavorite) {
+      _favorites.removeWhere((v) => v.videoId == videoId);
+    } else {
+      _favorites.insert(0, video);
+    }
+    await _prefs?.setString(_kFavorites, _encodeVideos(_favorites));
+    notifyListeners();
+    return !wasFavorite;
+  }
+
+  Future<void> clearFavorites() async {
+    _favorites = [];
+    await _prefs?.setString(_kFavorites, _encodeVideos(_favorites));
     notifyListeners();
   }
 

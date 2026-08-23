@@ -39,6 +39,16 @@ class PlaybackCoordinator extends ChangeNotifier {
 
   QueueMode get queueMode => _queueMode;
 
+  /// Yeni bir medya hazırlanıyor mu. Arayüz bu sürede eski videonun karesini
+  /// göstermek yerine yükleme durumuna geçer.
+  bool _loading = false;
+  bool get isLoading => _loading;
+
+  /// Hazırlanırken gösterilecek özet (başlık/kapak). Tam detay gelene kadar
+  /// ekran boş kalmasın diye kuyruktan alınır.
+  VideoSummary? _pending;
+  VideoSummary? get pending => _pending;
+
   VideoDetails? get details => _details;
   bool get audioOnly => _audioOnly;
   String? get qualityLabel => _qualityLabel;
@@ -64,6 +74,30 @@ class PlaybackCoordinator extends ChangeNotifier {
     List<VideoSummary>? exactQueue,
     int? index,
   }) async {
+    // Kullanıcı dokunur dokunmaz arayüz tepki versin: eski videonun karesi
+    // ekranda kalmasın, yeni içeriğin başlığı hemen görünsün.
+    _loading = true;
+    _pending = [...context, ...(exactQueue ?? const <VideoSummary>[])]
+        .where((v) => v.videoId == videoId)
+        .firstOrNull;
+    _details = null;
+    notifyListeners();
+
+    try {
+      await _play(videoId, context, exactQueue, index);
+    } finally {
+      _loading = false;
+      _pending = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _play(
+    String videoId,
+    List<VideoSummary> context,
+    List<VideoSummary>? exactQueue,
+    int? index,
+  ) async {
     final details = await _extraction.videoDetails(videoId);
 
     // Açılış modu içeriğin türünden belirlenir; sonrası yalnızca kullanıcının.

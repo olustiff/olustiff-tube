@@ -24,17 +24,19 @@ class HomeFeed {
   bool get hasHistory =>
       _library.searches.isNotEmpty || _library.watched.isNotEmpty;
 
-  /// Tohumlar: önce son aramalar, yetmezse son izlenenlerin kanal adları.
+  /// Tohumlar: önce son aramalar, sonra EN ÇOK dinlenen kanallar.
+  ///
+  /// Sık dinlenen sanatçı, sadece bir kez açılmış bir kanaldan daha isabetli
+  /// öneri verir; bu yüzden izleme sayacına göre sıralanır.
   List<String> seeds() {
     final result = <String>[];
     for (final search in _library.searches) {
       if (result.length >= _seedCount) break;
       result.add(search);
     }
-    for (final watched in _library.watched) {
+    for (final channel in _library.topChannels) {
       if (result.length >= _seedCount) break;
-      final channel = watched.uploaderName;
-      if (channel == null || channel.isEmpty) continue;
+      if (channel.isEmpty) continue;
       if (result.any((s) => s.toLowerCase() == channel.toLowerCase())) continue;
       result.add(channel);
     }

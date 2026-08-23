@@ -78,47 +78,14 @@ class _DismissiblePlayerState extends State<_DismissiblePlayer> {
       offset: Offset(0, _offset),
       child: Opacity(
         opacity: 1 - progress * 0.4,
-        child: Scaffold(
-          body: Column(
-            children: [
-              // Yalnızca üst şerit sürüklemeyi yakalar; liste kaydırma ve
-              // video kontrolleri normal çalışsın.
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onVerticalDragUpdate: _onDragUpdate,
-                onVerticalDragEnd: _onDragEnd,
-                child: const _DragHandle(),
-              ),
-              Expanded(child: PlayerScreen(videoId: widget.videoId)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Aşağı kaydırılabileceğini gösteren tutamaç.
-class _DragHandle extends StatelessWidget {
-  const _DragHandle();
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        width: double.infinity,
-        color: Theme.of(context).colorScheme.surface,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Center(
-          child: Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+        // Sürükleme ekranın HER YERİNDEN başlar. Alttaki liste kendi
+        // kaydırmasını yaptığı için jest yarışını o kazanır; video ve
+        // kontrol alanında ise sürükleme buraya düşer.
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onVerticalDragUpdate: _onDragUpdate,
+          onVerticalDragEnd: _onDragEnd,
+          child: PlayerScreen(videoId: widget.videoId),
         ),
       ),
     );

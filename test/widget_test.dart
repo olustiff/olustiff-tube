@@ -109,19 +109,34 @@ void main() {
     expect(find.text('Sonuç 39'), findsOneWidget);
   });
 
-  testWidgets('en çok dinlenenler yalnızca tekrar edilenleri listeler',
+  testWidgets('favori ekleme ve çıkarma çalışır', (tester) async {
+    final store = LibraryStore.instance;
+    final video = VideoSummary.fromMap(videoMap('a', 'Bir şarkı'));
+
+    expect(store.isFavorite('a'), isFalse);
+
+    final added = await store.toggleFavorite(video);
+    expect(added, isTrue);
+    expect(store.isFavorite('a'), isTrue);
+    expect(store.favorites.map((e) => e.videoId), ['a']);
+
+    final removed = await store.toggleFavorite(video);
+    expect(removed, isFalse);
+    expect(store.favorites, isEmpty);
+  });
+
+  testWidgets('öneri tohumları en çok dinlenen kanalı öne alır',
       (tester) async {
     final store = LibraryStore.instance;
-    final tekrar = VideoSummary.fromMap(videoMap('a', 'Tekrar edilen'));
-    final birKez = VideoSummary.fromMap(videoMap('b', 'Bir kez açılan'));
+    final az = VideoSummary.fromMap(videoMap('a', 'Az', uploader: 'Az Kanal'));
+    final cok = VideoSummary.fromMap(videoMap('b', 'Çok', uploader: 'Çok Kanal'));
 
-    await store.recordWatch(tekrar);
-    await store.recordWatch(birKez);
-    await store.recordWatch(tekrar);
+    await store.recordWatch(az);
+    await store.recordWatch(cok);
+    await store.recordWatch(cok);
 
-    expect(store.mostPlayed.map((e) => e.videoId), ['a'],
-        reason: 'tek kez açılan "en çok dinlenen" sayılmamalı');
-    expect(store.playCountOf('a'), 2);
+    expect(store.topChannels.first, 'Çok Kanal',
+        reason: 'sık dinlenen kanal daha isabetli öneri verir');
   });
 
   testWidgets('boş arama ekranı son aramaları önerir', (tester) async {
