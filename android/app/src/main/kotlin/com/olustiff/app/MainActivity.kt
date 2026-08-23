@@ -1,6 +1,10 @@
 package com.olustiff.app
 
 import android.app.PictureInPictureParams
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
@@ -80,6 +84,34 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "enterPictureInPicture" -> result.success(enterPip())
+
+                // Bluetooth otomatik çalma, arka planda servis başlatmayı
+                // gerektiriyor; bu da yalnızca pil optimizasyonundan muaf
+                // uygulamalara izinli.
+                "isBatteryOptimizationIgnored" -> {
+                    val power = getSystemService(PowerManager::class.java)
+                    result.success(
+                        power?.isIgnoringBatteryOptimizations(packageName) ?: false
+                    )
+                }
+
+                "requestIgnoreBatteryOptimization" -> {
+                    try {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:$packageName")
+                            )
+                        )
+                        result.success(true)
+                    } catch (e: Exception) {
+                        // Bazı üreticiler bu ekranı kapatır; genel listeye düş.
+                        startActivity(
+                            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        )
+                        result.success(false)
+                    }
+                }
 
                 else -> result.notImplemented()
             }

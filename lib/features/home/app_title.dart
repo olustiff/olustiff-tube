@@ -27,8 +27,10 @@ class AppTitle extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         // Yükseklik işaretten küçük: yazı, işaretle optik olarak dengelensin.
+        // Açık renkli varyant: logo beyaz zemin için çizildiğinden harfleri
+        // neredeyse siyah, koyu arayüzde okunmuyordu.
         Image.asset(
-          'assets/logo_wordmark.png',
+          'assets/logo_wordmark_light.png',
           height: 16,
           errorBuilder: (context, error, stack) => _fallback,
         ),

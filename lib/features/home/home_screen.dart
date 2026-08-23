@@ -146,7 +146,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return FeedTabs(
       selected: _tab,
-      favoriteCount: _library.mostPlayed.length,
       onChanged: (tab) => setState(() => _tab = tab),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/playback/playback_client.dart';
+import 'bluetooth_setting.dart';
 import 'update_section.dart';
 
 /// Oynatma tercihleri: kalite tavanı, hız ve otomatik oynatma.
@@ -70,19 +71,7 @@ class SettingsScreen extends StatelessWidget {
                 value: settings.musicAsAudio,
                 onChanged: settings.setMusicAsAudio,
               ),
-              SwitchListTile(
-                secondary: const Icon(Icons.bluetooth_audio),
-                title: const Text('Bluetooth\'a bağlanınca çal'),
-                subtitle: const Text(
-                  'Kulaklık/hoparlör bağlanınca son dinlediğin başlar. '
-                  'Uygulamayı açmaz, sadece müziği başlatır.',
-                ),
-                value: settings.bluetoothAutoPlay,
-                onChanged: (value) async {
-                  await settings.setBluetoothAutoPlay(value);
-                  await PlaybackClient.shared.setBluetoothAutoPlay(value);
-                },
-              ),
+              const BluetoothSetting(),
               SwitchListTile(
                 secondary: const Icon(Icons.playlist_play),
                 title: const Text('Otomatik oynatma'),

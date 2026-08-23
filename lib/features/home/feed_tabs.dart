@@ -19,12 +19,10 @@ class FeedTabs extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onChanged,
-    required this.favoriteCount,
   });
 
   final HomeTab selected;
   final ValueChanged<HomeTab> onChanged;
-  final int favoriteCount;
 
   @override
   Widget build(BuildContext context) {
@@ -45,8 +43,6 @@ class FeedTabs extends StatelessWidget {
             child: _TabChip(
               icon: Icons.repeat,
               label: 'Favoriler',
-              // Kaç parça olduğunu göstermek, sekmeye girmeden bilgi verir.
-              badge: favoriteCount > 0 ? '$favoriteCount' : null,
               isSelected: selected == HomeTab.favorites,
               onTap: () => onChanged(HomeTab.favorites),
             ),
@@ -63,14 +59,12 @@ class _TabChip extends StatelessWidget {
     required this.label,
     required this.isSelected,
     required this.onTap,
-    this.badge,
   });
 
   final IconData icon;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -113,23 +107,6 @@ class _TabChip extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (badge != null) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? scheme.onPrimaryContainer.withValues(alpha: 0.15)
-                          : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      badge!,
-                      style: TextStyle(fontSize: 11, color: foreground),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

@@ -265,8 +265,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   switch (value) {
                     case 'download':
                       showDownloadMenu(context);
-                    case 'playlist':
-                      _addToPlaylist();
                     case 'sleep':
                       _openSleepTimer();
                     case 'share':
@@ -279,13 +277,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     child: ListTile(
                       leading: Icon(Icons.download_outlined),
                       title: Text('MP3 indir'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'playlist',
-                    child: ListTile(
-                      leading: Icon(Icons.playlist_add),
-                      title: Text('Çalma listesine ekle'),
                     ),
                   ),
                   PopupMenuItem(
@@ -384,7 +375,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 8),
-                  _QuickSettings(state: state, coordinator: _coordinator),
+                  _QuickSettings(
+                    state: state,
+                    coordinator: _coordinator,
+                    onAddToPlaylist: _addToPlaylist,
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.playlist_play),
@@ -412,12 +407,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 }
 
-/// Hız, kalite, tekrar ve karıştır — oynatıcıdan çıkmadan.
+/// Hız, kalite, tekrar, karıştır ve listeye ekle — oynatıcıdan çıkmadan.
 class _QuickSettings extends StatelessWidget {
-  const _QuickSettings({required this.state, required this.coordinator});
+  const _QuickSettings({
+    required this.state,
+    required this.coordinator,
+    required this.onAddToPlaylist,
+  });
 
   final PlaybackState state;
   final PlaybackCoordinator coordinator;
+
+  // Listeye ekleme akışı ekranın state'inde yaşıyor (sheet + kayıt), o yüzden
+  // buraya geri çağrı olarak geliyor.
+  final VoidCallback onAddToPlaylist;
 
   IconData get _repeatIcon => switch (state.repeatMode) {
         'one' => Icons.repeat_one,
@@ -475,6 +478,13 @@ class _QuickSettings extends StatelessWidget {
             icon: Icon(state.shuffle ? Icons.shuffle_on_outlined : Icons.shuffle),
             tooltip: state.shuffle ? 'Karıştırma açık' : 'Karıştır',
             onPressed: () => coordinator.setShuffle(!state.shuffle),
+          ),
+          // Menünün içinde kaybolmak yerine diğer kuyruk kontrolleriyle
+          // birlikte dursun.
+          IconButton(
+            icon: const Icon(Icons.playlist_add),
+            tooltip: 'Çalma listesine ekle',
+            onPressed: onAddToPlaylist,
           ),
         ],
       ),
