@@ -4,7 +4,7 @@ import '../../core/data/library_store.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../player/mini_player.dart';
-import '../player/player_screen.dart';
+import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import 'downloads_tab.dart';
@@ -270,7 +270,5 @@ void _play(
     exactQueue: exact ? list : null,
     index: exact ? index : null,
   );
-  Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => PlayerScreen(videoId: videoId)),
-  );
+  openPlayer(context, videoId);
 }

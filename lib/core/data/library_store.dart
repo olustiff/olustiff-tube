@@ -18,6 +18,7 @@ class LibraryStore extends ChangeNotifier {
   static const _kSearches = 'search_history';
   static const _kWatched = 'watch_history';
   static const _kPlaylists = 'playlists';
+  static const _kPlayCounts = 'play_counts';
 
   static const _maxSearches = 40;
   static const _maxWatched = 200;
@@ -26,10 +27,29 @@ class LibraryStore extends ChangeNotifier {
 
   List<String> _searches = [];
   List<VideoSummary> _watched = [];
+
+  /// videoId → kaç kez oynatıldı. "En çok dinlediklerin" bundan üretilir.
+  Map<String, int> _playCounts = {};
   Map<String, List<VideoSummary>> _playlists = {};
 
   List<String> get searches => List.unmodifiable(_searches);
   List<VideoSummary> get watched => List.unmodifiable(_watched);
+
+  int playCountOf(String videoId) => _playCounts[videoId] ?? 0;
+
+  /// Geçmişte en çok tekrar edilen içerikler (çoktan aza).
+  ///
+  /// Tek kez açılanlar "en çok dinlenen" sayılmaz; liste anlamlı kalsın diye
+  /// en az iki kez oynatılmış olanlar gösterilir.
+  List<VideoSummary> get mostPlayed {
+    final repeated = _watched
+        .where((v) => v.videoId != null && playCountOf(v.videoId!) > 1)
+        .toList();
+    repeated.sort(
+      (a, b) => playCountOf(b.videoId!).compareTo(playCountOf(a.videoId!)),
+    );
+    return List.unmodifiable(repeated);
+  }
   Map<String, List<VideoSummary>> get playlists => Map.unmodifiable(_playlists);
 
   Future<void> load() async {
@@ -37,6 +57,12 @@ class LibraryStore extends ChangeNotifier {
 
     _searches = prefs.getStringList(_kSearches) ?? [];
     _watched = _decodeVideos(prefs.getString(_kWatched));
+
+    final rawCounts = prefs.getString(_kPlayCounts);
+    if (rawCounts != null) {
+      _playCounts = (jsonDecode(rawCounts) as Map<String, dynamic>)
+          .map((key, value) => MapEntry(key, (value as num).toInt()));
+    }
 
     final rawPlaylists = prefs.getString(_kPlaylists);
     if (rawPlaylists != null) {
@@ -81,19 +107,25 @@ class LibraryStore extends ChangeNotifier {
   // --- İzleme geçmişi ---
 
   Future<void> recordWatch(VideoSummary video) async {
-    if (video.videoId == null) return;
-    _watched.removeWhere((v) => v.videoId == video.videoId);
+    final videoId = video.videoId;
+    if (videoId == null) return;
+    _watched.removeWhere((v) => v.videoId == videoId);
     _watched.insert(0, video);
     if (_watched.length > _maxWatched) {
       _watched = _watched.sublist(0, _maxWatched);
     }
+    _playCounts[videoId] = (_playCounts[videoId] ?? 0) + 1;
+
     await _prefs?.setString(_kWatched, _encodeVideos(_watched));
+    await _prefs?.setString(_kPlayCounts, jsonEncode(_playCounts));
     notifyListeners();
   }
 
   Future<void> clearWatched() async {
     _watched = [];
+    _playCounts = {};
     await _prefs?.setString(_kWatched, _encodeVideos(_watched));
+    await _prefs?.setString(_kPlayCounts, jsonEncode(_playCounts));
     notifyListeners();
   }
 

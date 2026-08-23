@@ -5,7 +5,7 @@ import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../player/mini_player.dart';
-import '../player/player_screen.dart';
+import '../player/player_route.dart';
 import 'video_list.dart';
 
 /// Arama ekranı.
@@ -105,11 +105,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void _open(int index) {
     PlaybackCoordinator.instance
         .play(_results[index].videoId!, context: _results);
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PlayerScreen(videoId: _results[index].videoId!),
-      ),
-    );
+    openPlayer(context, _results[index].videoId!);
   }
 
   @override

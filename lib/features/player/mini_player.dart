@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/playback/playback_coordinator.dart';
 import '../../core/playback/playback_client.dart';
-import 'player_screen.dart';
+import 'player_route.dart';
 
 /// Liste ekranlarının altında duran, çalan içeriğe dönüş çubuğu.
 ///
@@ -28,11 +28,7 @@ class MiniPlayer extends StatelessWidget {
         return Material(
           color: theme.colorScheme.surfaceContainerHigh,
           child: InkWell(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => PlayerScreen(videoId: details.videoId),
-              ),
-            ),
+            onTap: () => openPlayer(context, details.videoId),
             child: SizedBox(
               height: 64,
               child: Row(

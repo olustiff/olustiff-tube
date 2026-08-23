@@ -5,11 +5,20 @@ import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../library/library_screen.dart';
 import '../player/mini_player.dart';
-import '../player/player_screen.dart';
+import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import '../settings/settings_screen.dart';
 import 'home_feed.dart';
+
+/// Ana sayfadaki liste türü.
+enum HomeTab {
+  /// Aramalardan ve izlenenlerden üretilen kişisel akış.
+  forYou,
+
+  /// Geçmişte en çok tekrar edilenler.
+  mostPlayed,
+}
 
 /// Ana ekran: kullanıcının arama ve izleme geçmişinden üretilen kişisel akış.
 ///
@@ -29,6 +38,11 @@ class _HomeScreenState extends State<HomeScreen> {
   List<VideoSummary> _videos = const [];
   bool _loading = false;
   Object? _error;
+  HomeTab _tab = HomeTab.forYou;
+
+  /// Akışın hangi aramalardan üretildiği. Kullanıcı bir aramayı silince
+  /// akışın yenilenmesi gerektiğini buradan anlıyoruz.
+  List<String> _feedSeeds = const [];
 
   @override
   void initState() {
@@ -43,9 +57,14 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /// Geçmiş boşken ilk arama yapıldığında akış kendiliğinden dolsun.
+  /// Arama geçmişi değişince akışı tazele: silinen bir aramanın sonuçları
+  /// ana sayfada kalmamalı.
   void _onLibraryChanged() {
-    if (_videos.isEmpty && !_loading && _feed.hasHistory) _load();
+    if (_loading) return;
+    final seeds = _feed.seeds();
+    final changed = seeds.length != _feedSeeds.length ||
+        !seeds.every(_feedSeeds.contains);
+    if (changed) _load();
   }
 
   Future<void> _load() async {
@@ -54,10 +73,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
     try {
+      final seeds = _feed.seeds();
       final videos = await _feed.load();
       if (!mounted) return;
       setState(() {
         _videos = videos;
+        _feedSeeds = seeds;
         _loading = false;
       });
     } catch (e) {
@@ -69,12 +90,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  List<VideoSummary> get _currentList =>
+      _tab == HomeTab.forYou ? _videos : _library.mostPlayed;
+
   void _open(int index) {
-    final videoId = _videos[index].videoId!;
-    PlaybackCoordinator.instance.play(videoId, context: _videos);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PlayerScreen(videoId: videoId)),
-    );
+    final list = _currentList;
+    final videoId = list[index].videoId!;
+    PlaybackCoordinator.instance.play(videoId, context: list);
+    openPlayer(context, videoId);
   }
 
   void _openSearch() {
@@ -109,11 +132,45 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(child: _buildBody()),
-          const MiniPlayer(),
-        ],
+      body: AnimatedBuilder(
+        animation: _library,
+        builder: (context, _) => Column(
+          children: [
+            _buildTabs(),
+            Expanded(child: _buildBody()),
+            const MiniPlayer(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabs() {
+    // Geçmiş yokken filtre göstermek anlamsız.
+    if (!_feed.hasHistory) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<HomeTab>(
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [
+            ButtonSegment(
+              value: HomeTab.forYou,
+              icon: Icon(Icons.explore_outlined),
+              label: Text('Sana özel'),
+            ),
+            ButtonSegment(
+              value: HomeTab.mostPlayed,
+              icon: Icon(Icons.repeat),
+              label: Text('En çok dinlediklerin'),
+            ),
+          ],
+          selected: {_tab},
+          onSelectionChanged: (selection) =>
+              setState(() => _tab = selection.first),
+        ),
       ),
     );
   }
@@ -122,6 +179,20 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_feed.hasHistory && _videos.isEmpty && !_loading) {
       return _EmptyFeed(onSearch: _openSearch);
     }
+
+    if (_tab == HomeTab.mostPlayed) {
+      return VideoList(
+        videos: _library.mostPlayed,
+        loading: false,
+        hasMore: false,
+        onLoadMore: () {},
+        onTap: _open,
+        emptyMessage:
+            'Henüz tekrar dinlediğin bir şey yok.\n'
+            'Bir şarkıyı ikinci kez açtığında burada görünür.',
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: _load,
       child: VideoList(

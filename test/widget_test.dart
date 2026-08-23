@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:akis/core/data/library_store.dart';
+import 'package:akis/core/extraction/models.dart';
 import 'package:akis/core/data/settings_store.dart';
 import 'package:akis/features/home/home_screen.dart';
 import 'package:akis/features/search/search_screen.dart';
@@ -106,6 +107,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sonuç 39'), findsOneWidget);
+  });
+
+  testWidgets('en çok dinlenenler yalnızca tekrar edilenleri listeler',
+      (tester) async {
+    final store = LibraryStore.instance;
+    final tekrar = VideoSummary.fromMap(videoMap('a', 'Tekrar edilen'));
+    final birKez = VideoSummary.fromMap(videoMap('b', 'Bir kez açılan'));
+
+    await store.recordWatch(tekrar);
+    await store.recordWatch(birKez);
+    await store.recordWatch(tekrar);
+
+    expect(store.mostPlayed.map((e) => e.videoId), ['a'],
+        reason: 'tek kez açılan "en çok dinlenen" sayılmamalı');
+    expect(store.playCountOf('a'), 2);
   });
 
   testWidgets('boş arama ekranı son aramaları önerir', (tester) async {
