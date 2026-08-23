@@ -1,11 +1,11 @@
 package com.olustiff.app.player
 
-import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothA2dp
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.media.AudioManager
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,27 +16,41 @@ import kotlinx.coroutines.launch
  * Bluetooth ses aygıtı bağlanınca çalmaya devam eder.
  *
  * Uygulamanın ekranını AÇMAZ: Android 10'dan beri arka plandan aktivite
- * başlatmak engelli. Bunun yerine son çalınan parçayı arka planda başlatır —
- * kulaklığı takınca müziğin gelmesi zaten istenen davranış.
+ * başlatmak engelli. Bunun yerine son çalınan parçayı arka planda başlatır.
+ *
+ * Neden ACL_CONNECTED değil de A2DP olayı: cihaz "bağlandı" (ACL) anında ses
+ * profili (A2DP) henüz kurulmamış oluyor — kulaklık önce bağlanır, müzik
+ * kanalı saniyeler sonra açılır. ACL anında çalmaya kalkmak sesin telefon
+ * hoparlöründen çıkmasına ya da hiç başlamamasına yol açıyordu.
  */
 class BluetoothAutoPlayReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != BluetoothDevice.ACTION_ACL_CONNECTED) return
+        if (intent.action != BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) return
+
+        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
+        if (state != BluetoothProfile.STATE_CONNECTED) return
 
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_ENABLED, false)) return
+        if (!prefs.getBoolean(KEY_ENABLED, false)) {
+            Log.d(TAG, "Otomatik çalma kapalı")
+            return
+        }
 
-        // Yalnızca ses aygıtları: klavye, saat vb. müzik başlatmamalı.
-        val audioManager = context.getSystemService(AudioManager::class.java)
-        if (audioManager?.isBluetoothA2dpOn != true) return
+        val videoId = prefs.getString(KEY_LAST_VIDEO, null)
+        if (videoId.isNullOrBlank()) {
+            Log.d(TAG, "Çalınacak parça kayıtlı değil")
+            return
+        }
 
-        val videoId = prefs.getString(KEY_LAST_VIDEO, null) ?: return
-
+        // onReceive dönünce süreç öldürülebilir; asenkron iş bitene kadar
+        // sistemin bizi canlı tutması için goAsync() gerekiyor.
+        val pending = goAsync()
+        val appContext = context.applicationContext
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
         scope.launch {
             try {
-                val appContext = context.applicationContext
                 appContext.startService(
                     Intent(appContext, PlaybackService::class.java)
                 )
@@ -52,13 +66,18 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
                     startIndex = -1
                 )
                 PlayerHolder.playNext(appContext)
+                Log.d(TAG, "Otomatik çalma başlatıldı: $videoId")
             } catch (e: Exception) {
-                Log.w("AkisBluetooth", "Otomatik çalma başarısız", e)
+                Log.w(TAG, "Otomatik çalma başarısız", e)
+            } finally {
+                pending.finish()
             }
         }
     }
 
     companion object {
+        private const val TAG = "OlustiffBluetooth"
+
         const val PREFS = "olustiff_bluetooth"
         const val KEY_ENABLED = "auto_play_enabled"
         const val KEY_LAST_VIDEO = "last_video_id"

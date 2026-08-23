@@ -78,7 +78,10 @@
             android:name=".player.BluetoothAutoPlayReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.bluetooth.device.action.ACL_CONNECTED"/>
+                <!-- Ses profili (A2DP) kurulduğunda tetiklenir. Cihazın
+                     "bağlandığı" an (ACL_CONNECTED) müzik kanalı henüz
+                     hazır olmuyor. -->
+                <action android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED"/>
             </intent-filter>
         </receiver>
 
