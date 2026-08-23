@@ -9,6 +9,7 @@ import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import '../settings/settings_screen.dart';
+import 'app_title.dart';
 import 'feed_tabs.dart';
 import 'home_feed.dart';
 
@@ -83,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<VideoSummary> get _currentList =>
-      _tab == HomeTab.forYou ? _videos : _library.favorites;
+      _tab == HomeTab.forYou ? _videos : _library.mostPlayed;
 
   void _open(int index) {
     final list = _currentList;
@@ -101,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('oLusTifF'),
+        title: const AppTitle(),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -139,13 +140,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTabs() {
     // Geçmiş de favori de yokken filtre göstermek anlamsız.
-    if (!_feed.hasHistory && _library.favorites.isEmpty) {
+    if (!_feed.hasHistory && _library.mostPlayed.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return FeedTabs(
       selected: _tab,
-      favoriteCount: _library.favorites.length,
+      favoriteCount: _library.mostPlayed.length,
       onChanged: (tab) => setState(() => _tab = tab),
     );
   }
@@ -157,14 +158,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_tab == HomeTab.favorites) {
       return VideoList(
-        videos: _library.favorites,
+        videos: _library.mostPlayed,
         loading: false,
         hasMore: false,
         onLoadMore: () {},
         onTap: _open,
         emptyMessage:
-            'Henüz favorin yok.\n'
-            'Oynatırken kalbe dokunarak ekleyebilirsin.',
+            'Henüz tekrar dinlediğin bir şey yok.\n'
+            'Bir şarkıyı ikinci kez açtığında burada görünür.',
       );
     }
 

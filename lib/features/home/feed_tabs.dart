@@ -5,7 +5,7 @@ enum HomeTab {
   /// Aramalardan ve dinlenenlerden üretilen kişisel akış.
   forYou,
 
-  /// Kullanıcının kalple işaretledikleri.
+  /// Geçmişte en çok tekrar edilenler.
   favorites,
 }
 
@@ -43,11 +43,9 @@ class FeedTabs extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: _TabChip(
-              icon: selected == HomeTab.favorites
-                  ? Icons.favorite
-                  : Icons.favorite_border,
+              icon: Icons.repeat,
               label: 'Favoriler',
-              // Kaç favori olduğunu göstermek, sekmeye girmeden bilgi verir.
+              // Kaç parça olduğunu göstermek, sekmeye girmeden bilgi verir.
               badge: favoriteCount > 0 ? '$favoriteCount' : null,
               isSelected: selected == HomeTab.favorites,
               onTap: () => onChanged(HomeTab.favorites),

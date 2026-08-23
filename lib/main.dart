@@ -23,7 +23,7 @@ Future<void> main() async {
   await PlaybackClient.shared
       .setBluetoothAutoPlay(settings.bluetoothAutoPlay);
   final library = LibraryStore.instance;
-  final fallback = library.favorites.firstOrNull ?? library.watched.firstOrNull;
+  final fallback = library.mostPlayed.firstOrNull ?? library.watched.firstOrNull;
   if (fallback?.videoId != null) {
     await PlaybackClient.shared.rememberLastPlayed(
       videoId: fallback!.videoId!,

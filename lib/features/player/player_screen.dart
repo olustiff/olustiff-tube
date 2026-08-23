@@ -254,7 +254,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   MaterialPageRoute(builder: (_) => const SearchScreen()),
                 ),
               ),
-              _FavoriteButton(details: details),
               IconButton(
                 tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
                 icon: Icon(
@@ -674,48 +673,6 @@ class _TransportBar extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Videoyu favorilere ekleyip çıkarır.
-class _FavoriteButton extends StatelessWidget {
-  const _FavoriteButton({required this.details});
-
-  final VideoDetails? details;
-
-  @override
-  Widget build(BuildContext context) {
-    final store = LibraryStore.instance;
-    final video = details;
-
-    return AnimatedBuilder(
-      animation: store,
-      builder: (context, _) {
-        final isFavorite =
-            video != null && store.isFavorite(video.videoId);
-        return IconButton(
-          tooltip: isFavorite ? 'Favorilerden çıkar' : 'Favorilere ekle',
-          icon: Icon(
-            isFavorite ? Icons.favorite : Icons.favorite_border,
-            color: isFavorite ? Theme.of(context).colorScheme.primary : null,
-          ),
-          onPressed: video == null
-              ? null
-              : () => store.toggleFavorite(
-                    VideoSummary(
-                      videoId: video.videoId,
-                      title: video.title,
-                      url: 'https://www.youtube.com/watch?v=${video.videoId}',
-                      uploaderName: video.uploaderName,
-                      durationSeconds: video.durationSeconds,
-                      viewCount: video.viewCount,
-                      textualUploadDate: null,
-                      thumbnailUrl: video.thumbnailUrl,
-                    ),
-                  ),
-        );
-      },
     );
   }
 }

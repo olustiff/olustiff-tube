@@ -109,20 +109,19 @@ void main() {
     expect(find.text('Sonuç 39'), findsOneWidget);
   });
 
-  testWidgets('favori ekleme ve çıkarma çalışır', (tester) async {
+  testWidgets('favoriler yalnızca tekrar dinlenenleri listeler',
+      (tester) async {
     final store = LibraryStore.instance;
-    final video = VideoSummary.fromMap(videoMap('a', 'Bir şarkı'));
+    final tekrar = VideoSummary.fromMap(videoMap('a', 'Tekrar edilen'));
+    final birKez = VideoSummary.fromMap(videoMap('b', 'Bir kez açılan'));
 
-    expect(store.isFavorite('a'), isFalse);
+    await store.recordWatch(tekrar);
+    await store.recordWatch(birKez);
+    await store.recordWatch(tekrar);
 
-    final added = await store.toggleFavorite(video);
-    expect(added, isTrue);
-    expect(store.isFavorite('a'), isTrue);
-    expect(store.favorites.map((e) => e.videoId), ['a']);
-
-    final removed = await store.toggleFavorite(video);
-    expect(removed, isFalse);
-    expect(store.favorites, isEmpty);
+    expect(store.mostPlayed.map((e) => e.videoId), ['a'],
+        reason: 'tek kez açılan "en çok dinlenen" sayılmamalı');
+    expect(store.playCountOf('a'), 2);
   });
 
   testWidgets('öneri tohumları en çok dinlenen kanalı öne alır',
