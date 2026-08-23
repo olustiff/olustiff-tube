@@ -19,6 +19,7 @@ class BluetoothSetting extends StatefulWidget {
 class _BluetoothSettingState extends State<BluetoothSetting>
     with WidgetsBindingObserver {
   bool _exempt = false;
+  bool _hasBtPermission = false;
 
   @override
   void initState() {
@@ -41,7 +42,13 @@ class _BluetoothSettingState extends State<BluetoothSetting>
 
   Future<void> _refresh() async {
     final exempt = await UiChannel.instance.isBatteryOptimizationIgnored();
-    if (mounted) setState(() => _exempt = exempt);
+    final bt = await UiChannel.instance.hasBluetoothPermission();
+    if (mounted) {
+      setState(() {
+        _exempt = exempt;
+        _hasBtPermission = bt;
+      });
+    }
   }
 
   Future<void> _toggle(bool value) async {
@@ -49,8 +56,14 @@ class _BluetoothSettingState extends State<BluetoothSetting>
     await settings.setBluetoothAutoPlay(value);
     await PlaybackClient.shared.setBluetoothAutoPlay(value);
 
-    if (value && !_exempt && mounted) {
-      await _askForExemption();
+    if (value) {
+      // İki izin de şart: bluetooth izni olmadan yayın hiç gelmez, pil
+      // muafiyeti olmadan Android arka planda çalmayı engeller.
+      if (!_hasBtPermission) {
+        await UiChannel.instance.requestBluetoothPermission();
+        await _refresh();
+      }
+      if (mounted && !_exempt) await _askForExemption();
     }
     if (mounted) setState(() {});
   }
@@ -90,7 +103,11 @@ class _BluetoothSettingState extends State<BluetoothSetting>
     final enabled = settings.bluetoothAutoPlay;
     // İzin yoksa özellik açık görünse de çalışmaz; bunu gizlemek yerine
     // açıkça söylüyoruz.
-    final needsPermission = enabled && !_exempt;
+    final needsPermission = enabled && (!_exempt || !_hasBtPermission);
+    final missing = [
+      if (!_hasBtPermission) 'Bluetooth izni',
+      if (!_exempt) 'pil kısıtlaması muafiyeti',
+    ].join(' ve ');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -112,12 +129,19 @@ class _BluetoothSettingState extends State<BluetoothSetting>
               color: Theme.of(context).colorScheme.errorContainer,
               child: ListTile(
                 leading: const Icon(Icons.warning_amber),
-                title: const Text('İzin verilmedi'),
-                subtitle: const Text(
-                  'Bu izin olmadan Android müziği başlatmıyor.',
+                title: const Text('İzin eksik'),
+                subtitle: Text(
+                  '$missing gerekiyor. Bunlar olmadan Android '
+                  'müziği başlatmıyor.',
                 ),
                 trailing: TextButton(
-                  onPressed: _askForExemption,
+                  onPressed: () async {
+                    if (!_hasBtPermission) {
+                      await UiChannel.instance.requestBluetoothPermission();
+                      await _refresh();
+                    }
+                    if (mounted && !_exempt) await _askForExemption();
+                  },
                   child: const Text('İzin ver'),
                 ),
               ),

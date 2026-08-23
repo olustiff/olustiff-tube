@@ -14,6 +14,17 @@ class UiChannel {
   Future<void> setKeepScreenOn(bool enabled) =>
       _channel.invokeMethod<void>('setKeepScreenOn', {'enabled': enabled});
 
+  /// Bluetooth izni verilmiş mi.
+  ///
+  /// Android 12+ bu izni çalışma anında ister; verilmezse bluetooth bağlantı
+  /// yayınları uygulamaya hiç ulaşmaz ve otomatik çalma sessizce çalışmaz.
+  Future<bool> hasBluetoothPermission() async =>
+      await _channel.invokeMethod<bool>('hasBluetoothPermission') ?? false;
+
+  /// Bluetooth iznini ister; sistem onay penceresini açar.
+  Future<void> requestBluetoothPermission() =>
+      _channel.invokeMethod<void>('requestBluetoothPermission');
+
   /// Uygulama pil optimizasyonundan muaf mı.
   ///
   /// Bluetooth bağlanınca müziği arka planda başlatmak yalnızca muaf

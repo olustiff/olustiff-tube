@@ -1,7 +1,9 @@
 package com.olustiff.app
 
+import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
@@ -88,6 +90,22 @@ class MainActivity : FlutterActivity() {
                 // Bluetooth otomatik çalma, arka planda servis başlatmayı
                 // gerektiriyor; bu da yalnızca pil optimizasyonundan muaf
                 // uygulamalara izinli.
+                // Android 12+ bu izni çalışma anında ister. İzin olmadan
+                // bluetooth bağlantı yayınları uygulamaya HİÇ ulaşmaz.
+                "hasBluetoothPermission" -> result.success(hasBluetoothPermission())
+
+                "requestBluetoothPermission" -> {
+                    if (hasBluetoothPermission()) {
+                        result.success(true)
+                    } else {
+                        requestPermissions(
+                            arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                            REQ_BLUETOOTH
+                        )
+                        result.success(false)
+                    }
+                }
+
                 "isBatteryOptimizationIgnored" -> {
                     val power = getSystemService(PowerManager::class.java)
                     result.success(
@@ -154,6 +172,11 @@ class MainActivity : FlutterActivity() {
      * Videoyu küçük pencerede sürdürür. Desteklenmeyen cihazlarda sessizce
      * false döner; arayüz butonu buna göre gizler.
      */
+    private fun hasBluetoothPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED
+
     private fun enterPip(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
         if (!packageManager.hasSystemFeature(
@@ -181,6 +204,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pipChannel: MethodChannel? = null
+
+    private val REQ_BLUETOOTH = 4711
 
     override fun onDestroy() {
         scope.cancel()
