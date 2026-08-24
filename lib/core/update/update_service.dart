@@ -77,7 +77,11 @@ class UpdateService extends ChangeNotifier {
       );
 
       if (response.statusCode == 404) {
-        // Henüz hiç sürüm yayınlanmamış — hata değil.
+        // Depo erişilemiyor ya da hiç sürüm yayınlanmamış. "En güncelsin"
+        // demek yanıltıcı olurdu — kullanıcı güncelleme gelmediğini
+        // sanmasın, kaynağın hazır olmadığını bilsin.
+        _error = 'Sürüm kaynağına ulaşılamadı. Depo herkese açık olmalı ve '
+            'en az bir sürüm yayınlanmış olmalı.';
         _available = null;
         return null;
       }

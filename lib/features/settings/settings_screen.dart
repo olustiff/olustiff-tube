@@ -4,6 +4,7 @@ import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/playback/playback_client.dart';
 import 'bluetooth_setting.dart';
+import 'feedback_tile.dart';
 import 'update_section.dart';
 
 /// Oynatma tercihleri: kalite tavanı, hız ve otomatik oynatma.
@@ -87,6 +88,7 @@ class SettingsScreen extends StatelessWidget {
               const Divider(),
               const _SectionHeader('Uygulama'),
               const UpdateSection(),
+              const FeedbackTile(),
               const Divider(),
               const _SectionHeader('Veriler'),
               ListTile(
