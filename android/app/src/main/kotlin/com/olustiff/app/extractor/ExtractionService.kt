@@ -187,7 +187,8 @@ object ExtractionService {
     private fun List<org.schabi.newpipe.extractor.Image>.bestThumbnailUrl(): String? =
         maxByOrNull { it.height * it.width }?.url
 
-    private fun extractVideoId(videoUrl: String): String? =
+    /** Video adresinden id çıkarır. Kuyruk kurulurken de kullanılıyor. */
+    fun extractVideoId(videoUrl: String): String? =
         Regex("[?&]v=([^&]+)").find(videoUrl)?.groupValues?.get(1)
             ?: videoUrl.substringAfterLast("/").takeIf { it.isNotBlank() }
 

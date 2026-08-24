@@ -195,6 +195,15 @@ class PlaybackController(
                 result.success(null)
             }
 
+            // Kulaklık bağlamadan otomatik çalmayı denemek için: bluetooth
+            // yayını sistem korumalı olduğundan başka türlü test edilemiyor.
+            "testBluetoothAutoPlay" -> {
+                scope.launch {
+                    val error = BluetoothAutoPlayReceiver.startSavedTrack(context)
+                    result.success(error)
+                }
+            }
+
             "setAutoplay" -> {
                 PlaybackQueue.setAutoplayEnabled(call.argument<Boolean>("enabled") ?: true)
                 result.success(null)

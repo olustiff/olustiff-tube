@@ -68,6 +68,17 @@ class _BluetoothSettingState extends State<BluetoothSetting>
     if (mounted) setState(() {});
   }
 
+  /// Kulaklık bağlamadan otomatik çalmayı dener; sonucu kullanıcıya söyler.
+  Future<void> _test() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await PlaybackClient.shared.testBluetoothAutoPlay();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(error == null ? 'Çalmaya başladı.' : 'Olmadı: $error'),
+      ),
+    );
+  }
+
   Future<void> _askForExemption() async {
     final accepted = await showDialog<bool>(
       context: context,
@@ -122,6 +133,15 @@ class _BluetoothSettingState extends State<BluetoothSetting>
           value: enabled,
           onChanged: _toggle,
         ),
+        if (enabled && !needsPermission)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: OutlinedButton.icon(
+              onPressed: _test,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Şimdi dene'),
+            ),
+          ),
         if (needsPermission)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

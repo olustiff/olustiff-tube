@@ -224,6 +224,11 @@ class PlaybackClient {
   Future<void> setBluetoothAutoPlay(bool enabled) => _method
       .invokeMethod<void>('setBluetoothAutoPlay', {'enabled': enabled});
 
+  /// Otomatik çalmayı kulaklık bağlamadan dener.
+  /// Başarılıysa null, değilse sorunu anlatan metin döner.
+  Future<String?> testBluetoothAutoPlay() =>
+      _method.invokeMethod<String>('testBluetoothAutoPlay');
+
   /// Bluetooth bağlanınca çalacak parçayı kaydeder.
   Future<void> rememberLastPlayed({
     required String videoId,
