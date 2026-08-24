@@ -9,6 +9,7 @@ import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../../core/playback/sleep_timer.dart';
 import '../../core/playback/ui_channel.dart';
+import '../library/download_progress_bar.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import 'download_menu.dart';
@@ -400,6 +401,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ],
               ),
             ),
+            // İndirme buradan başlatılıyor; ilerlemenin de burada görünmesi
+            // gerekiyor, yoksa "indiriyor mu?" belirsiz kalıyor.
+            const DownloadProgressBar(),
           ],
         );
       },
