@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/data/library_store.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
+import '../library/download_progress_bar.dart';
 import '../library/library_screen.dart';
 import '../player/mini_player.dart';
 import '../player/player_route.dart';
@@ -131,6 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _buildTabs(),
             Expanded(child: _buildBody()),
+            const DownloadProgressBar(),
             const MiniPlayer(),
           ],
         ),

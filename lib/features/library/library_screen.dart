@@ -4,6 +4,7 @@ import '../../core/data/library_store.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../player/mini_player.dart';
+import 'download_progress_bar.dart';
 import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
@@ -42,6 +43,7 @@ class LibraryScreen extends StatelessWidget {
                 ],
               ),
             ),
+            const DownloadProgressBar(),
             const MiniPlayer(),
           ],
         ),
@@ -247,6 +249,7 @@ class _PlaylistScreen extends StatelessWidget {
                         ),
                       ),
               ),
+              const DownloadProgressBar(),
               const MiniPlayer(),
             ],
           ),

@@ -4,6 +4,7 @@ import '../../core/data/library_store.dart';
 import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
+import '../library/download_progress_bar.dart';
 import '../player/mini_player.dart';
 import '../player/player_route.dart';
 import 'video_list.dart';
@@ -149,6 +150,7 @@ class _SearchScreenState extends State<SearchScreen> {
               onTap: _open,
             ),
           ),
+          const DownloadProgressBar(),
           const MiniPlayer(),
         ],
       ),
