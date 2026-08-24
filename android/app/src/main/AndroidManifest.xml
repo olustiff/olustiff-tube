@@ -9,6 +9,14 @@
     <!-- Uygulama içi güncelleme: indirilen APK'nın kurulumunu başlatmak için.
          Kurulumu sistem yapar, kullanıcı onaylar. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- İndirilen MP3'ler herkesin eriştiği Music/oLusTifF klasörüne kaydediliyor.
+         Android 10+ bunu MediaStore üzerinden izinsiz yapar; yalnızca Android 9
+         ve öncesinde ortak depolamaya yazmak/okumak için izin gerekiyor. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+
     <!-- Bluetooth ses aygıtı bağlanınca çalmaya devam etmek için.
          BLUETOOTH_CONNECT Android 12+ karşılığıdır. -->
     <uses-permission android:name="android.permission.BLUETOOTH"

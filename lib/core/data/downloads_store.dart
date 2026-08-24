@@ -10,7 +10,19 @@ class DownloadedItem {
   final String title;
   final String? uploaderName;
   final int durationSeconds;
+
+  /// Dosya YOLU DEĞİL: MediaStore kaydının `content://` adresi.
+  ///
+  /// MP3'ler artık ortak `Music/oLusTifF` klasöründe duruyor ve oraya yalnızca
+  /// MediaStore üzerinden erişiliyor; dosya sisteminde tutunabileceğimiz bir
+  /// yol yok. Alan adı `path` olarak korundu — oynatma ve silme çağrıları bu
+  /// değeri olduğu gibi native tarafa geri veriyor.
   final String path;
+
+  /// Müzik klasöründeki gerçek dosya adı. Aynı şarkı ikinci kez indirilirse
+  /// MediaStore üzerine yazmaz, "ad (1).mp3" diye çoğaltır; gerçek ad budur.
+  final String fileName;
+
   final int sizeBytes;
 
   /// Kbit/sn cinsinden kodlama kalitesi.
@@ -22,6 +34,7 @@ class DownloadedItem {
     required this.uploaderName,
     required this.durationSeconds,
     required this.path,
+    required this.fileName,
     required this.sizeBytes,
     required this.bitrate,
   });
@@ -39,6 +52,7 @@ class DownloadedItem {
         uploaderName: map['uploaderName'] as String?,
         durationSeconds: (map['durationSeconds'] as num?)?.toInt() ?? 0,
         path: map['path'] as String? ?? '',
+        fileName: map['fileName'] as String? ?? '',
         sizeBytes: (map['sizeBytes'] as num?)?.toInt() ?? 0,
         bitrate: (map['bitrate'] as num?)?.toInt() ?? 320,
       );
@@ -49,6 +63,7 @@ class DownloadedItem {
         'uploaderName': uploaderName,
         'durationSeconds': durationSeconds,
         'path': path,
+        'fileName': fileName,
         'sizeBytes': sizeBytes,
         'bitrate': bitrate,
       };
@@ -106,17 +121,19 @@ class DownloadsStore extends ChangeNotifier {
           .toList();
     }
 
-    // Diskte olmayan kayıtları ele: kullanıcı dosyayı silmiş olabilir.
+    // Müzik klasöründe artık bulunmayan kayıtları ele: kullanıcı dosyayı
+    // telefonunun dosya yöneticisinden silmiş olabilir.
     final onDisk = await _listFiles();
     _items = _items.where((i) => onDisk.contains(i.path)).toList();
     await _save();
   }
 
+  /// Music/oLusTifF klasöründeki MP3'lerin content URI'ları.
   Future<Set<String>> _listFiles() async {
     try {
       final raw = await _channel.invokeMethod<List<Object?>>('list') ?? [];
       return raw
-          .map((e) => (e as Map<Object?, Object?>)['path'] as String?)
+          .map((e) => (e as Map<Object?, Object?>)['uri'] as String?)
           .whereType<String>()
           .toSet();
     } on PlatformException {
@@ -124,7 +141,7 @@ class DownloadsStore extends ChangeNotifier {
     }
   }
 
-  /// Videonun sesini MP3 olarak indirir.
+  /// Videonun sesini MP3 olarak indirir ve ortak Müzik klasörüne kaydeder.
   Future<DownloadedItem> download(String videoId, {int bitrate = 320}) async {
     _progress[videoId] = 0;
     notifyListeners();
@@ -146,9 +163,24 @@ class DownloadsStore extends ChangeNotifier {
   }
 
   Future<void> delete(DownloadedItem item) async {
+    // 'path' bir content URI; native taraf MediaStore kaydını siler.
     await _channel.invokeMethod<bool>('delete', {'path': item.path});
     _items.remove(item);
     await _save();
+  }
+
+  /// İndirme klasörünü ("Music/oLusTifF") cihazın dosya uygulamasında açar.
+  ///
+  /// Klasör açmanın her cihazda çalışan tek bir yolu yok; açılamadıysa hata
+  /// fırlatmak yerine `false` döner ki arayüz seçeneği gizleyebilsin.
+  Future<bool> openFolder() async {
+    try {
+      return await _channel.invokeMethod<bool>('openFolder') ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
   }
 
   Future<void> _save() async {

@@ -262,6 +262,10 @@ object PlayerHolder {
      *
      * Yerel dosyada video ve ses zaten tek kapta olduğu için birleştirme
      * yapılmaz; sesli mod, video parçasını devre dışı bırakarak uygulanır.
+     *
+     * [path] iki biçimde gelebilir: indirmeler artık ortak Müzik klasöründe
+     * durduğu için bir `content://` adresi, eski kayıtlar içinse mutlak dosya
+     * yolu. ExoPlayer ikisini de okur, yeter ki doğru Uri'ye çevrilsin.
      */
     fun playLocal(
         context: Context,
@@ -295,13 +299,23 @@ object PlayerHolder {
 
         player.setMediaItem(
             MediaItem.Builder()
-                .setUri(Uri.fromFile(java.io.File(path)))
+                .setUri(localUri(path))
                 .setMediaMetadata(metadata)
                 .build()
         )
         player.prepare()
         player.playWhenReady = true
     }
+
+    /**
+     * Mutlak dosya yolu mu, content:// adresi mi olduğunu ayırt eder.
+     *
+     * Dosya yolu her zaman "/" ile başlar; başka her şey (content://, file://)
+     * zaten hazır bir Uri metnidir ve olduğu gibi çözülmelidir — [Uri.fromFile]
+     * ile sarmalamak bozuk bir adres üretirdi.
+     */
+    private fun localUri(path: String): Uri =
+        if (path.startsWith("/")) Uri.fromFile(java.io.File(path)) else Uri.parse(path)
 
     /**
      * Kaynakları değiştirir (ör. kalite seçimi) — mod aynı kalır ve oynatma

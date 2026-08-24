@@ -61,6 +61,15 @@ class MainActivity : FlutterActivity() {
             progressChannel =
                 EventChannel(messenger, DownloadController.PROGRESS_CHANNEL)
         )
+        // Android 9 ve öncesinde indirmeler ortak Müzik klasörüne klasik dosya
+        // yazmayla gidiyor ve bu izin ister. İzin AÇILIŞTA değil, ilk indirme
+        // denendiğinde sorulur — kullanıcı neden sorulduğunu görsün.
+        downloadController?.onRequestStoragePermission = {
+            requestPermissions(
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                REQ_STORAGE
+            )
+        }
 
         updateController = UpdateController(
             context = applicationContext,
@@ -206,6 +215,7 @@ class MainActivity : FlutterActivity() {
     private var pipChannel: MethodChannel? = null
 
     private val REQ_BLUETOOTH = 4711
+    private val REQ_STORAGE = 4712
 
     override fun onDestroy() {
         scope.cancel()

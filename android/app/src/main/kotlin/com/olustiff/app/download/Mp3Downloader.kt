@@ -10,6 +10,7 @@ import okhttp3.Request
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -24,27 +25,32 @@ import java.nio.ByteOrder
  */
 object Mp3Downloader {
 
-    /** İndirilen dosyaların tutulduğu klasör (uygulamaya özel, izin gerekmez). */
-    fun downloadsDir(context: android.content.Context): File =
-        File(context.getExternalFilesDir(null), "downloads").apply { mkdirs() }
-
     private val client = OkHttpClient.Builder().build()
 
     /**
+     * Sesi indirir ve MP3'e kodlayıp [output] akışına yazar.
+     *
+     * Hedef bir [File] değil [OutputStream]: MP3'ler artık ortak Müzik
+     * klasörüne, MediaStore'un açtığı `content://` akışına yazılıyor
+     * (bkz. [MusicLibrary]) — orada bir dosya yolumuz yok.
+     *
+     * [cacheDir] yalnızca ham ses akışını tutan geçici dosya içindir; iş
+     * bitince (hata da olsa) silinir.
+     *
      * [onProgress] 0..1 arası ilerleme bildirir; indirme uzun sürdüğü için
      * arayüzün kullanıcıya durum gösterebilmesi gerekiyor.
      */
     fun download(
         audioUrl: String,
-        outputFile: File,
+        output: OutputStream,
+        cacheDir: File,
         bitrateKbps: Int,
         onProgress: (Double) -> Unit
-    ): File {
-        val temp = File.createTempFile("akis-audio", ".tmp", outputFile.parentFile)
+    ) {
+        val temp = File.createTempFile("akis-audio", ".tmp", cacheDir)
         try {
             fetch(audioUrl, temp) { onProgress(it * 0.5) }
-            encodeToMp3(temp, outputFile, bitrateKbps) { onProgress(0.5 + it * 0.5) }
-            return outputFile
+            encodeToMp3(temp, output, bitrateKbps) { onProgress(0.5 + it * 0.5) }
         } finally {
             temp.delete()
         }
@@ -85,10 +91,10 @@ object Mp3Downloader {
         }
     }
 
-    /** İndirilen sesi çözüp LAME ile MP3'e kodlar. */
+    /** İndirilen sesi çözüp LAME ile MP3'e kodlar ve [target] akışına yazar. */
     private fun encodeToMp3(
         source: File,
-        target: File,
+        target: OutputStream,
         bitrateKbps: Int,
         onProgress: (Double) -> Unit
     ) {
@@ -122,9 +128,11 @@ object Mp3Downloader {
             .setQuality(2) // 0 en iyi, 9 en hızlı; 2 kalite/hız dengesi
             .build()
 
-        BufferedOutputStream(FileOutputStream(target)).use { output ->
-            writeMp3(extractor, codec, lame, output, channels, durationUs, onProgress)
-        }
+        // Akışı KAPATMIYORUZ, yalnızca boşaltıyoruz: akışın sahibi çağıran taraf
+        // (MediaStore kaydı) ve kapatma sırasını o yönetiyor.
+        val output = BufferedOutputStream(target)
+        writeMp3(extractor, codec, lame, output, channels, durationUs, onProgress)
+        output.flush()
 
         codec.stop()
         codec.release()
