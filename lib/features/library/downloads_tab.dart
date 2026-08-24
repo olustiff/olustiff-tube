@@ -8,6 +8,21 @@ import '../search/video_list.dart';
 class DownloadsTab extends StatelessWidget {
   const DownloadsTab({super.key});
 
+  /// Sistem dosya/müzik uygulamasında indirme klasörünü açar.
+  Future<void> _openFolder(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final opened = await DownloadsStore.instance.openFolder();
+    if (!opened) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Klasör açılamadı. Dosyalar: Müzik / oLusTifF',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = DownloadsStore.instance;
@@ -21,7 +36,8 @@ class DownloadsTab extends StatelessWidget {
               padding: EdgeInsets.all(32),
               child: Text(
                 'Henüz indirilen yok.\n'
-                'Bir videoyu açıp menüden "MP3 indir" diyebilirsin.',
+                'Bir videoyu açıp menüden "MP3 indir" diyebilirsin.\n\n'
+                'İndirilenler telefonundaki Müzik / oLusTifF klasörüne kaydedilir.',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -38,8 +54,16 @@ class DownloadsTab extends StatelessWidget {
               child: Row(
                 children: [
                   Text('${items.length} dosya'),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Text('${totalMb.toStringAsFixed(0)} MB'),
+                  const Spacer(),
+                  // Dosyalar ortak Müzik klasöründe; kullanıcı onları
+                  // telefonun dosya yöneticisinde de görebilsin.
+                  TextButton.icon(
+                    onPressed: () => _openFolder(context),
+                    icon: const Icon(Icons.folder_open, size: 18),
+                    label: const Text('Klasörü aç'),
+                  ),
                 ],
               ),
             ),

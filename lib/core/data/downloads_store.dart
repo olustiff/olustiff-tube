@@ -94,9 +94,23 @@ class DownloadsStore extends ChangeNotifier {
   /// Süren indirmelerin ilerlemesi (0..1) — arayüz yüzde gösterir.
   final Map<String, double> _progress = {};
 
+  /// Süren indirmelerin başlıkları. Arayüzün "ne iniyor" diye başka
+  /// kaynaklardan tahmin yürütmesine gerek kalmasın diye burada tutulur.
+  final Map<String, String> _titles = {};
+
   List<DownloadedItem> get items => List.unmodifiable(_items);
   bool isDownloading(String videoId) => _progress.containsKey(videoId);
   double progressOf(String videoId) => _progress[videoId] ?? 0;
+
+  /// Şu an inen dosyalar: (videoId, başlık, ilerleme).
+  List<({String videoId, String title, double progress})> get activeDownloads =>
+      _progress.entries
+          .map((e) => (
+                videoId: e.key,
+                title: _titles[e.key] ?? '',
+                progress: e.value,
+              ))
+          .toList(growable: false);
 
   bool hasDownload(String videoId) =>
       _items.any((i) => i.videoId == videoId);
@@ -142,8 +156,13 @@ class DownloadsStore extends ChangeNotifier {
   }
 
   /// Videonun sesini MP3 olarak indirir ve ortak Müzik klasörüne kaydeder.
-  Future<DownloadedItem> download(String videoId, {int bitrate = 320}) async {
+  Future<DownloadedItem> download(
+    String videoId, {
+    int bitrate = 320,
+    String title = '',
+  }) async {
     _progress[videoId] = 0;
+    _titles[videoId] = title;
     notifyListeners();
     try {
       final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
@@ -158,6 +177,7 @@ class DownloadsStore extends ChangeNotifier {
       return item;
     } finally {
       _progress.remove(videoId);
+      _titles.remove(videoId);
       notifyListeners();
     }
   }

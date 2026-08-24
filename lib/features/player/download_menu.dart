@@ -61,7 +61,11 @@ Future<void> showDownloadMenu(BuildContext context) async {
   );
 
   try {
-    final item = await store.download(details.videoId, bitrate: bitrate);
+    final item = await store.download(
+      details.videoId,
+      bitrate: bitrate,
+      title: details.title,
+    );
     messenger.showSnackBar(
       SnackBar(content: Text('İndirildi • ${item.sizeLabel}')),
     );
