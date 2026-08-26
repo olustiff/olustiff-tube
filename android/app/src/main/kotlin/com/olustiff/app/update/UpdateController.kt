@@ -50,6 +50,52 @@ class UpdateController(
                 progressSink = null
             }
         })
+
+        // Kurulumdan sonra APK önbellekte kalıyor ve boşuna ~55 MB yer
+        // kaplıyordu. Kurulmuş ya da eskimiş indirmeler açılışta silinir.
+        scope.launch(Dispatchers.IO) { cleanupDownloads() }
+    }
+
+    /** Kurulu sürümden yeni OLMAYAN indirmeleri siler. */
+    private fun cleanupDownloads() {
+        val dir = File(context.cacheDir, "updates")
+        if (!dir.isDirectory) return
+        val installed = installedVersion() ?: return
+
+        dir.listFiles()?.forEach { file ->
+            val version = file.name
+                .removePrefix("olustiff-")
+                .removeSuffix(".part")
+                .removeSuffix(".apk")
+            if (!isNewer(version, installed)) file.delete()
+        }
+    }
+
+    /** Cihazın kullandığı mimari; sürüm dosyası buna göre seçilir. */
+    private fun deviceAbi(): String = when {
+        Build.SUPPORTED_ABIS.contains("arm64-v8a") -> "arm64"
+        Build.SUPPORTED_ABIS.contains("armeabi-v7a") -> "arm32"
+        Build.SUPPORTED_ABIS.contains("x86_64") -> "x64"
+        else -> "universal"
+    }
+
+    private fun installedVersion(): String? = try {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    } catch (e: Exception) {
+        null
+    }
+
+    /** "1.2.10" > "1.2.9" karşılaştırması; metin kıyası yanlış sonuç verir. */
+    private fun isNewer(candidate: String, current: String): Boolean {
+        fun parse(v: String) = v.split('.', '+', '-').map { it.toIntOrNull() ?: 0 }
+        val a = parse(candidate)
+        val b = parse(current)
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val x = a.getOrElse(i) { 0 }
+            val y = b.getOrElse(i) { 0 }
+            if (x != y) return x > y
+        }
+        return false
     }
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
@@ -63,7 +109,10 @@ class UpdateController(
                 }
                 scope.launch {
                     try {
-                        val apk = withContext(Dispatchers.IO) { download(url, version) }
+                        val expectedSize = (call.argument<Number>("sizeBytes"))?.toLong() ?: 0L
+                        val apk = withContext(Dispatchers.IO) {
+                            download(url, version, expectedSize)
+                        }
                         install(apk)
                         result.success(null)
                     } catch (e: Exception) {
@@ -72,16 +121,31 @@ class UpdateController(
                 }
             }
 
+            // Sürüm dosyaları işlemci mimarisine göre ayrı yayınlanıyor:
+            // hepsini tek APK'da taşımak indirmeyi ~2,5 katına çıkarıyordu.
+            "deviceAbi" -> result.success(deviceAbi())
+
             else -> result.notImplemented()
         }
     }
 
-    private fun download(url: String, version: String): File {
+    private fun download(url: String, version: String, expectedSize: Long): File {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-        // Eski indirmeler birikmesin.
-        dir.listFiles()?.forEach { it.delete() }
-
         val target = File(dir, "olustiff-$version.apk")
+
+        // Bu sürüm zaten inmiş: kullanıcı indirdiği halde kurmadıysa tekrar
+        // 55 MB indirmesin. Boyut tutuyorsa dosya eksiksizdir.
+        if (target.isFile && (expectedSize <= 0L || target.length() == expectedSize)) {
+            mainHandler.post { progressSink?.success(mapOf("progress" to 1.0)) }
+            return target
+        }
+
+        // Başka sürümlerin artıkları yer kaplamasın.
+        dir.listFiles()?.forEach { if (it != target) it.delete() }
+
+        // Yarım kalan indirme "tam" sanılmasın diye önce geçici ada yazılır.
+        val part = File(dir, "olustiff-$version.apk.part")
+        part.delete()
         val request = Request.Builder().url(url).build()
 
         client.newCall(request).execute().use { response ->
@@ -93,7 +157,7 @@ class UpdateController(
             var written = 0L
 
             body.byteStream().use { input ->
-                FileOutputStream(target).use { output ->
+                FileOutputStream(part).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         val read = input.read(buffer)
@@ -109,6 +173,10 @@ class UpdateController(
                     }
                 }
             }
+        }
+
+        if (!part.renameTo(target)) {
+            throw IllegalStateException("İndirilen dosya taşınamadı")
         }
         return target
     }

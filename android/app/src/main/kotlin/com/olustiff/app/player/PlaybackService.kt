@@ -2,9 +2,17 @@ package com.olustiff.app.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Bundle
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import com.olustiff.app.MainActivity
+import com.olustiff.app.R
 
 /**
  * Uygulama arka plana alınsa ya da video ekranı kapatılsa bile oynatmayı
@@ -37,6 +45,11 @@ class PlaybackService : MediaSessionService() {
             QueueAwarePlayer(this, PlayerHolder.getPlayer(this))
         )
             .setSessionActivity(sessionActivityIntent)
+            .setCallback(CloseCallback())
+            // Bildirimde kapatma düğmesi: çalarken bildirim kaydırılarak
+            // kapatılamıyor, kullanıcının oynatmayı bitirmek için uygulamayı
+            // açması gerekiyordu.
+            .setCustomLayout(ImmutableList.of(closeButton()))
             .build()
         mediaSession = session
 
@@ -49,6 +62,54 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
+
+    private fun closeButton(): CommandButton = CommandButton.Builder()
+        .setDisplayName("Kapat")
+        .setIconResId(R.drawable.ic_notification_close)
+        .setSessionCommand(SessionCommand(ACTION_CLOSE, Bundle.EMPTY))
+        .build()
+
+    /** "Kapat" düğmesini kullanılabilir kılar ve basıldığında oynatmayı bitirir. */
+    private inner class CloseCallback : MediaSession.Callback {
+
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                .buildUpon()
+                .add(SessionCommand(ACTION_CLOSE, Bundle.EMPTY))
+                .build()
+
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction != ACTION_CLOSE) {
+                return super.onCustomCommand(session, controller, customCommand, args)
+            }
+
+            // Kuyruğu da boşalt: yalnızca durdurmak bildirimi ayakta
+            // bırakıyor, kullanıcı ise oynatmayı bitirmek istiyor.
+            session.player.stop()
+            session.player.clearMediaItems()
+            PlaybackQueue.clear()
+            stopSelf()
+
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+    }
+
+    private companion object {
+        const val ACTION_CLOSE = "com.olustiff.app.CLOSE"
+    }
 
     /**
      * Kullanıcı uygulamayı görev listesinden kaydırdığında: oynatma duraklamışsa

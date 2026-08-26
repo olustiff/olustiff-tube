@@ -38,6 +38,10 @@ Future<void> main() async {
     final videoId = state.currentVideoId;
     if (videoId != null) {
       PlaybackCoordinator.instance.syncFromNative(videoId, state.queueIndex);
+    } else if (state.queueSize == 0) {
+      // Bildirimdeki kapat düğmesi oynatmayı bitirdi: mini oynatıcı da
+      // ekranda kalmasın.
+      PlaybackCoordinator.instance.handleStoppedExternally();
     }
   });
 

@@ -86,6 +86,17 @@ class UpdateService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Cihazın işlemci mimarisi ('arm64' | 'arm32' | 'x64'). Bilinemezse null.
+  Future<String?> _deviceAbi() async {
+    try {
+      return await _channel.invokeMethod<String>('deviceAbi');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   /// Yeni sürüm var mı diye bakar. Sonuç [available]'da tutulur.
   Future<AppRelease?> check() async {
     _checking = true;
@@ -112,11 +123,9 @@ class UpdateService extends ChangeNotifier {
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final tag = (json['tag_name'] as String? ?? '').replaceFirst('v', '');
-      final assets = (json['assets'] as List<dynamic>? ?? []);
-      final apk = assets.cast<Map<String, dynamic>>().firstWhere(
-            (a) => (a['name'] as String? ?? '').endsWith('.apk'),
-            orElse: () => <String, dynamic>{},
-          );
+      final assets = (json['assets'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+      final apk = pickApkAsset(assets, await _deviceAbi());
 
       if (tag.isEmpty || apk.isEmpty) {
         _available = null;
@@ -151,6 +160,9 @@ class UpdateService extends ChangeNotifier {
       await _channel.invokeMethod<void>('downloadAndInstall', {
         'url': release.apkUrl,
         'version': release.version,
+        // Native taraf, yarım inmiş dosyayı "hazır" sanmasın diye boyutu
+        // doğruluyor: eksiksiz inmişse yeniden indirilmiyor.
+        'sizeBytes': release.sizeBytes,
       });
     } on PlatformException catch (e) {
       _error = e.message ?? 'Güncelleme kurulamadı';
@@ -179,4 +191,29 @@ bool isNewer(String candidate, String current) {
     if (x != y) return x > y;
   }
   return false;
+}
+
+/// Cihaza uyan sürüm dosyasını seçer.
+///
+/// Her mimari ayrı yayınlanıyor (arm64 ~21 MB), hepsini taşıyan ortak dosya
+/// ise ~53 MB. Uygun olanı bulamazsak ortak dosyaya düşülür — yanlış
+/// mimarili bir APK kurdurmaktansa fazladan indirmek yeğdir.
+Map<String, dynamic> pickApkAsset(
+  List<Map<String, dynamic>> assets,
+  String? abi,
+) {
+  String nameOf(Map<String, dynamic> a) => a['name'] as String? ?? '';
+  final apks = assets.where((a) => nameOf(a).endsWith('.apk')).toList();
+  if (apks.isEmpty) return <String, dynamic>{};
+
+  if (abi != null) {
+    for (final apk in apks) {
+      if (nameOf(apk).contains('-$abi.')) return apk;
+    }
+  }
+
+  for (final apk in apks) {
+    if (!RegExp(r'-(arm64|arm32|x64)\.').hasMatch(nameOf(apk))) return apk;
+  }
+  return apks.first;
 }

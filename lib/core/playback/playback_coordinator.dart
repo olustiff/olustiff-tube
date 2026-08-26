@@ -366,6 +366,23 @@ class PlaybackCoordinator extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Oynatma uygulama DIŞINDAN bitirildiğinde (bildirimdeki kapat düğmesi)
+  /// arayüzü temizler. Native'e komut göndermez — orada zaten durdu.
+  void handleStoppedExternally() {
+    // Yeni bir medya hazırlanıyorsa bu, henüz medya yüklenmemiş olmasından
+    // kaynaklanan geçici bir durumdur; temizlemek hazırlığı bozardı.
+    if (_loading) return;
+    if (_details == null && _queue.isEmpty) return;
+
+    _targetVideoId = null;
+    _details = null;
+    _pending = null;
+    _qualityLabel = null;
+    _queue = const [];
+    _index = -1;
+    notifyListeners();
+  }
+
   Future<void> stop() async {
     await _playback.stop();
     _targetVideoId = null;
