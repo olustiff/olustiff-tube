@@ -255,9 +255,12 @@ class PlaybackController(
             }
 
             "resume" -> {
-                // Odak başkasındaysa (ör. süren arama) çalmaya başlamayalım.
-                player().playWhenReady = PlayerHolder.requestAudioFocus()
-                result.success(null)
+                // Kullanıcı bilerek bastı: ses odağı alınamasa bile (süren
+                // arama) oynatma başlar. Aramanın KENDİLİĞİNDEN duraklatması
+                // ayrı bir durum ve korunuyor — burada iradeli bir istek var.
+                PlayerHolder.requestAudioFocus()
+                player().playWhenReady = true
+                result.success(false)
             }
 
             "pause" -> {

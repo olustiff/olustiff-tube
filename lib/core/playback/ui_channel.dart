@@ -1,13 +1,29 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Yalnızca aktivite üzerinden yapılabilen işler: ekranı açık tutma ve
 /// resim-içinde-resim.
 class UiChannel {
-  UiChannel._();
+  UiChannel._() {
+    // Native taraf küçük pencereye girip çıkıldığını buradan bildiriyor.
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'pipChanged') {
+        isInPictureInPicture.value = call.arguments as bool? ?? false;
+      }
+      return null;
+    });
+  }
 
   static final UiChannel instance = UiChannel._();
 
   static const _channel = MethodChannel('olustiff/ui');
+
+  /// Küçük pencerede miyiz.
+  ///
+  /// Pencerede yalnızca görüntü olmalı: uygulamanın kendi düğmeleri o boyutta
+  /// hem okunaksız hem de gereksiz. Oynat/duraklat'ı sistem kendi düğmesiyle
+  /// veriyor.
+  final ValueNotifier<bool> isInPictureInPicture = ValueNotifier(false);
 
   /// Video izlenirken ekranın kapanmasını engeller. Sesli modda kapatılır ki
   /// telefon normal şekilde uyuyabilsin.
@@ -30,7 +46,8 @@ class UiChannel {
   /// Bluetooth bağlanınca müziği arka planda başlatmak yalnızca muaf
   /// uygulamalara izinli (Android 12+).
   Future<bool> isBatteryOptimizationIgnored() async =>
-      await _channel.invokeMethod<bool>('isBatteryOptimizationIgnored') ?? false;
+      await _channel.invokeMethod<bool>('isBatteryOptimizationIgnored') ??
+      false;
 
   /// Muafiyet iznini ister; sistem onay ekranını açar.
   Future<void> requestIgnoreBatteryOptimization() =>

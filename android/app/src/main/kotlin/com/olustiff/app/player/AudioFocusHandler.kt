@@ -87,13 +87,24 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
                 // Sesi kısarak sürdürmeyi kabul etmiyoruz; duraklatmak
                 // istediğimiz için olayı kendimiz karşılıyoruz.
                 .setWillPauseWhenDucked(true)
+                // Odak meşgulken (süren arama) istek reddedilmek yerine
+                // BEKLETİLİR: kullanıcı arama sırasında oynat'a bastığında
+                // hiçbir şey olmuyordu. Sistem odak serbest kalınca GAIN
+                // gönderiyor, oynatma o an başlıyor.
+                .setAcceptsDelayedFocusGain(true)
                 .setOnAudioFocusChangeListener(listener)
                 .build()
         } else {
             null
         }
 
-    /** Oynatma başlarken çağrılır. Odak alınamazsa false döner. */
+    /**
+     * Oynatma başlarken çağrılır.
+     *
+     * Odak hemen alınabildiyse true döner. Arama gibi bir sebeple meşgulse
+     * false döner — ama çağıran taraf oynatmayı yine de başlatır: kullanıcı
+     * bilerek istediyse odağın reddi onu engellememeli.
+     */
     fun request(): Boolean {
         if (hasFocus) return true
         val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -106,7 +117,15 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
                 AudioManager.AUDIOFOCUS_GAIN
             )
         }
+
         hasFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        if (!hasFocus) {
+            // Odak şu an başkasında (süren arama). Oynatma yine de başlıyor —
+            // kullanıcı bilerek istedi. Odak serbest kalınca sistem GAIN
+            // gönderiyor ve ses yolu orada tazeleniyor.
+            resumeOnFocusGain = true
+            Log.d(TAG, "Odak alınamadı (sonuç=$result), oynatma yine de sürüyor")
+        }
         return hasFocus
     }
 

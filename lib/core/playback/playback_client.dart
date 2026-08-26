@@ -183,7 +183,13 @@ class PlaybackClient {
         'audioUrl': audioUrl,
       });
 
-  Future<void> resume() => _method.invokeMethod<void>('resume');
+  /// Oynatmayı sürdürür.
+  ///
+  /// Ses odağı başkasındaysa (süren telefon araması) oynatma HEMEN başlamaz;
+  /// istek saklanır ve arama bitince kendiliğinden çalar. Böyle bir erteleme
+  /// olduysa true döner — arayüz kullanıcıya durumu söyleyebilir.
+  Future<bool> resume() async =>
+      await _method.invokeMethod<bool>('resume') ?? false;
 
   Future<void> pause() => _method.invokeMethod<void>('pause');
 

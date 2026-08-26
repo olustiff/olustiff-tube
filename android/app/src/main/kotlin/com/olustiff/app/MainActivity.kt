@@ -1,8 +1,14 @@
 package com.olustiff.app
 
 import android.Manifest
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.drawable.Icon
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
@@ -194,13 +200,52 @@ class MainActivity : FlutterActivity() {
         ) {
             return false
         }
+        return enterPictureInPictureMode(pipParams())
+    }
+
+    /**
+     * Küçük pencerenin ayarları.
+     *
+     * Oynat/duraklat düğmesi buradan, SİSTEM düğmesi olarak veriliyor:
+     * uygulamanın kendi kontrolleri küçük pencerede okunaksız kalıyor ve
+     * pencerede yalnızca görüntü olması gerekiyor.
+     */
+    private fun pipParams(): PictureInPictureParams {
         val ratio = PlayerHolder.videoAspectRatio
         // Android, en/boy oranını 1:2.39 ile 2.39:1 arasında ister.
         val clamped = ratio.coerceIn(0.42, 2.39)
-        val params = PictureInPictureParams.Builder()
+        return PictureInPictureParams.Builder()
             .setAspectRatio(Rational((clamped * 1000).toInt(), 1000))
+            .setActions(listOf(playPauseAction()))
             .build()
-        return enterPictureInPictureMode(params)
+    }
+
+    private fun playPauseAction(): RemoteAction {
+        val playing = PlayerHolder.isPlaying()
+        val icon = Icon.createWithResource(
+            this,
+            if (playing) R.drawable.ic_pip_pause else R.drawable.ic_pip_play
+        )
+        val label = if (playing) "Duraklat" else "Oynat"
+        val intent = PendingIntent.getBroadcast(
+            this,
+            REQUEST_PIP_TOGGLE,
+            Intent(ACTION_PIP_TOGGLE).setPackage(packageName),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        return RemoteAction(icon, label, label, intent)
+    }
+
+    /** Küçük penceredeki düğmeye basıldığında oynatmayı çevirir. */
+    private val pipActionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_PIP_TOGGLE) return
+            PlayerHolder.togglePlayback()
+            // Düğmenin ikonu duruma göre değişmeli.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                setPictureInPictureParams(pipParams())
+            }
+        }
     }
 
     override fun onPictureInPictureModeChanged(
@@ -210,9 +255,40 @@ class MainActivity : FlutterActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         // Arayüz, küçük pencerede kontrolleri gizleyebilsin diye haberdar edilir.
         pipChannel?.invokeMethod("pipChanged", isInPictureInPictureMode)
+
+        if (isInPictureInPictureMode) {
+            registerPipReceiver()
+        } else {
+            unregisterPipReceiver()
+        }
+    }
+
+    private var pipReceiverRegistered = false
+
+    private fun registerPipReceiver() {
+        if (pipReceiverRegistered) return
+        val filter = IntentFilter(ACTION_PIP_TOGGLE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(pipActionReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(pipActionReceiver, filter)
+        }
+        pipReceiverRegistered = true
+    }
+
+    private fun unregisterPipReceiver() {
+        if (!pipReceiverRegistered) return
+        runCatching { unregisterReceiver(pipActionReceiver) }
+        pipReceiverRegistered = false
     }
 
     private var pipChannel: MethodChannel? = null
+
+    private companion object {
+        const val ACTION_PIP_TOGGLE = "com.olustiff.app.PIP_TOGGLE"
+        const val REQUEST_PIP_TOGGLE = 1001
+    }
 
     private val REQ_BLUETOOTH = 4711
     private val REQ_STORAGE = 4712

@@ -225,7 +225,10 @@ object PlayerHolder {
         player.setMediaSource(buildSource(request, audioOnly))
         player.prepare()
         // Odak alınamazsa (ör. süren bir arama var) çalmaya başlamıyoruz.
-        player.playWhenReady = audioFocus?.request() ?: true
+        // Odak istenir ama SONUCU beklenmez: kullanıcı bilerek bir şey
+        // açtıysa (süren arama sırasında bile) oynatma başlamalı.
+        audioFocus?.request()
+        player.playWhenReady = true
     }
 
     /**
@@ -310,7 +313,10 @@ object PlayerHolder {
                 .build()
         )
         player.prepare()
-        player.playWhenReady = audioFocus?.request() ?: true
+        // Odak istenir ama SONUCU beklenmez: kullanıcı bilerek bir şey
+        // açtıysa (süren arama sırasında bile) oynatma başlamalı.
+        audioFocus?.request()
+        player.playWhenReady = true
     }
 
     /**
@@ -423,4 +429,17 @@ object PlayerHolder {
 
     /** Kullanıcı elle devam ettirdiğinde odağın bizde olduğundan emin ol. */
     fun requestAudioFocus(): Boolean = audioFocus?.request() ?: true
+
+    fun isPlaying(): Boolean = exoPlayer?.playWhenReady == true
+
+    /** Küçük penceredeki sistem düğmesi için: çalıyorsa duraklat, tersi. */
+    fun togglePlayback() {
+        val current = exoPlayer ?: return
+        if (current.playWhenReady) {
+            current.playWhenReady = false
+        } else {
+            audioFocus?.request()
+            current.playWhenReady = true
+        }
+    }
 }

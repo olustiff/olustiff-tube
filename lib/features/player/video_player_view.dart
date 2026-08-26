@@ -28,6 +28,7 @@ class VideoPlayerView extends StatefulWidget {
     required this.state,
     required this.playback,
     required this.isFullscreen,
+    this.pipMode = false,
     required this.onToggleFullscreen,
     this.onEnterPip,
     this.posterUrl,
@@ -36,6 +37,9 @@ class VideoPlayerView extends StatefulWidget {
   final PlaybackState state;
   final PlaybackClient playback;
   final bool isFullscreen;
+
+  /// Küçük pencerede: yalnızca görüntü kalır, tüm düğmeler gizlenir.
+  final bool pipMode;
   final VoidCallback onToggleFullscreen;
   final VoidCallback? onEnterPip;
 
@@ -87,8 +91,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
   void _seekBy(Duration offset) {
     final target = widget.state.position + offset;
-    widget.playback
-        .seekTo(target < Duration.zero ? Duration.zero : target);
+    widget.playback.seekTo(target < Duration.zero ? Duration.zero : target);
 
     setState(() {
       _seekHint = offset.isNegative
@@ -104,9 +107,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   void _onDoubleTapDown(TapDownDetails details, BoxConstraints constraints) {
     if (_locked) return;
     final isLeft = details.localPosition.dx < constraints.maxWidth / 2;
-    _seekBy(Duration(
-      seconds: isLeft ? -kDoubleTapSeekSeconds : kDoubleTapSeekSeconds,
-    ));
+    _seekBy(
+      Duration(
+        seconds: isLeft ? -kDoubleTapSeekSeconds : kDoubleTapSeekSeconds,
+      ),
+    );
   }
 
   @override
@@ -114,8 +119,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         return GestureDetector(
-          onTap: _toggleControls,
-          onDoubleTapDown: (d) => _onDoubleTapDown(d, constraints),
+          onTap: widget.pipMode ? null : _toggleControls,
+          onDoubleTapDown: (d) {
+            if (widget.pipMode) return;
+            _onDoubleTapDown(d, constraints);
+          },
           // Çift dokunuş algılansın diye boş kalsa da gerekli.
           onDoubleTap: () {},
           child: ColoredBox(
@@ -124,12 +132,13 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
               fit: StackFit.expand,
               children: [
                 _buildVideo(),
-                if (_seekHint != null) SeekHint(text: _seekHint!),
+                if (_seekHint != null && !widget.pipMode)
+                  SeekHint(text: _seekHint!),
                 AnimatedOpacity(
-                  opacity: _controlsVisible ? 1 : 0,
+                  opacity: (_controlsVisible && !widget.pipMode) ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
                   child: IgnorePointer(
-                    ignoring: !_controlsVisible,
+                    ignoring: !_controlsVisible || widget.pipMode,
                     child: _buildControls(),
                   ),
                 ),
@@ -231,7 +240,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                   icon: _fit == VideoFit.contain
                       ? Icons.fit_screen_outlined
                       : Icons.crop_free,
-                  tooltip: _fit == VideoFit.contain ? 'Ekranı doldur' : 'Sığdır',
+                  tooltip: _fit == VideoFit.contain
+                      ? 'Ekranı doldur'
+                      : 'Sığdır',
                   onPressed: () => setState(() {
                     _fit = _fit == VideoFit.contain
                         ? VideoFit.cover
@@ -309,8 +320,10 @@ class _BottomBar extends StatelessWidget {
     final duration = state.duration;
     final isLive = duration == null;
     final maxMs = (duration ?? Duration.zero).inMilliseconds.toDouble();
-    final positionMs = state.position.inMilliseconds
-        .clamp(0, (duration ?? Duration.zero).inMilliseconds);
+    final positionMs = state.position.inMilliseconds.clamp(
+      0,
+      (duration ?? Duration.zero).inMilliseconds,
+    );
 
     return Row(
       children: [
@@ -324,8 +337,9 @@ class _BottomBar extends StatelessWidget {
               : SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: 2,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 6,
+                    ),
                   ),
                   child: Slider(
                     value: maxMs == 0 ? 0 : positionMs.toDouble(),
@@ -333,8 +347,7 @@ class _BottomBar extends StatelessWidget {
                     onChanged: maxMs == 0
                         ? null
                         : (v) {
-                            playback
-                                .seekTo(Duration(milliseconds: v.toInt()));
+                            playback.seekTo(Duration(milliseconds: v.toInt()));
                             onInteraction();
                           },
                   ),
@@ -385,10 +398,7 @@ class _RoundButton extends StatelessWidget {
 
 /// Tam ekran video sayfası: yatay yönlendirme ve gizli sistem çubukları.
 class FullscreenPlayerPage extends StatefulWidget {
-  const FullscreenPlayerPage({
-    super.key,
-    required this.playback,
-  });
+  const FullscreenPlayerPage({super.key, required this.playback});
 
   final PlaybackClient playback;
 

@@ -142,9 +142,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
     );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"$selected" listesine eklendi')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('"$selected" listesine eklendi')));
     }
   }
 
@@ -229,78 +229,89 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _coordinator,
-      builder: (context, _) {
-        final details = _coordinator.details;
-        final audioOnly = _coordinator.audioOnly;
-
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(audioOnly ? 'Dinleniyor' : 'İzleniyor'),
-            actions: [
-              // Yeni bir şey aramak için listeye geri dönmek gerekmiyor.
-              IconButton(
-                icon: const Icon(Icons.search),
-                tooltip: 'Ara',
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SearchScreen()),
-                ),
-              ),
-              IconButton(
-                tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
-                icon: Icon(
-                    audioOnly ? Icons.videocam_outlined : Icons.headphones),
-                onPressed: details == null ? null : _coordinator.toggleMode,
-              ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  switch (value) {
-                    case 'download':
-                      showDownloadMenu(context);
-                    case 'sleep':
-                      _openSleepTimer();
-                    case 'share':
-                      _share();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'download',
-                    child: ListTile(
-                      leading: Icon(Icons.download_outlined),
-                      title: Text('MP3 indir'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'sleep',
-                    child: ListTile(
-                      leading: const Icon(Icons.bedtime_outlined),
-                      title: Text(
-                        SleepTimer.instance.isActive
-                            ? 'Uyku zamanlayıcısı (açık)'
-                            : 'Uyku zamanlayıcısı',
-                      ),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'share',
-                    child: ListTile(
-                      leading: Icon(Icons.share_outlined),
-                      title: Text('Paylaş'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          body: _buildBody(details, audioOnly),
-        );
-      },
+    return ValueListenableBuilder<bool>(
+      valueListenable: UiChannel.instance.isInPictureInPicture,
+      builder: (context, pip, _) => AnimatedBuilder(
+        animation: _coordinator,
+        builder: (context, _) => _buildScreen(context, pip),
+      ),
     );
   }
 
-  Widget _buildBody(VideoDetails? details, bool audioOnly) {
+  Widget _buildScreen(BuildContext context, bool pip) {
+    final details = _coordinator.details;
+    final audioOnly = _coordinator.audioOnly;
+
+    return Scaffold(
+      // Küçük pencerede yalnızca görüntü kalır: başlık çubuğu, listeler
+      // ve düğmeler o boyutta okunaksız. Oynat/duraklat'ı sistem kendi
+      // düğmesiyle veriyor.
+      appBar: pip
+          ? null
+          : AppBar(
+              title: Text(audioOnly ? 'Dinleniyor' : 'İzleniyor'),
+              actions: [
+                // Yeni bir şey aramak için listeye geri dönmek gerekmiyor.
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Ara',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SearchScreen()),
+                  ),
+                ),
+                IconButton(
+                  tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
+                  icon: Icon(
+                    audioOnly ? Icons.videocam_outlined : Icons.headphones,
+                  ),
+                  onPressed: details == null ? null : _coordinator.toggleMode,
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'download':
+                        showDownloadMenu(context);
+                      case 'sleep':
+                        _openSleepTimer();
+                      case 'share':
+                        _share();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'download',
+                      child: ListTile(
+                        leading: Icon(Icons.download_outlined),
+                        title: Text('MP3 indir'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'sleep',
+                      child: ListTile(
+                        leading: const Icon(Icons.bedtime_outlined),
+                        title: Text(
+                          SleepTimer.instance.isActive
+                              ? 'Uyku zamanlayıcısı (açık)'
+                              : 'Uyku zamanlayıcısı',
+                        ),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'share',
+                      child: ListTile(
+                        leading: Icon(Icons.share_outlined),
+                        title: Text('Paylaş'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+      body: _buildBody(details, audioOnly, pip),
+    );
+  }
+
+  Widget _buildBody(VideoDetails? details, bool audioOnly, bool pip) {
     final error = _coordinator.lastError;
     if (error != null && details == null) {
       return Center(
@@ -353,59 +364,69 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       state: state,
                       playback: _playback,
                       isFullscreen: false,
+                      pipMode: pip,
                       onToggleFullscreen: _openFullscreen,
                       posterUrl: details.thumbnailUrl,
                       onEnterPip: () =>
                           UiChannel.instance.enterPictureInPicture(),
                     ),
             ),
-            _TransportBar(
-              state: state,
-              playback: _playback,
-              coordinator: _coordinator,
-              showSeek: audioOnly,
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  Text(details.title,
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    [?details.uploaderName, ?_coordinator.qualityLabel]
-                        .join(' • '),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  _QuickSettings(
-                    state: state,
-                    coordinator: _coordinator,
-                    onAddToPlaylist: _addToPlaylist,
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    secondary: const Icon(Icons.playlist_play),
-                    title: const Text('Otomatik oynatma'),
-                    subtitle: Text(
-                      _coordinator.upNext == null
-                          ? 'Bittiğinde durur.'
-                          : 'Sırada: ${_coordinator.upNext!.title}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    value: state.autoplay,
-                    onChanged: _coordinator.setAutoplay,
-                  ),
-                  const SizedBox(height: 8),
-                  _QueueSection(coordinator: _coordinator),
-                  const SizedBox(height: 16),
-                ],
+            // Küçük pencerede yalnızca görüntü kalsın. Video yüzeyi ağaçta
+            // AYNI yerde duruyor: yerinden oynatmak native yüzeyi kopardığı
+            // için pencere siyah kalırdı.
+            if (!pip)
+              _TransportBar(
+                state: state,
+                playback: _playback,
+                coordinator: _coordinator,
+                showSeek: audioOnly,
               ),
-            ),
+            if (!pip)
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    Text(
+                      details.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      [
+                        ?details.uploaderName,
+                        ?_coordinator.qualityLabel,
+                      ].join(' • '),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    _QuickSettings(
+                      state: state,
+                      coordinator: _coordinator,
+                      onAddToPlaylist: _addToPlaylist,
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      secondary: const Icon(Icons.playlist_play),
+                      title: const Text('Otomatik oynatma'),
+                      subtitle: Text(
+                        _coordinator.upNext == null
+                            ? 'Bittiğinde durur.'
+                            : 'Sırada: ${_coordinator.upNext!.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      value: state.autoplay,
+                      onChanged: _coordinator.setAutoplay,
+                    ),
+                    const SizedBox(height: 8),
+                    _QueueSection(coordinator: _coordinator),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
             // İndirme buradan başlatılıyor; ilerlemenin de burada görünmesi
             // gerekiyor, yoksa "indiriyor mu?" belirsiz kalıyor.
-            const DownloadProgressBar(),
+            if (!pip) const DownloadProgressBar(),
           ],
         );
       },
@@ -429,16 +450,16 @@ class _QuickSettings extends StatelessWidget {
   final VoidCallback onAddToPlaylist;
 
   IconData get _repeatIcon => switch (state.repeatMode) {
-        'one' => Icons.repeat_one,
-        'all' => Icons.repeat_on_outlined,
-        _ => Icons.repeat,
-      };
+    'one' => Icons.repeat_one,
+    'all' => Icons.repeat_on_outlined,
+    _ => Icons.repeat,
+  };
 
   String get _nextRepeatMode => switch (state.repeatMode) {
-        'off' => 'all',
-        'all' => 'one',
-        _ => 'off',
-      };
+    'off' => 'all',
+    'all' => 'one',
+    _ => 'off',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -481,7 +502,9 @@ class _QuickSettings extends StatelessWidget {
             onPressed: () => coordinator.setRepeatMode(_nextRepeatMode),
           ),
           IconButton(
-            icon: Icon(state.shuffle ? Icons.shuffle_on_outlined : Icons.shuffle),
+            icon: Icon(
+              state.shuffle ? Icons.shuffle_on_outlined : Icons.shuffle,
+            ),
             tooltip: state.shuffle ? 'Karıştırma açık' : 'Karıştır',
             onPressed: () => coordinator.setShuffle(!state.shuffle),
           ),
@@ -622,8 +645,10 @@ class _TransportBar extends StatelessWidget {
     // yakıyordu; gerçek bilgi oynatıcıdan geliyor.
     final isLive = state.isLive;
     final maxMs = (duration ?? Duration.zero).inMilliseconds.toDouble();
-    final positionMs = state.position.inMilliseconds
-        .clamp(0, (duration ?? Duration.zero).inMilliseconds);
+    final positionMs = state.position.inMilliseconds.clamp(
+      0,
+      (duration ?? Duration.zero).inMilliseconds,
+    );
 
     return Column(
       children: [
@@ -642,8 +667,11 @@ class _TransportBar extends StatelessWidget {
               if (isLive)
                 Row(
                   children: [
-                    Icon(Icons.circle,
-                        size: 10, color: Theme.of(context).colorScheme.error),
+                    Icon(
+                      Icons.circle,
+                      size: 10,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                     const SizedBox(width: 6),
                     const Text('CANLI'),
                   ],
@@ -675,8 +703,7 @@ class _TransportBar extends StatelessWidget {
               ),
               const Spacer(),
               // Süre henüz gelmemiş olabilir (yeni medya hazırlanırken).
-              if (showSeek && !isLive && duration != null)
-                Text(_fmt(duration)),
+              if (showSeek && !isLive && duration != null) Text(_fmt(duration)),
             ],
           ),
         ),
@@ -734,13 +761,17 @@ class _PreparingView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(video.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
+                Text(
+                  video.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 4),
-                Text(video.uploaderName ?? '',
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  video.uploaderName ?? '',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
