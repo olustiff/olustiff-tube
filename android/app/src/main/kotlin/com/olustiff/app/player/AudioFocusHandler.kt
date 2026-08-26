@@ -60,7 +60,13 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
                     // Konuma yeniden gitmek çözücüyü ve ses çıkışını
                     // tazeliyor. Ses seviyesi de kısılmış olabilir.
                     player.volume = 1f
-                    player.seekTo(player.currentPosition)
+                    if (player.isCurrentMediaItemLive) {
+                        // Canlı yayında eski konuma dönmek akışın kenarından
+                        // koparıyor; doğrusu canlı kenara geri dönmek.
+                        player.seekToDefaultPosition()
+                    } else if (player.isCurrentMediaItemSeekable) {
+                        player.seekTo(player.currentPosition)
+                    }
 
                     player.playWhenReady = true
                     Log.d(TAG, "Odak geri geldi, ses çıkışı tazelendi")

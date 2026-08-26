@@ -41,8 +41,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final _coordinator = PlaybackCoordinator.instance;
   final _playback = PlaybackClient.shared;
 
-  Object? _error;
-
   @override
   void initState() {
     super.initState();
@@ -64,14 +62,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     UiChannel.instance.setKeepScreenOn(!_coordinator.audioOnly);
   }
 
-  Future<void> _start() async {
-    setState(() => _error = null);
-    try {
-      await _coordinator.play(widget.videoId);
-    } catch (e) {
-      if (mounted) setState(() => _error = e);
-    }
-  }
+  Future<void> _start() => _coordinator.play(widget.videoId);
 
   Future<void> _openFullscreen() async {
     // Tam ekran = yatay + sistem çubukları gizli.
@@ -309,7 +300,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildBody(VideoDetails? details, bool audioOnly) {
-    if (_error != null) {
+    final error = _coordinator.lastError;
+    if (error != null && details == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -318,7 +310,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               const Icon(Icons.error_outline, size: 40),
               const SizedBox(height: 12),
-              Text('$_error', textAlign: TextAlign.center),
+              Text('$error', textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton(onPressed: _start, child: const Text('Tekrar dene')),
             ],
@@ -330,7 +322,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (details == null) {
       // Yeni medya hazırlanıyor: eski videonun karesi yerine, dokunulan
       // içeriğin başlığıyla birlikte yükleme durumu gösterilir.
-      return _PreparingView(pending: _coordinator.pending);
+      return _PreparingView(
+        pending: _coordinator.pending,
+        loading: _coordinator.isLoading,
+      );
     }
 
     return StreamBuilder<PlaybackState>(
@@ -696,9 +691,13 @@ class _TransportBar extends StatelessWidget {
 /// Eski videonun son karesini ekranda bırakmak "tıkladım ama bir şey olmadı"
 /// hissi veriyordu; burada dokunulan içeriğin kapağı ve başlığı hemen görünür.
 class _PreparingView extends StatelessWidget {
-  const _PreparingView({required this.pending});
+  const _PreparingView({required this.pending, required this.loading});
 
   final VideoSummary? pending;
+
+  /// Hazırlık sürüyor mu. Bitmiş ama detay gelmemişse (ağ hatası) dönen
+  /// halkayı göstermek "takıldı" izlenimi veriyordu.
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -716,16 +715,17 @@ class _PreparingView extends StatelessWidget {
               else
                 ColoredBox(color: Theme.of(context).colorScheme.surfaceDim),
               Container(color: Colors.black54),
-              const Center(
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: Colors.white,
+              if (loading)
+                const Center(
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),

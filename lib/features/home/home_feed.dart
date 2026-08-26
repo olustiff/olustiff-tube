@@ -24,23 +24,23 @@ class HomeFeed {
   bool get hasHistory =>
       _library.searches.isNotEmpty || _library.watched.isNotEmpty;
 
-  /// Tohumlar: önce son aramalar, sonra EN ÇOK dinlenen kanallar.
+  /// Tohumlar: kullanıcının SON ARAMALARI.
   ///
-  /// Sık dinlenen sanatçı, sadece bir kez açılmış bir kanaldan daha isabetli
-  /// öneri verir; bu yüzden izleme sayacına göre sıralanır.
+  /// Akış aramaya göre kurulur. Kanal adlarını da tohum yapmak, aranmamış
+  /// içerikleri ana sayfaya taşıyordu: bir videonun kanalı çoğu zaman
+  /// sanatçının adı değil ("... VEVO", "Topic", derleme kanalları) ve
+  /// oradan gelen sonuçlar kullanıcının aradığı şeyle ilgisiz kalıyordu.
+  ///
+  /// Kanallar yalnızca hiç arama yapılmamışken yedek olarak kullanılır —
+  /// aksi halde ana sayfa bomboş kalırdı.
   List<String> seeds() {
-    final result = <String>[];
-    for (final search in _library.searches) {
-      if (result.length >= _seedCount) break;
-      result.add(search);
-    }
-    for (final channel in _library.topChannels) {
-      if (result.length >= _seedCount) break;
-      if (channel.isEmpty) continue;
-      if (result.any((s) => s.toLowerCase() == channel.toLowerCase())) continue;
-      result.add(channel);
-    }
-    return result;
+    final searches = _library.searches.take(_seedCount).toList();
+    if (searches.isNotEmpty) return searches;
+
+    return _library.topChannels
+        .where((channel) => channel.isNotEmpty)
+        .take(_seedCount)
+        .toList();
   }
 
   /// Tohumlardan arama yapıp sonuçları serpiştirir.

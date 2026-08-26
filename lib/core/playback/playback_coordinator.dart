@@ -61,6 +61,18 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// kuyruk da yanlış kuruluyordu.
   String? _targetVideoId;
 
+  /// Meta verisi alınamayan parça. Durum akışı saniyede birkaç kez geldiği
+  /// için, başarısız denemeyi hatırlamazsak aynı istek ağ kopukken sürekli
+  /// tekrarlanırdı.
+  String? _syncFailedFor;
+
+  /// Son hazırlığın hatası. Oynatma isteği çoğu zaman `await` edilmeden
+  /// başlatılıp ekran hemen açılıyor; hata burada tutulmazsa oynatma ekranı
+  /// hiç haber alamaz ve sonsuza kadar "hazırlanıyor"da kalırdı.
+  Object? _lastError;
+
+  Object? get lastError => _lastError;
+
   /// Hazırlanırken gösterilecek özet (başlık/kapak). Tam detay gelene kadar
   /// ekran boş kalmasın diye kuyruktan alınır.
   VideoSummary? _pending;
@@ -95,6 +107,8 @@ class PlaybackCoordinator extends ChangeNotifier {
   }) async {
     final requestId = ++_requestId;
     _targetVideoId = videoId;
+    _syncFailedFor = null;
+    _lastError = null;
 
     // Kullanıcı dokunur dokunmaz arayüz tepki versin: eski videonun karesi
     // ekranda kalmasın, yeni içeriğin başlığı hemen görünsün.
@@ -107,11 +121,14 @@ class PlaybackCoordinator extends ChangeNotifier {
 
     try {
       await _play(videoId, context, exactQueue, index, requestId);
-    } catch (_) {
+    } catch (e) {
       // Hazırlık başarısız oldu: hedefi bırak ki kullanıcı aynı videoya
-      // yeniden dokunduğunda tekrar denensin.
-      if (requestId == _requestId) _targetVideoId = null;
-      rethrow;
+      // yeniden dokunduğunda tekrar denensin. Hata fırlatılmıyor — çağıranlar
+      // beklemiyor; ekran hatayı [lastError]'dan okuyup gösteriyor.
+      if (requestId == _requestId) {
+        _targetVideoId = null;
+        _lastError = e;
+      }
     } finally {
       // Daha yeni bir istek başladıysa yükleme durumunu artık O yönetiyor;
       // buradan sıfırlamak yeni videonun yükleniyor göstergesini düşürürdü.
@@ -271,6 +288,7 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// gerçekte çalanla eşitler.
   Future<void> syncFromNative(String videoId, int nativeIndex) async {
     if (_details?.videoId == videoId) return;
+    if (_syncFailedFor == videoId) return;
 
     // Bir hazırlık sürerken native'i DİNLEME.
     //
@@ -296,6 +314,7 @@ class PlaybackCoordinator extends ChangeNotifier {
       final details = await _extraction.videoDetails(videoId);
       if (_isStale(requestId)) return;
       _details = details;
+      _syncFailedFor = null;
       _qualityLabel = null;
       notifyListeners();
       await _library.recordWatch(_summaryOf(details));
@@ -303,6 +322,7 @@ class PlaybackCoordinator extends ChangeNotifier {
       // Meta veri alınamadı; oynatma yine de sürüyor. Ekranı boş bırakmamak
       // için kuyruktaki özet (başlık/kapak) yerinde kalır.
       failed = true;
+      _syncFailedFor = videoId;
     } finally {
       if (!_isStale(requestId)) {
         _loading = false;
