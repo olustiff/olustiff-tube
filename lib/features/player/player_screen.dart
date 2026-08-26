@@ -12,6 +12,7 @@ import '../../core/playback/ui_channel.dart';
 import '../library/download_progress_bar.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
+import 'double_tap_seek.dart';
 import 'download_menu.dart';
 import 'quality_menu.dart';
 import 'video_player_view.dart';
@@ -338,9 +339,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
             AspectRatio(
               aspectRatio: audioOnly ? 16 / 9 : state.aspectRatio,
               child: audioOnly
-                  ? _AudioModeArtwork(
-                      details: details,
-                      isBuffering: state.isBuffering,
+                  ? DoubleTapSeek(
+                      state: state,
+                      playback: _playback,
+                      // Süre bilinmiyorsa içerik canlı: sarma yapılmaz.
+                      enabled: state.duration != null,
+                      child: _AudioModeArtwork(
+                        details: details,
+                        isBuffering: state.isBuffering,
+                      ),
                     )
                   : VideoPlayerView(
                       state: state,
@@ -647,12 +654,6 @@ class _TransportBar extends StatelessWidget {
                 tooltip: 'Önceki',
                 onPressed: state.hasPrevious ? coordinator.playPrevious : null,
               ),
-              if (showSeek && !isLive)
-                IconButton(
-                  icon: const Icon(Icons.replay_10),
-                  onPressed: () => playback
-                      .seekTo(state.position - const Duration(seconds: 10)),
-                ),
               // Yükleme göstergesi görüntü/kapak alanında gösterildiği için
               // burada ayrıca dönmez; buton hep oynat/duraklat kalır.
               IconButton(
@@ -665,12 +666,6 @@ class _TransportBar extends StatelessWidget {
                 onPressed: () =>
                     state.playWhenReady ? playback.pause() : playback.resume(),
               ),
-              if (showSeek && !isLive)
-                IconButton(
-                  icon: const Icon(Icons.forward_10),
-                  onPressed: () => playback
-                      .seekTo(state.position + const Duration(seconds: 10)),
-                ),
               IconButton(
                 icon: const Icon(Icons.skip_next),
                 tooltip: 'Sonraki',

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/ui_channel.dart';
+import 'double_tap_seek.dart';
 import 'quality_menu.dart';
 import 'video_surface.dart';
 
@@ -103,7 +104,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   void _onDoubleTapDown(TapDownDetails details, BoxConstraints constraints) {
     if (_locked) return;
     final isLeft = details.localPosition.dx < constraints.maxWidth / 2;
-    _seekBy(Duration(seconds: isLeft ? -10 : 10));
+    _seekBy(Duration(
+      seconds: isLeft ? -kDoubleTapSeekSeconds : kDoubleTapSeekSeconds,
+    ));
   }
 
   @override
@@ -121,7 +124,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
               fit: StackFit.expand,
               children: [
                 _buildVideo(),
-                if (_seekHint != null) _SeekHint(text: _seekHint!),
+                if (_seekHint != null) SeekHint(text: _seekHint!),
                 AnimatedOpacity(
                   opacity: _controlsVisible ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
@@ -379,25 +382,6 @@ class _RoundButton extends StatelessWidget {
 }
 
 /// Çift dokunuş sonrası kısa süre görünen "10 sn ileri/geri" balonu.
-class _SeekHint extends StatelessWidget {
-  const _SeekHint({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(text, style: const TextStyle(color: Colors.white)),
-      ),
-    );
-  }
-}
 
 /// Tam ekran video sayfası: yatay yönlendirme ve gizli sistem çubukları.
 class FullscreenPlayerPage extends StatefulWidget {
