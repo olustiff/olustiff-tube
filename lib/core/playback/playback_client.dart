@@ -10,6 +10,10 @@ class PlaybackState {
   final bool isBuffering;
   final bool isEnded;
 
+  /// İçerik canlı yayın mı. Süre bilinmiyor olmasıyla karıştırılmamalı:
+  /// yeni medya hazırlanırken de süre henüz gelmemiş olur.
+  final bool isLive;
+
   /// Kullanıcının seçtiği mod. Uygulama bunu kendiliğinden değiştirmez —
   /// sesli modda başlayan bir oynatma asla video moduna atlamaz.
   final bool audioOnly;
@@ -39,6 +43,7 @@ class PlaybackState {
     this.playWhenReady = false,
     this.isBuffering = false,
     this.isEnded = false,
+    this.isLive = false,
     this.audioOnly = false,
     this.speed = 1.0,
     this.queueIndex = -1,
@@ -75,6 +80,7 @@ class PlaybackState {
       playWhenReady: map['playWhenReady'] as bool? ?? false,
       isBuffering: map['isBuffering'] as bool? ?? false,
       isEnded: map['isEnded'] as bool? ?? false,
+      isLive: map['isLive'] as bool? ?? false,
       audioOnly: map['audioOnly'] as bool? ?? false,
       speed: (map['speed'] as num?)?.toDouble() ?? 1.0,
       queueIndex: (map['queueIndex'] as num?)?.toInt() ?? -1,

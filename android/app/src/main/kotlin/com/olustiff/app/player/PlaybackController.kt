@@ -298,6 +298,10 @@ class PlaybackController(
             mapOf(
                 "positionMs" to player.currentPosition,
                 "durationMs" to player.duration.takeIf { it > 0 },
+                // Süresi bilinmiyor olması canlı olduğu anlamına GELMEZ:
+                // yeni medya hazırlanırken de süre henüz yoktur. Arayüz
+                // "CANLI" rozetini bu bilgiye göre gösteriyor.
+                "isLive" to player.isCurrentMediaItemLive,
                 "bufferedPositionMs" to player.bufferedPosition,
                 "isPlaying" to player.isPlaying,
                 "playWhenReady" to player.playWhenReady,

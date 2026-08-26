@@ -343,7 +343,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       state: state,
                       playback: _playback,
                       // Süre bilinmiyorsa içerik canlı: sarma yapılmaz.
-                      enabled: state.duration != null,
+                      enabled: !state.isLive,
                       child: _AudioModeArtwork(
                         details: details,
                         isBuffering: state.isBuffering,
@@ -618,7 +618,9 @@ class _TransportBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final duration = state.duration;
-    final isLive = duration == null;
+    // Süre yokluğuna bakmak, video geçişlerinde kısa süre "CANLI" rozeti
+    // yakıyordu; gerçek bilgi oynatıcıdan geliyor.
+    final isLive = state.isLive;
     final maxMs = (duration ?? Duration.zero).inMilliseconds.toDouble();
     final positionMs = state.position.inMilliseconds
         .clamp(0, (duration ?? Duration.zero).inMilliseconds);
@@ -672,7 +674,9 @@ class _TransportBar extends StatelessWidget {
                 onPressed: state.hasNext ? coordinator.playNext : null,
               ),
               const Spacer(),
-              if (showSeek && !isLive) Text(_fmt(duration)),
+              // Süre henüz gelmemiş olabilir (yeni medya hazırlanırken).
+              if (showSeek && !isLive && duration != null)
+                Text(_fmt(duration)),
             ],
           ),
         ),
