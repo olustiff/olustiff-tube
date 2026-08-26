@@ -53,6 +53,13 @@ class UiChannel {
   Future<void> requestIgnoreBatteryOptimization() =>
       _channel.invokeMethod<void>('requestIgnoreBatteryOptimization');
 
+  /// Cihaz televizyon mu.
+  ///
+  /// Televizyonda kumandayla (D-pad) geziliyor: odaklanan öğe belirgin bir
+  /// çerçeveyle işaretlenmeli, dokunmaya özel hareketler ise anlamsız.
+  Future<bool> isTelevision() async =>
+      await _channel.invokeMethod<bool>('isTelevision') ?? false;
+
   /// Videoyu küçük pencereye alır. Cihaz desteklemiyorsa false döner.
   Future<bool> enterPictureInPicture() async =>
       await _channel.invokeMethod<bool>('enterPictureInPicture') ?? false;

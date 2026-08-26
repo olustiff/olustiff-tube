@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/extraction/models.dart';
+import '../../core/ui/tv_mode.dart';
 
 /// Sonsuz kaydırmalı video listesi.
 ///
@@ -112,6 +113,19 @@ class VideoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tile = _buildTile(context);
+
+    // Televizyonda kumandayla geziliyor: hangi öğenin seçili olduğu
+    // görünmezse liste kullanılamaz hale geliyor.
+    return ValueListenableBuilder<bool>(
+      valueListenable: TvMode.isTv,
+      builder: (context, isTv, child) =>
+          isTv ? _FocusHighlight(onTap: onTap, child: child!) : child!,
+      child: tile,
+    );
+  }
+
+  Widget _buildTile(BuildContext context) {
     return ListTile(
       leading: SizedBox(
         width: 100,
@@ -157,6 +171,51 @@ class _ErrorView extends StatelessWidget {
               FilledButton(onPressed: onRetry, child: const Text('Tekrar dene')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Odaklanan öğeyi belirgin bir çerçeveyle işaretler (televizyon).
+class _FocusHighlight extends StatefulWidget {
+  const _FocusHighlight({required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<_FocusHighlight> createState() => _FocusHighlightState();
+}
+
+class _FocusHighlightState extends State<_FocusHighlight> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return FocusableActionDetector(
+      onShowFocusHighlight: (value) => setState(() => _focused = value),
+      // Kumandanın onay tuşu, dokunmayla aynı işi yapar.
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap?.call();
+            return null;
+          },
+        ),
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: _focused ? scheme.primaryContainer : Colors.transparent,
+          border: Border.all(
+            color: _focused ? scheme.primary : Colors.transparent,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: widget.child,
       ),
     );
   }

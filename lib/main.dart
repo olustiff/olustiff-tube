@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/data/downloads_store.dart';
 import 'core/data/library_store.dart';
+import 'core/ui/tv_mode.dart';
 import 'core/update/update_service.dart';
 import 'core/data/settings_store.dart';
 import 'core/playback/playback_client.dart';
@@ -15,6 +16,8 @@ Future<void> main() async {
   await SettingsStore.instance.load();
   await DownloadsStore.instance.load();
   await UpdateService.instance.load();
+  // Televizyonda arayüz kumandaya göre uyarlanıyor.
+  await TvMode.detect();
 
   // Bluetooth bağlanınca ne çalacağını hazırla. Hiç bir şey çalınmadıysa
   // favorilerden (yoksa geçmişten) ilk parça yedek olarak ayarlanır;
@@ -64,6 +67,23 @@ class AkisApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const HomeScreen(),
+      // Televizyonların bir kısmı görüntünün kenarlarını kırpıyor (overscan);
+      // arayüzün kenara yapışan parçaları ekran dışında kalabiliyor.
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        return ValueListenableBuilder<bool>(
+          valueListenable: TvMode.isTv,
+          builder: (context, isTv, _) => isTv
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                  child: child,
+                )
+              : child,
+        );
+      },
     );
   }
 }

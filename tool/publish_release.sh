@@ -32,7 +32,6 @@ OUT="build/app/outputs/flutter-apk"
 STAGE=$(mktemp -d)
 cp "$OUT/app-arm64-v8a-release.apk"   "$STAGE/olustiff-arm64.apk"
 cp "$OUT/app-armeabi-v7a-release.apk" "$STAGE/olustiff-arm32.apk"
-cp "$OUT/app-x86_64-release.apk"      "$STAGE/olustiff-x64.apk"
 cp "$OUT/app-release.apk"             "$STAGE/olustiff.apk"
 
 echo "== sürüm oluşturuluyor: v$VERSION =="
@@ -44,7 +43,9 @@ TOKEN=$(gh auth token)
 
 # gh release upload büyük dosyalarda aralıklı olarak HTTP 400 veriyor;
 # doğrudan yükleme uç noktası daha güvenilir çalışıyor.
-for name in olustiff-arm64.apk olustiff-arm32.apk olustiff-x64.apk olustiff.apk; do
+# x86_64 ayrica yayinlanmiyor: yalnizca emulatorlerde kullaniliyor ve
+# ortak dosya zaten onu da tasiyor.
+for name in olustiff-arm64.apk olustiff-arm32.apk olustiff.apk; do
   echo "== yükleniyor: $name =="
   for attempt in 1 2 3; do
     # --progress-bar: yukleme ilerlemesi gorunur olsun (-s onu susturuyordu).

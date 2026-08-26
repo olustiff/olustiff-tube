@@ -227,13 +227,56 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Kumanda ve klavye kısayolları.
+  ///
+  /// Televizyonda dokunma yok: oynat/duraklat ve sarma yalnızca tuşlarla
+  /// yapılabiliyor. Aynı kısayollar klavyeli cihazlarda da çalışır.
+  Map<ShortcutActivator, VoidCallback> _shortcuts() => {
+        const SingleActivator(LogicalKeyboardKey.mediaPlayPause): _togglePlay,
+        const SingleActivator(LogicalKeyboardKey.mediaPlay): _togglePlay,
+        const SingleActivator(LogicalKeyboardKey.mediaPause): _togglePlay,
+        const SingleActivator(LogicalKeyboardKey.space): _togglePlay,
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            _seekRelative(const Duration(seconds: 10)),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            _seekRelative(const Duration(seconds: -10)),
+        const SingleActivator(LogicalKeyboardKey.mediaTrackNext):
+            _coordinator.playNext,
+        const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious):
+            _coordinator.playPrevious,
+      };
+
+  Future<void> _togglePlay() async {
+    final playing = _lastState?.playWhenReady ?? false;
+    if (playing) {
+      await _playback.pause();
+    } else {
+      await _playback.resume();
+    }
+  }
+
+  Future<void> _seekRelative(Duration offset) async {
+    final position = _lastState?.position ?? Duration.zero;
+    final target = position + offset;
+    await _playback.seekTo(target < Duration.zero ? Duration.zero : target);
+  }
+
+  /// Kısayolların o anki konumu/durumu bilmesi için son durum saklanır.
+  PlaybackState? _lastState;
+
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: UiChannel.instance.isInPictureInPicture,
-      builder: (context, pip, _) => AnimatedBuilder(
-        animation: _coordinator,
-        builder: (context, _) => _buildScreen(context, pip),
+    return CallbackShortcuts(
+      bindings: _shortcuts(),
+      child: Focus(
+        autofocus: true,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: UiChannel.instance.isInPictureInPicture,
+          builder: (context, pip, _) => AnimatedBuilder(
+            animation: _coordinator,
+            builder: (context, _) => _buildScreen(context, pip),
+          ),
+        ),
       ),
     );
   }
@@ -344,6 +387,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       stream: _playback.stateStream,
       builder: (context, snapshot) {
         final state = snapshot.data ?? const PlaybackState();
+        _lastState = state;
 
         return Column(
           children: [

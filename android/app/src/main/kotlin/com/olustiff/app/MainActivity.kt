@@ -3,6 +3,7 @@ package com.olustiff.app
 import android.Manifest
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.UiModeManager
 import android.app.RemoteAction
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -102,6 +103,10 @@ class MainActivity : FlutterActivity() {
 
                 "enterPictureInPicture" -> result.success(enterPip())
 
+                // Televizyonda kumandayla geziliyor: arayüz odak çerçevesi
+                // gösterip dokunmaya özel hareketleri devre dışı bırakıyor.
+                "isTelevision" -> result.success(isTelevision())
+
                 // Bluetooth otomatik çalma, arka planda servis başlatmayı
                 // gerektiriyor; bu da yalnızca pil optimizasyonundan muaf
                 // uygulamalara izinli.
@@ -191,6 +196,16 @@ class MainActivity : FlutterActivity() {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
                 PackageManager.PERMISSION_GRANTED
+
+    private fun isTelevision(): Boolean {
+        val uiMode = getSystemService(UI_MODE_SERVICE) as? UiModeManager
+        if (uiMode?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION) {
+            return true
+        }
+        // Bazı TV kutuları UiModeManager'ı doğru bildirmiyor; leanback
+        // özelliği daha güvenilir bir işaret.
+        return packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
 
     private fun enterPip(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
