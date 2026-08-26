@@ -255,7 +255,8 @@ class PlaybackController(
             }
 
             "resume" -> {
-                player().playWhenReady = true
+                // Odak başkasındaysa (ör. süren arama) çalmaya başlamayalım.
+                player().playWhenReady = PlayerHolder.requestAudioFocus()
                 result.success(null)
             }
 
@@ -280,6 +281,7 @@ class PlaybackController(
             "stop" -> {
                 player().stop()
                 player().clearMediaItems()
+                PlayerHolder.abandonAudioFocus()
                 context.stopService(Intent(context, PlaybackService::class.java))
                 emitState()
                 result.success(null)

@@ -37,6 +37,9 @@ object PlayerHolder {
     private var exoPlayer: ExoPlayer? = null
     private var dataSourceFactory: DataSource.Factory? = null
 
+    /** Arama/bildirim geldiğinde duraklatmayı sağlayan ses odağı yöneticisi. */
+    private var audioFocus: AudioFocusHandler? = null
+
     /** Kullanıcının seçtiği mod. Uygulamanın hiçbir yerinde otomatik değişmez. */
     @Volatile
     var audioOnlyMode: Boolean = false
@@ -82,15 +85,16 @@ object PlayerHolder {
         exoPlayer?.let { return it }
         val appContext = context.applicationContext
         return ExoPlayer.Builder(appContext)
-            // Ses odağını Media3 yönetsin: başka bir uygulama (arama, video,
-            // navigasyon sesi) ses çaldığında otomatik duraklat/kıs, bitince
-            // geri dön.
+            // Ses türü bildiriliyor (doğru ses yönlendirmesi için), ama odak
+            // yönetimi Media3'e BIRAKILMIYOR: otomatik yönetim telefon
+            // aramalarında çoğu cihazda duraklatmak yerine sesi kısıyordu.
+            // Odağı [AudioFocusHandler] yönetiyor.
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                /* handleAudioFocus= */ true
+                /* handleAudioFocus= */ false
             )
             // Kulaklık/bluetooth çıkarıldığında duraklat — hoparlörden
             // aniden çalmaya başlamasın.
@@ -101,6 +105,7 @@ object PlayerHolder {
             .build()
             .also { player ->
             exoPlayer = player
+            audioFocus = AudioFocusHandler(appContext, player)
             // Otomatik geçiş NATIVE tarafta dinleniyor: ekran kapalıyken de
             // parça bitince sıradakine geçilmeli. Bu dinleyici Dart'ta olsaydı
             // Flutter motoru askıya alındığında hiç tetiklenmezdi.
@@ -219,7 +224,8 @@ object PlayerHolder {
         applyAudioOnlyTrackSelection(player, request, audioOnly)
         player.setMediaSource(buildSource(request, audioOnly))
         player.prepare()
-        player.playWhenReady = true
+        // Odak alınamazsa (ör. süren bir arama var) çalmaya başlamıyoruz.
+        player.playWhenReady = audioFocus?.request() ?: true
     }
 
     /**
@@ -304,7 +310,7 @@ object PlayerHolder {
                 .build()
         )
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = audioFocus?.request() ?: true
     }
 
     /**
@@ -403,8 +409,18 @@ object PlayerHolder {
 
     @Synchronized
     fun release() {
+        audioFocus?.abandon()
+        audioFocus = null
         exoPlayer?.release()
         exoPlayer = null
         currentRequest = null
     }
+
+    /** Kullanıcı oynatmayı tamamen durdurduğunda odağı bırakır. */
+    fun abandonAudioFocus() {
+        audioFocus?.abandon()
+    }
+
+    /** Kullanıcı elle devam ettirdiğinde odağın bizde olduğundan emin ol. */
+    fun requestAudioFocus(): Boolean = audioFocus?.request() ?: true
 }
