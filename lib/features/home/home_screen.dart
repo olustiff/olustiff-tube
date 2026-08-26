@@ -10,6 +10,7 @@ import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import '../settings/settings_screen.dart';
+import '../settings/update_prompt.dart';
 import 'app_title.dart';
 import 'feed_tabs.dart';
 import 'home_feed.dart';
@@ -43,6 +44,12 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _library.addListener(_onLibraryChanged);
     _load();
+
+    // Güncelleme denetimi açılışı geciktirmesin: ilk kare çizildikten sonra
+    // arka planda sorulur, yalnızca yeni sürüm varsa pencere gelir.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) UpdatePrompt.maybeShow(context);
+    });
   }
 
   @override

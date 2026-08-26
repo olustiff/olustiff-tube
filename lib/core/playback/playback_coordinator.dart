@@ -44,6 +44,23 @@ class PlaybackCoordinator extends ChangeNotifier {
   bool _loading = false;
   bool get isLoading => _loading;
 
+  /// Her oynatma isteğine verilen sıra numarası.
+  ///
+  /// Çözümleme ağdan geldiği için saniyeler sürebiliyor. Kullanıcı bu sırada
+  /// başka bir videoya geçerse ÖNCEKİ isteğin geç dönen sonucu yenisinin
+  /// üstüne yazıyordu: ekranda eski başlık/kapak beliriyor, hatta yanlış
+  /// medya çalmaya başlıyordu. Sonuç yazılmadan önce jetonun hâlâ güncel
+  /// olduğu doğrulanır; eski istek sessizce terk edilir.
+  int _requestId = 0;
+
+  /// Şu an çalan ya da hazırlanmakta olan videonun kimliği.
+  ///
+  /// Yalnızca `_details`e bakmak yetmiyordu: oynatma ekranı, çözümleme daha
+  /// bitmeden açıldığı için "bu video çalmıyor" sanıp İKİNCİ bir oynatma
+  /// isteği başlatıyordu. İkinci istek, dokunulan listeyi taşımadığı için
+  /// kuyruk da yanlış kuruluyordu.
+  String? _targetVideoId;
+
   /// Hazırlanırken gösterilecek özet (başlık/kapak). Tam detay gelene kadar
   /// ekran boş kalmasın diye kuyruktan alınır.
   VideoSummary? _pending;
@@ -56,7 +73,9 @@ class PlaybackCoordinator extends ChangeNotifier {
   List<VideoSummary> get queue => List.unmodifiable(_queue);
   int get queueIndex => _index;
 
-  bool isCurrent(String videoId) => _details?.videoId == videoId;
+  /// Bu video çalıyor mu ya da onun için hazırlık sürüyor mu.
+  bool isCurrent(String videoId) =>
+      _details?.videoId == videoId || _targetVideoId == videoId;
 
   VideoSummary? get upNext {
     final next = _index + 1;
@@ -74,6 +93,9 @@ class PlaybackCoordinator extends ChangeNotifier {
     List<VideoSummary>? exactQueue,
     int? index,
   }) async {
+    final requestId = ++_requestId;
+    _targetVideoId = videoId;
+
     // Kullanıcı dokunur dokunmaz arayüz tepki versin: eski videonun karesi
     // ekranda kalmasın, yeni içeriğin başlığı hemen görünsün.
     _loading = true;
@@ -84,21 +106,35 @@ class PlaybackCoordinator extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _play(videoId, context, exactQueue, index);
+      await _play(videoId, context, exactQueue, index, requestId);
+    } catch (_) {
+      // Hazırlık başarısız oldu: hedefi bırak ki kullanıcı aynı videoya
+      // yeniden dokunduğunda tekrar denensin.
+      if (requestId == _requestId) _targetVideoId = null;
+      rethrow;
     } finally {
-      _loading = false;
-      _pending = null;
-      notifyListeners();
+      // Daha yeni bir istek başladıysa yükleme durumunu artık O yönetiyor;
+      // buradan sıfırlamak yeni videonun yükleniyor göstergesini düşürürdü.
+      if (requestId == _requestId) {
+        _loading = false;
+        _pending = null;
+        notifyListeners();
+      }
     }
   }
+
+  /// Bu istek hâlâ kullanıcının istediği mi? Değilse sonucu yazmadan çık.
+  bool _isStale(int requestId) => requestId != _requestId;
 
   Future<void> _play(
     String videoId,
     List<VideoSummary> context,
     List<VideoSummary>? exactQueue,
     int? index,
+    int requestId,
   ) async {
     final details = await _extraction.videoDetails(videoId);
+    if (_isStale(requestId)) return;
 
     // Açılış modu içeriğin türünden belirlenir; sonrası yalnızca kullanıcının.
     // Kullanıcı tercihi kapalıysa müzik de video modunda açılır.
@@ -141,7 +177,9 @@ class PlaybackCoordinator extends ChangeNotifier {
       _queue.map(_queueItem).toList(growable: false),
       _index,
     );
+    if (_isStale(requestId)) return;
     await _playback.setAutoplay(_settings.autoplay);
+    if (_isStale(requestId)) return;
 
     await _playback.play(
       audioUrl: streams.audioUrl,
@@ -153,6 +191,7 @@ class PlaybackCoordinator extends ChangeNotifier {
       isLive: streams.isLive,
     );
 
+    if (_isStale(requestId)) return;
     await _playback.setSpeed(_settings.speed);
     await _library.recordWatch(seed);
 
@@ -232,6 +271,17 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// gerçekte çalanla eşitler.
   Future<void> syncFromNative(String videoId, int nativeIndex) async {
     if (_details?.videoId == videoId) return;
+
+    // Bir hazırlık sürerken native'i DİNLEME.
+    //
+    // Bu metot durum akışından, saniyede birkaç kez çağrılıyor. Kullanıcı yeni
+    // bir videoya dokunduğunda native hâlâ ÖNCEKİ parçayı bildiriyor: o
+    // gecikmiş bilgi yeni seçimin üstüne yazıyor, seçilen video hiç açılmıyordu.
+    // Hazırlık bitince zaten bir sonraki durum olayı eşitlemeyi yapar.
+    if (_loading) return;
+
+    final requestId = ++_requestId;
+    _targetVideoId = videoId;
     _index = nativeIndex;
 
     // Kuyruk kendiliğinden ilerlediğinde de ESKİ videonun başlığı/kapağı
@@ -241,21 +291,24 @@ class PlaybackCoordinator extends ChangeNotifier {
     _details = null;
     notifyListeners();
 
+    var failed = false;
     try {
       final details = await _extraction.videoDetails(videoId);
+      if (_isStale(requestId)) return;
       _details = details;
       _qualityLabel = null;
       notifyListeners();
       await _library.recordWatch(_summaryOf(details));
     } catch (_) {
-      // Meta veri alınamazsa oynatma yine de sürüyor; arayüz eski başlıkta
-      // kalmaktansa kuyruktaki özeti gösterir.
-      final fallback = _queue.elementAtOrNull(nativeIndex);
-      if (fallback != null) notifyListeners();
+      // Meta veri alınamadı; oynatma yine de sürüyor. Ekranı boş bırakmamak
+      // için kuyruktaki özet (başlık/kapak) yerinde kalır.
+      failed = true;
     } finally {
-      _loading = false;
-      _pending = null;
-      notifyListeners();
+      if (!_isStale(requestId)) {
+        _loading = false;
+        if (!failed) _pending = null;
+        notifyListeners();
+      }
     }
   }
 
@@ -295,6 +348,7 @@ class PlaybackCoordinator extends ChangeNotifier {
 
   Future<void> stop() async {
     await _playback.stop();
+    _targetVideoId = null;
     _details = null;
     _qualityLabel = null;
     _queue = const [];

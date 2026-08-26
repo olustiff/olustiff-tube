@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Yayınlanmış bir sürüm.
 class AppRelease {
@@ -38,7 +39,13 @@ class UpdateService extends ChangeNotifier {
 
   static const _repo = 'olustiff/youtube';
 
+  /// "Daha sonra" denen sürüm. Açılışta aynı sürüm için tekrar tekrar
+  /// sorulması rahatsız edici olurdu; kullanıcı isterse ayarlardan yine
+  /// kurabilir, bir SONRAKİ sürüm çıkınca yeniden sorulur.
+  static const _postponedKey = 'update_postponed_version';
+
   String _currentVersion = '';
+  String? _postponedVersion;
   AppRelease? _available;
   bool _checking = false;
   bool _downloading = false;
@@ -52,9 +59,23 @@ class UpdateService extends ChangeNotifier {
   double get progress => _progress;
   String? get error => _error;
 
+  /// Bu sürüm için açılışta sormaya devam edilmeli mi.
+  bool isPostponed(String version) => _postponedVersion == version;
+
+  /// Kullanıcı "daha sonra" dedi: bu sürüm açılışta bir daha sorulmaz.
+  Future<void> postpone(String version) async {
+    _postponedVersion = version;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_postponedKey, version);
+    notifyListeners();
+  }
+
   Future<void> load() async {
     final info = await PackageInfo.fromPlatform();
     _currentVersion = info.version;
+
+    final prefs = await SharedPreferences.getInstance();
+    _postponedVersion = prefs.getString(_postponedKey);
 
     _progressChannel.receiveBroadcastStream().listen((event) {
       final map = event as Map<Object?, Object?>;
