@@ -47,7 +47,8 @@ TOKEN=$(gh auth token)
 for name in olustiff-arm64.apk olustiff-arm32.apk olustiff-x64.apk olustiff.apk; do
   echo "== yükleniyor: $name =="
   for attempt in 1 2 3; do
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 1800 \
+    # --progress-bar: yukleme ilerlemesi gorunur olsun (-s onu susturuyordu).
+    code=$(curl --progress-bar -o /dev/null -w '%{http_code}' --max-time 1800 \
       -X POST -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/vnd.android.package-archive" \
       --data-binary "@$STAGE/$name" \

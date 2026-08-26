@@ -67,6 +67,13 @@ class PlaybackService : MediaSessionService() {
         .setDisplayName("Kapat")
         .setIconResId(R.drawable.ic_notification_close)
         .setSessionCommand(SessionCommand(ACTION_CLOSE, Bundle.EMPTY))
+        // Düğme sırasının SAĞ ucuna yerleşsin. Bildirimin sağ ÜST köşesi
+        // (medya çıkışı seçicisinin olduğu yer) sistem arayüzüne ait;
+        // uygulama oraya düğme koyamıyor. Yer bulunamazsa taşma menüsüne.
+        .setSlots(
+            CommandButton.SLOT_FORWARD_SECONDARY,
+            CommandButton.SLOT_OVERFLOW
+        )
         .build()
 
     /** "Kapat" düğmesini kullanılabilir kılar ve basıldığında oynatmayı bitirir. */
