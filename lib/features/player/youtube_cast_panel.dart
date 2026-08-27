@@ -5,13 +5,17 @@ import '../../core/cast/youtube_cast_controller.dart';
 /// Televizyonun kendi YouTube'una gönderilirken oynatma ekranının yerini alan
 /// kumanda.
 ///
-/// [CastPanel]'den AYRI, çünkü sunabildikleri farklı. Orada televizyondaki
-/// uygulama bize durumunu bildiriyor (konum, süre, çalıyor mu); burada
-/// bildirmiyor. İki ekranı tek koda sığdırmak, olmayan veriyi varmış gibi
-/// gösteren dallanmalar doğururdu.
+/// [CastPanel]'den AYRI, çünkü arkalarındaki protokoller farklı ve hata
+/// hâlleri farklı görünüyor. İki ekranı tek koda sığdırmak, hangi yolun
+/// hangi kontrolü desteklediğini dallandıran bir yapı doğururdu.
 ///
-/// Bu yüzden burada konum çubuğu YOK ve oynat/duraklat tek bir düğme değil.
-/// Gerekçesi [YouTubeCastController] belgesinde.
+/// Panel İKİ hâlde çalışıyor:
+/// - Televizyon durumunu bildiriyorsa ([YouTubeCastController.hasLiveStatus])
+///   konum çubuğu ve TEK bir oynat/duraklat düğmesi var; gösterilen her şey
+///   televizyonun kendi bildirdiği değer.
+/// - Bildirmiyorsa iki ayrı düğmeye ve çubuksuz görünüme düşülüyor —
+///   okunamayan bir durumu tahmin ederek çizmek, çubuğu hiç göstermemekten
+///   kötü.
 class YouTubeCastPanel extends StatelessWidget {
   const YouTubeCastPanel({super.key});
 
@@ -75,7 +79,15 @@ class YouTubeCastPanel extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              // Çubuk yalnızca televizyon konumunu bildiriyorken çiziliyor.
+              if (cast.hasLiveStatus)
+                _CastProgress(
+                  position: cast.position ?? Duration.zero,
+                  duration: cast.duration,
+                  onSeek: cast.seekTo,
+                ),
+              const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -85,20 +97,36 @@ class YouTubeCastPanel extends StatelessWidget {
                     onPressed: cast.isBusy ? null : cast.previous,
                   ),
                   const SizedBox(width: 8),
-                  // Oynat ve Duraklat AYRI düğmeler: televizyonun o an çalıp
-                  // çalmadığını okuyamıyoruz, dolayısıyla tek bir düğmenin
-                  // göstereceği durum tahmin olurdu.
-                  FilledButton.tonalIcon(
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Oynat'),
-                    onPressed: cast.isBusy ? null : cast.play,
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton.tonalIcon(
-                    icon: const Icon(Icons.pause),
-                    label: const Text('Duraklat'),
-                    onPressed: cast.isBusy ? null : cast.pause,
-                  ),
+                  if (cast.hasLiveStatus)
+                    // Tek düğme: televizyonun bildirdiği duruma göre biçim
+                    // değiştiriyor. Komut yerel ağdan gidiyor (~1 ms), bu
+                    // yüzden `isBusy` ile kilitlenmiyor — kilitlemek düğmeyi
+                    // sebepsiz donuk gösterirdi.
+                    FilledButton.tonalIcon(
+                      icon: Icon(
+                        cast.isPlaying == true ? Icons.pause : Icons.play_arrow,
+                      ),
+                      label: Text(
+                        cast.isPlaying == true ? 'Duraklat' : 'Oynat',
+                      ),
+                      onPressed:
+                          cast.isPlaying == true ? cast.pause : cast.play,
+                    )
+                  else ...[
+                    // Durum okunamıyor: hangi hâlde olduğumuzu iddia etmeden
+                    // iki düğme de her zaman ne yazdığını yapıyor.
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Oynat'),
+                      onPressed: cast.isBusy ? null : cast.play,
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.pause),
+                      label: const Text('Duraklat'),
+                      onPressed: cast.isBusy ? null : cast.pause,
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   IconButton(
                     tooltip: 'Sonraki',
@@ -118,7 +146,7 @@ class YouTubeCastPanel extends StatelessWidget {
                   onToggleMute: cast.toggleMute,
                 ),
               const SizedBox(height: 8),
-              const _RemoteLimitsNote(),
+              if (!cast.hasLiveStatus) const _RemoteLimitsNote(),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 12,
@@ -175,6 +203,91 @@ class _RemoteLimitsNote extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Televizyondaki videonun konum çubuğu.
+///
+/// Gösterdiği değer televizyonun kendi bildirdiği konum; iki bildirim arası
+/// saatle ilerletiliyor (bkz. [YouTubeCastController.position]).
+class _CastProgress extends StatefulWidget {
+  const _CastProgress({
+    required this.position,
+    required this.duration,
+    required this.onSeek,
+  });
+
+  final Duration position;
+
+  /// Alıcı süreyi bildirmediyse null — o hâlde çubuk yerine yalnızca geçen
+  /// süre yazılıyor, çünkü sonu bilinmeyen bir çubuk yanlış bilgi verir.
+  final Duration? duration;
+
+  final ValueChanged<Duration> onSeek;
+
+  @override
+  State<_CastProgress> createState() => _CastProgressState();
+}
+
+class _CastProgressState extends State<_CastProgress> {
+  /// Sürükleme sürerken parmağın takip ettiği saniye.
+  ///
+  /// Televizyondan gelen konum sürükleme sırasında dinlenmiyor: her saniye
+  /// gelen gerçek değer, parmağın altındaki noktayı geri sıçratırdı.
+  double? _dragging;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final total = widget.duration;
+
+    if (total == null || total.inMilliseconds <= 0) {
+      return Text(
+        _format(widget.position),
+        style: theme.textTheme.bodySmall,
+      );
+    }
+
+    final maxSeconds = total.inMilliseconds / 1000;
+    final current =
+        _dragging ?? (widget.position.inMilliseconds / 1000).clamp(0.0, maxSeconds);
+
+    return Column(
+      children: [
+        Slider(
+          value: current.clamp(0.0, maxSeconds),
+          max: maxSeconds,
+          onChanged: (v) => setState(() => _dragging = v),
+          onChangeEnd: (v) {
+            setState(() => _dragging = null);
+            widget.onSeek(Duration(milliseconds: (v * 1000).round()));
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _format(Duration(milliseconds: (current * 1000).round())),
+                style: theme.textTheme.bodySmall,
+              ),
+              Text(_format(total), style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Süreyi "d:ss" ya da bir saati aşıyorsa "s:dd:ss" olarak yazar.
+  static String _format(Duration value) {
+    final seconds = value.inSeconds;
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    final m = (seconds ~/ 60) % 60;
+    final h = seconds ~/ 3600;
+    if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:$s';
+    return '$m:$s';
   }
 }
 

@@ -120,6 +120,7 @@ class CastChannel {
     if (transportId == null) {
       throw const CastException('Televizyonda YouTube açılamadı.');
     }
+    _youTubeTransportId = transportId;
 
     // Oturumla konuşmadan önce ona ayrıca bağlanmak gerekiyor; alıcıya
     // bağlanmış olmak yetmiyor.
@@ -220,6 +221,60 @@ class CastChannel {
 
   /// Açık oturumdaki YouTube'un kimliği (durdurmak için gerekiyor).
   String? youTubeSessionId;
+
+  /// YouTube oturumunun adresi; medya komutları buraya gidiyor.
+  String? _youTubeTransportId;
+
+  /// Televizyonun kendiliğinden gönderdiği medya durumları.
+  ///
+  /// Yoklamaya EK, yerine değil: alıcı kendi kumandasıyla yapılan
+  /// değişiklikleri (kullanıcı televizyondan duraklattığında) buradan
+  /// bildiriyor, ama düzenli aralıklarla konum yollamıyor.
+  Stream<CastMediaStatus> get mediaStatuses => _messages.stream
+      .where((m) => m.namespace == CastNamespace.media)
+      .map((m) => parseMediaStatus(m.json))
+      .where((status) => status != null)
+      .cast<CastMediaStatus>();
+
+  /// Televizyondan durumunu bildirmesini ister.
+  ///
+  /// Cevap BEKLENMİYOR: gelen durum zaten [mediaStatuses] akışından geçiyor,
+  /// çünkü alıcı sorulmadan da bildirim gönderiyor ve iki kaynağı ayrı ayrı
+  /// karşılamanın bir karşılığı yok.
+  ///
+  /// Ayrıca bu istek saniyede bir gönderiliyor. Cevabı tek tek beklemek,
+  /// televizyon sustuğunda (uyudu, ağdan düştü) her turda bir bekleyen
+  /// abonelik bırakırdı; cevapsız gönderimde biriken bir şey yok.
+  void requestMediaStatus() => _media({'type': 'GET_STATUS'});
+
+  /// Televizyondaki videoyu oynatır.
+  void playMedia(int mediaSessionId) =>
+      _media({'type': 'PLAY', 'mediaSessionId': mediaSessionId});
+
+  /// Televizyondaki videoyu duraklatır.
+  void pauseMedia(int mediaSessionId) =>
+      _media({'type': 'PAUSE', 'mediaSessionId': mediaSessionId});
+
+  /// Televizyondaki videoyu [position] konumuna sarar.
+  void seekMedia(int mediaSessionId, Duration position) => _media({
+        'type': 'SEEK',
+        'mediaSessionId': mediaSessionId,
+        'currentTime': position.inMilliseconds / 1000,
+      });
+
+  /// Medya komutu gönderir; cevabı beklemiyor.
+  ///
+  /// Beklememek bilinçli: komut yerel ağdan gidiyor ve alıcı sonucu zaten
+  /// kendiliğinden bildiriyor. Cevabı beklemek arayüzü boş yere kilitlerdi —
+  /// düğmenin anında tepki vermesinin sebebi bu.
+  void _media(Map<String, Object?> body) {
+    final transport = _youTubeTransportId;
+    if (transport == null) return;
+    _send(transport, CastNamespace.media, {
+      ...body,
+      'requestId': _requestId++,
+    });
+  }
 
   String? _findYouTubeTransport(Map<String, Object?>? json) {
     final status = json?['status'];

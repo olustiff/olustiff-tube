@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cast/cast_controller.dart';
+import '../../core/cast/cast_targets.dart';
 import '../../core/cast/cast_protocol.dart';
 import '../../core/cast/youtube_cast_controller.dart';
 import '../../core/cast/youtube_cast_protocol.dart';
@@ -172,8 +173,10 @@ class _CastPickerState extends State<_CastPicker> {
   Widget build(BuildContext context) {
     final devices = _devices ?? const <CastDevice>[];
     final youtubeDevices = _youtubeDevices ?? const <YouTubeCastDevice>[];
-    final nothingFound =
-        !_searching && devices.isEmpty && youtubeDevices.isEmpty;
+    // İki keşif AYNI televizyonu bulabiliyor; listeye tek satır olarak
+    // giriyor. Gerekçesi [mergeCastTargets] belgesinde.
+    final targets = mergeCastTargets(youtubeDevices, devices);
+    final nothingFound = !_searching && targets.isEmpty;
 
     return SafeArea(
       child: ListView(
@@ -220,36 +223,17 @@ class _CastPickerState extends State<_CastPicker> {
               ),
             ),
 
-          // Kendi uygulamamızın çalıştığı televizyonlar ÖNCE geliyor: tam
-          // kumanda orada var, diğerinde yok.
-          if (devices.isNotEmpty) ...[
+          if (targets.isNotEmpty) ...[
             const _SectionHeader(
-              title: 'oLusTifF kurulu televizyonlar',
-              subtitle: 'Tam kumanda: sarma, kuyruk, ses',
+              title: 'Televizyonlar',
+              subtitle: 'Sarma, oynat/duraklat ve ses telefondan',
             ),
-            for (final device in devices)
-              ListTile(
-                leading: const Icon(Icons.tv),
-                title: Text(device.name),
-                subtitle: Text(device.host),
+            for (final target in targets)
+              _TargetTile(
+                target: target,
                 enabled: !_sending,
-                onTap: _sending ? null : () => _send(device),
-              ),
-          ],
-
-          if (youtubeDevices.isNotEmpty) ...[
-            const _SectionHeader(
-              title: "Televizyonun kendi YouTube'u",
-              subtitle: 'Oynat, duraklat ve ses; sarma televizyonun '
-                  'kumandasından',
-            ),
-            for (final device in youtubeDevices)
-              ListTile(
-                leading: const Icon(Icons.smart_display_outlined),
-                title: Text(device.name),
-                subtitle: Text(device.host),
-                enabled: !_sending,
-                onTap: _sending ? null : () => _sendToYouTube(device),
+                onSendToYouTube: _sendToYouTube,
+                onSendToApp: _send,
               ),
           ],
 
@@ -269,11 +253,66 @@ class _CastPickerState extends State<_CastPicker> {
   }
 }
 
-/// Listedeki iki grubu ayıran başlık.
+/// Listedeki tek bir televizyon.
 ///
-/// Alt başlık şart: iki satır da "televizyon" diyor ama biri tam kumanda
-/// veriyor, diğeri vermiyor. Farkı seçim ANINDA söylemek, kullanıcının
-/// gönderdikten sonra eksikliği keşfetmesinden iyi.
+/// Televizyonun KENDİ YouTube'u varsa dokunma onu açıyor. Sebebi ölçüm: o
+/// yolda videoyu televizyonun kendi oynatıcısı çözüyor ve pürüzsüz oynuyor;
+/// bizim alıcımız aynı videoda birkaç saniyede bir duraklıyor. Eskiden bizim
+/// yolumuz "tam kumanda" diye önce geliyordu — o gerekçe artık geçersiz,
+/// çünkü sarma ve konum çubuğu bu yolda da var (yerel Cast kanalı).
+///
+/// İki yol da varsa diğeri gizlenmiyor, ikincil bir düğme olarak duruyor:
+/// televizyondaki oLusTifF'in kendi kuyruğu ve arayüzü var, isteyen onu
+/// seçebilmeli.
+class _TargetTile extends StatelessWidget {
+  const _TargetTile({
+    required this.target,
+    required this.enabled,
+    required this.onSendToYouTube,
+    required this.onSendToApp,
+  });
+
+  final CastTarget target;
+  final bool enabled;
+  final void Function(YouTubeCastDevice) onSendToYouTube;
+  final void Function(CastDevice) onSendToApp;
+
+  @override
+  Widget build(BuildContext context) {
+    final youtube = target.youtube;
+    final ours = target.ours;
+
+    final subtitle = youtube != null
+        ? "${target.host} · Televizyonun kendi YouTube'u"
+        : '${target.host} · oLusTifF alıcısı';
+
+    return ListTile(
+      leading: Icon(
+        youtube != null ? Icons.smart_display_outlined : Icons.tv,
+      ),
+      title: Text(target.name),
+      subtitle: Text(subtitle),
+      enabled: enabled,
+      trailing: target.hasBoth
+          ? TextButton(
+              onPressed: enabled ? () => onSendToApp(ours!) : null,
+              child: const Text('oLusTifF ile'),
+            )
+          : null,
+      onTap: !enabled
+          ? null
+          : () => youtube != null
+              ? onSendToYouTube(youtube)
+              : onSendToApp(ours!),
+    );
+  }
+}
+
+/// Listenin başlığı.
+///
+/// Alt başlık, kullanıcının seçmeden ÖNCE ne alacağını söylüyor: bir zamanlar
+/// iki ayrı grup vardı ve hangisinin sarma verdiği ancak gönderdikten sonra
+/// anlaşılıyordu.
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title, required this.subtitle});
 

@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:olustiff/core/cast/cast_protocol.dart' show CastDevice;
+import 'package:olustiff/core/cast/cast_targets.dart';
 import 'package:olustiff/core/cast/dial_discovery.dart';
 import 'package:olustiff/core/cast/youtube_cast_protocol.dart';
 
@@ -311,6 +313,129 @@ void main() {
     test('geri döngü ve bozuk adresler taranmaz', () {
       expect(DialDiscovery.computeSweepTargets(['127.0.0.1']), isEmpty);
       expect(DialDiscovery.computeSweepTargets(['bozuk']), isEmpty);
+    });
+  });
+
+  group('medya durumu', () {
+    // Gerçek cihazın (Google TV, YouTube alıcısı) verdiği cevabın alanları.
+    final full = <String, Object?>{
+      'type': 'MEDIA_STATUS',
+      'requestId': 2,
+      'status': [
+        {
+          'mediaSessionId': 1109001889,
+          'playerState': 'PLAYING',
+          'currentTime': 72.144,
+          'media': {
+            'contentId': 'dQw4w9WgXcQ',
+            'duration': 213.061,
+            'metadata': {'title': 'Never Gonna Give You Up'},
+          },
+        },
+      ],
+    };
+
+    test('durum, konum ve süre okunur', () {
+      final status = parseMediaStatus(full);
+      expect(status, isNotNull);
+      expect(status!.mediaSessionId, 1109001889);
+      expect(status.isPlaying, isTrue);
+      expect(status.position, const Duration(milliseconds: 72144));
+      expect(status.duration, const Duration(milliseconds: 213061));
+      expect(status.title, 'Never Gonna Give You Up');
+    });
+
+    test('yüklü video yoksa null döner', () {
+      expect(
+        parseMediaStatus({'type': 'MEDIA_STATUS', 'status': const []}),
+        isNull,
+      );
+    });
+
+    test('başka türde mesaj çözülmez', () {
+      expect(parseMediaStatus({'type': 'RECEIVER_STATUS'}), isNull);
+      expect(parseMediaStatus(null), isNull);
+    });
+
+    // Alıcı oynat/duraklat cevabında `media` alanını GÖNDERMİYOR; ham hâliyle
+    // kullanılırsa konum çubuğu her düğmeye basışta sıfırlanırdı.
+    test('kısaltılmış durum, süreyi ve başlığı düşürmez', () {
+      final previous = parseMediaStatus(full)!;
+      final short = parseMediaStatus({
+        'type': 'MEDIA_STATUS',
+        'status': [
+          {
+            'mediaSessionId': 1109001889,
+            'playerState': 'PAUSED',
+            'currentTime': 80.0,
+          },
+        ],
+      })!;
+
+      final merged = short.mergeOnto(previous);
+      expect(merged.isPlaying, isFalse);
+      expect(merged.position, const Duration(seconds: 80));
+      expect(merged.duration, const Duration(milliseconds: 213061));
+      expect(merged.title, 'Never Gonna Give You Up');
+    });
+
+    test('yeni video gelince eski süre taşınmaz', () {
+      final previous = parseMediaStatus(full)!;
+      final other = parseMediaStatus({
+        'type': 'MEDIA_STATUS',
+        'status': [
+          {'mediaSessionId': 42, 'playerState': 'PLAYING', 'currentTime': 0},
+        ],
+      })!;
+
+      expect(other.mergeOnto(previous).duration, isNull);
+    });
+  });
+
+  group('televizyon listesi', () {
+    const youtube = YouTubeCastDevice(
+      id: 'uuid:tv',
+      name: "Oturma Odası TV'si",
+      host: '192.168.0.108',
+    );
+    const ours = CastDevice(
+      id: '5cf6d4f526b8cd00',
+      name: "Oturma Odası TV'si",
+      host: '192.168.0.108',
+      port: 45633,
+    );
+
+    // Gerçek evde yaşandı: aynı televizyon iki keşiften de dönüyor ve listede
+    // aynı adı taşıyan iki satır oluyordu; kullanıcı hangisine bastığını
+    // ayırt edemiyordu.
+    test('aynı adresteki televizyon tek satıra iner', () {
+      final targets = mergeCastTargets([youtube], [ours]);
+      expect(targets, hasLength(1));
+      expect(targets.single.hasBoth, isTrue);
+      expect(targets.single.name, "Oturma Odası TV'si");
+    });
+
+    test('farklı adresler ayrı satır kalır', () {
+      const other = CastDevice(
+        id: 'baska',
+        name: 'Yatak Odası',
+        host: '192.168.0.110',
+        port: 45633,
+      );
+      expect(mergeCastTargets([youtube], [ours, other]), hasLength(2));
+    });
+
+    test("kendi YouTube'u olan televizyon üste çıkar", () {
+      const onlyOurs = CastDevice(
+        id: 'baska',
+        name: 'AAA Yatak Odası',
+        host: '192.168.0.110',
+        port: 45633,
+      );
+      final targets = mergeCastTargets([youtube], [onlyOurs]);
+      // Ada göre sıralansaydı "AAA..." önce gelirdi; yol önceliği ondan güçlü.
+      expect(targets.first.host, '192.168.0.108');
+      expect(targets.last.youtube, isNull);
     });
   });
 }

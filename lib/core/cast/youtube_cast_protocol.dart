@@ -70,6 +70,14 @@ class CastNamespace {
 
   /// YouTube alıcısının kendi ad alanı; screenId buradan geliyor.
   static const String youtubeMdx = 'urn:x-cast:com.google.youtube.mdx';
+
+  /// Standart Cast medya ad alanı.
+  ///
+  /// YouTube alıcısı bunu KABUL EDİYOR — ölçüldü. Yeni video YÜKLEMEK
+  /// (`LOAD`) reddediliyor, ama zaten çalan videoyu oynatmak, duraklatmak ve
+  /// sarmak buradan yürüyor. Önemi hız: aynı komut Lounge'dan 300–1800 ms
+  /// sürerken buradan 0–20 ms sürüyor, çünkü paket internete hiç çıkmıyor.
+  static const String media = 'urn:x-cast:com.google.cast.media';
 }
 
 /// Televizyonun kendi YouTube uygulamasına gönderim yapılabilen cihaz.
@@ -561,4 +569,102 @@ class LoungeCommand {
 
   /// Alıcıyı durdurur (televizyondaki YouTube boşta ekrana döner).
   static const String stop = 'stopVideo';
+}
+
+// ---------------------------------------------------------------------------
+// Cast medya durumu
+// ---------------------------------------------------------------------------
+
+/// Televizyondaki YouTube'un o anki durumu — YEREL ağdan okunuyor.
+///
+/// Bu tür var olduğu için oynat/duraklat tek düğme ve konum çubuğu
+/// gösterilebiliyor: gösterilen değerler tahmin değil, televizyonun kendi
+/// bildirdiği değerler. Kullanıcı televizyonun kumandasına dokunduğunda da
+/// alıcı kendiliğinden bildirim gönderiyor, yani ekran kaymıyor.
+class CastMediaStatus {
+  const CastMediaStatus({
+    required this.mediaSessionId,
+    required this.playerState,
+    required this.position,
+    this.duration,
+    this.title,
+  });
+
+  /// Komut gönderirken geri verilmesi gereken oturum kimliği.
+  final int mediaSessionId;
+
+  /// `PLAYING`, `PAUSED`, `BUFFERING`, `IDLE`.
+  final String playerState;
+
+  final Duration position;
+
+  /// Videonun uzunluğu; alıcı bildirmediyse null.
+  final Duration? duration;
+
+  final String? title;
+
+  bool get isPlaying => playerState == 'PLAYING';
+
+  /// Konum çubuğu "yükleniyor" göstermeli mi.
+  bool get isBuffering => playerState == 'BUFFERING';
+
+  /// Televizyonda oynatılacak bir şey kalmadı mı.
+  bool get isIdle => playerState == 'IDLE';
+
+  /// Yeni durumu eskisinin üstüne bindirir.
+  ///
+  /// Gerekli çünkü alıcı KISALTILMIŞ durum gönderiyor: oynat/duraklat
+  /// cevabında `media` alanı hiç gelmiyor, yani süre ve başlık kayboluyor.
+  /// Ham hâliyle kullanılırsa konum çubuğu her düğmeye basışta bir anlığına
+  /// sıfırlanırdı.
+  CastMediaStatus mergeOnto(CastMediaStatus? previous) {
+    if (previous == null) return this;
+    if (previous.mediaSessionId != mediaSessionId) return this;
+    return CastMediaStatus(
+      mediaSessionId: mediaSessionId,
+      playerState: playerState,
+      position: position,
+      duration: duration ?? previous.duration,
+      title: title ?? previous.title,
+    );
+  }
+}
+
+/// `MEDIA_STATUS` mesajını çözer; oturum yoksa null.
+///
+/// `status` BOŞ dizi gelebiliyor — televizyonda yüklü bir video olmadığı
+/// anlamına geliyor, hata değil.
+CastMediaStatus? parseMediaStatus(Map<String, Object?>? json) {
+  if (json == null || json['type'] != 'MEDIA_STATUS') return null;
+  final list = json['status'];
+  if (list is! List || list.isEmpty) return null;
+  final entry = list.first;
+  if (entry is! Map) return null;
+
+  final sessionId = entry['mediaSessionId'];
+  if (sessionId is! num) return null;
+  final state = entry['playerState'];
+  if (state is! String || state.isEmpty) return null;
+
+  final media = entry['media'];
+  final metadata = media is Map ? media['metadata'] : null;
+  final title = metadata is Map ? metadata['title'] : null;
+
+  return CastMediaStatus(
+    mediaSessionId: sessionId.toInt(),
+    playerState: state,
+    position: _seconds(entry['currentTime']) ?? Duration.zero,
+    duration: media is Map ? _seconds(media['duration']) : null,
+    title: title is String && title.isNotEmpty ? title : null,
+  );
+}
+
+/// Saniye cinsinden ondalıklı süreyi [Duration]'a çevirir.
+///
+/// Milisaniyeye yuvarlanıyor: alıcı `72.144` gibi değerler gönderiyor ve
+/// mikrosaniye hassasiyetinin konum çubuğunda bir karşılığı yok.
+Duration? _seconds(Object? value) {
+  if (value is! num) return null;
+  if (value.isNaN || value.isInfinite || value < 0) return null;
+  return Duration(milliseconds: (value * 1000).round());
 }

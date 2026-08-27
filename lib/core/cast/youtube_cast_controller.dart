@@ -1,3 +1,5 @@
+import 'dart:async' show StreamSubscription, Timer;
+
 import 'package:flutter/foundation.dart';
 
 import '../playback/playback_client.dart';
@@ -14,21 +16,32 @@ import 'youtube_cast_protocol.dart';
 /// oLusTifF KURULU DEĞİLKEN çalışan yol. Tek sınıfta birleştirmek, her
 /// komutun hangi protokole gideceğini dallandıran bir yapı doğururdu.
 ///
-/// ## Ne sunuluyor, ne sunulmuyor — ve neden
+/// ## Komutlar İKİ ayrı yoldan gidiyor — sebebi ölçüm
 ///
-/// Sunulan: video gönderme, oynat, duraklat, önceki/sonraki, ses, durdurma.
-/// Hepsi gerçek cihazda doğrulandı.
+/// - **Video göndermek** (`setPlaylist`) Lounge'dan, yani internet üzerinden.
+///   Başka yolu yok: alıcı standart Cast `LOAD` komutunu reddediyor.
+/// - **Oynat, duraklat, sarma** YEREL Cast kanalından
+///   ([CastNamespace.media]). Alıcının bu ad alanını kabul ettiği gerçek
+///   cihazda ölçüldü ve fark büyük:
 ///
-/// SUNULMAYAN: konum çubuğu ve ileri/geri sarma. Televizyondaki YouTube'un
-/// o an nerede olduğunu okumak, Lounge'ın uzun yoklamalı olay akışını
-/// işlemeyi gerektiriyor; o akış olmadan gösterilecek her konum bir TAHMİN
-/// olurdu. Kullanıcı televizyonun kumandasına dokunduğu anda tahmin kayar ve
-/// ekranda yanlış bir yer görünür. Yanlış çalışan bir çubuk, olmayandan
-/// kötü — bu yüzden hiç gösterilmiyor.
+///   | komut | Lounge | yerel kanal |
+///   |-------|--------|-------------|
+///   | oynat/duraklat | 365–1771 ms | 0–1 ms |
+///   | sarma | 324 ms | 20 ms |
 ///
-/// Aynı sebeple oynat/duraklat TEK bir düğme değil, İKİ ayrı düğme: hangi
-/// durumda olduğumuzu bilmediğimiz için "şu an çalıyor" diye bir şey iddia
-/// etmiyoruz; iki düğme de her zaman ne yaptığını yazdığı işi yapıyor.
+///   Lounge'dan giden bir komut telefondan Google'a, oradan televizyona
+///   gidiyor; yereldeki paket ise ağdan hiç çıkmıyor. Saniyeye varan
+///   gecikme kumandayı "donuk" hissettiriyordu.
+///
+/// Yerel kanal yalnızca hızı değil, DURUMU da veriyor: televizyonun bildirdiği
+/// oynatma durumu, konum ve süre. Bu yüzden artık tek bir oynat/duraklat
+/// düğmesi ve çalışan bir konum çubuğu var — gösterilen değerler tahmin
+/// değil, televizyonun kendi söylediği değerler. Kullanıcı televizyonun
+/// kumandasına dokunduğunda alıcı kendiliğinden bildiriyor, ekran kaymıyor.
+///
+/// Durum okunamayan cihazlarda ([status] null) komutlar Lounge'a düşüyor ve
+/// arayüz eski hâline — iki ayrı düğme, çubuk yok — dönüyor. Yarım bilgiyle
+/// çubuk göstermek, hiç göstermemekten kötü.
 class YouTubeCastController extends ChangeNotifier {
   YouTubeCastController({DialDiscovery discovery = const DialDiscovery()})
       : _discovery = discovery;
@@ -76,6 +89,42 @@ class YouTubeCastController extends ChangeNotifier {
   bool _isMuted = false;
   bool get isMuted => _isMuted;
 
+  /// Televizyonun bildirdiği son durum; okunamıyorsa null.
+  CastMediaStatus? _status;
+  CastMediaStatus? get status => _status;
+
+  /// [_status]'un alındığı an — aradaki konumu ilerletmek için.
+  DateTime? _statusAt;
+
+  StreamSubscription<CastMediaStatus>? _statusSubscription;
+  Timer? _statusTimer;
+
+  /// Yerel kanaldan kumanda edilebiliyor mu (tek düğme + konum çubuğu).
+  bool get hasLiveStatus => _status != null;
+
+  /// Televizyonda video çalıyor mu; bilinmiyorsa null.
+  bool? get isPlaying => _status?.isPlaying;
+
+  Duration? get duration => _status?.duration;
+
+  /// Televizyonun o anki konumu.
+  ///
+  /// İki durum arası SAATLE ilerletiliyor: alıcı düzenli aralıklarla konum
+  /// yollamıyor, yalnızca bir şey değiştiğinde bildiriyor. İlerletmesek çubuk
+  /// her yoklama arasında donar, kullanıcı takılıyor sanırdı. İlerletme
+  /// yalnızca oynatma sürerken yapılıyor ve her yoklamada gerçek değerle
+  /// yeniden hizalanıyor, yani kayma birikmiyor.
+  Duration? get position {
+    final status = _status;
+    final at = _statusAt;
+    if (status == null || at == null) return null;
+    if (!status.isPlaying) return status.position;
+    final moved = status.position + DateTime.now().difference(at);
+    final total = status.duration;
+    if (total != null && moved > total) return total;
+    return moved;
+  }
+
   bool _busy = false;
 
   /// Bir komut sürüyor mu (arayüz düğmeleri kilitlensin diye).
@@ -121,6 +170,7 @@ class YouTubeCastController extends ChangeNotifier {
         lounge = await LoungeSessionClient.open(screenId);
         _channel = channel;
         _lounge = lounge;
+        _watchStatus(channel);
       }
 
       await lounge!.playVideo(videoId, position: position);
@@ -173,13 +223,113 @@ class YouTubeCastController extends ChangeNotifier {
     );
   }
 
-  Future<void> play() => _send((l) => l.play());
+  /// Televizyonda oynatmayı sürdürür.
+  Future<void> play() async {
+    final session = _status?.mediaSessionId;
+    final channel = _channel;
+    if (session != null && channel != null) {
+      channel.playMedia(session);
+      // Durum İYİMSER güncelleniyor: alıcının bildirimi 1–2 ms sonra gelse
+      // bile düğmenin o ana kadar eski hâlini göstermesi "basmadı" hissi
+      // veriyordu. Gelen gerçek bildirim bunun üstüne yazıyor.
+      _assumePlaying(true);
+      return;
+    }
+    return _send((l) => l.play());
+  }
 
-  Future<void> pause() => _send((l) => l.pause());
+  /// Televizyondaki videoyu duraklatır.
+  Future<void> pause() async {
+    final session = _status?.mediaSessionId;
+    final channel = _channel;
+    if (session != null && channel != null) {
+      channel.pauseMedia(session);
+      _assumePlaying(false);
+      return;
+    }
+    return _send((l) => l.pause());
+  }
+
+  /// Televizyondaki videoyu [position] konumuna sarar.
+  ///
+  /// Yalnızca [hasLiveStatus] doğruyken çağrılmalı: Lounge'ın sarma komutu
+  /// çalışıyor ama nereden nereye sarıldığını göremediğimiz için arayüzde
+  /// karşılığı olan bir çubuk çizilemiyor.
+  Future<void> seekTo(Duration position) async {
+    final session = _status?.mediaSessionId;
+    final channel = _channel;
+    if (session == null || channel == null) return;
+    channel.seekMedia(session, position);
+    // Çubuğun bırakıldığı yerde kalması için konum hemen kabul ediliyor;
+    // alıcı gerçek değeri birazdan bildiriyor.
+    _applyStatus(
+      CastMediaStatus(
+        mediaSessionId: session,
+        playerState: _status!.playerState,
+        position: position,
+        duration: _status!.duration,
+        title: _status!.title,
+      ),
+    );
+  }
 
   Future<void> next() => _send((l) => l.next());
 
   Future<void> previous() => _send((l) => l.previous());
+
+  /// Yerel komuttan hemen sonra beklenen durumu yazar.
+  void _assumePlaying(bool playing) {
+    final status = _status;
+    if (status == null) return;
+    _applyStatus(
+      CastMediaStatus(
+        mediaSessionId: status.mediaSessionId,
+        // Konum GETTER'dan okunuyor: duraklatırken ekranda duran değer,
+        // en son bildirimin değeri değil, o ana kadar ilerlemiş olan.
+        playerState: playing ? 'PLAYING' : 'PAUSED',
+        position: position ?? status.position,
+        duration: status.duration,
+        title: status.title,
+      ),
+    );
+  }
+
+  /// Televizyonun durumunu izlemeye başlar.
+  ///
+  /// İKİ kaynak birden dinleniyor ve ikisi de gerekli:
+  /// - Alıcının kendiliğinden gönderdiği bildirimler — kullanıcı televizyonun
+  ///   kumandasıyla duraklattığında ekranın kaymamasını sağlıyor.
+  /// - Saniyede bir yoklama — alıcı düzenli konum bildirmiyor, yalnızca bir
+  ///   şey değiştiğinde konuşuyor; yoklamasız çubuk gerçekle hiç
+  ///   hizalanmazdı. Yerel ağda bir tur ~1 ms sürüyor, yani bedeli yok.
+  void _watchStatus(CastChannel channel) {
+    _statusSubscription?.cancel();
+    _statusSubscription = channel.mediaStatuses.listen(
+      _applyStatus,
+      onError: (Object _) {},
+    );
+    _statusTimer?.cancel();
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _channel?.requestMediaStatus(),
+    );
+    channel.requestMediaStatus();
+  }
+
+  void _applyStatus(CastMediaStatus status) {
+    _status = status.mergeOnto(_status);
+    _statusAt = DateTime.now();
+    notifyListeners();
+  }
+
+  void _clearStatus() {
+    _statusSubscription?.cancel();
+    _statusSubscription = null;
+    _statusTimer?.cancel();
+    _statusTimer = null;
+    _status = null;
+    _statusAt = null;
+  }
 
   /// Televizyonun sesini ayarlar.
   ///
@@ -262,6 +412,7 @@ class YouTubeCastController extends ChangeNotifier {
   }
 
   Future<void> _teardown() async {
+    _clearStatus();
     _lounge?.close();
     _lounge = null;
     await _channel?.close();
