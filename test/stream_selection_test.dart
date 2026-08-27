@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:olustiff/core/extraction/models.dart';
@@ -44,6 +46,39 @@ VideoStreamInfo video(String resolution, {bool videoOnly = true}) =>
       fps: 30,
       bitrate: 1000,
     );
+
+/// DASH manifestine girebilecek bir akış: kodek, boyut ve parça baytları dolu.
+///
+/// [video] bilerek eksik bırakılıyor — YouTube bu bilgileri her akış için
+/// vermez ve "Otomatik"in ona düştüğü davranış da sınanmalı.
+VideoStreamInfo dashVideo(
+  String resolution, {
+  int height = 0,
+  int bitrate = 1000000,
+  String codec = 'avc1.640028',
+  String mimeType = 'video/mp4',
+  String? url,
+  int itag = 137,
+}) {
+  final parsed = height > 0 ? height : parseResolution(resolution);
+  return VideoStreamInfo(
+    url: url ?? 'https://example.test/video-$resolution',
+    resolution: resolution,
+    format: 'MPEG-4',
+    isVideoOnly: true,
+    fps: 30,
+    bitrate: bitrate,
+    mimeType: mimeType,
+    codec: codec,
+    itag: itag,
+    width: (parsed * 16 / 9).round(),
+    height: parsed,
+    initStart: 0,
+    initEnd: 739,
+    indexStart: 740,
+    indexEnd: 1231,
+  );
+}
 
 AudioStreamInfo audio(int bitrate) => AudioStreamInfo(
       url: 'https://example.test/audio-$bitrate',
@@ -93,16 +128,71 @@ void main() {
           reason: 'telefonda 4K gereksiz; bazı cihazlarda decode edilemez');
     });
 
-    test('maxHeight null verilirse sınır uygulanmaz', () {
+    test('otomatikte tüm çözünürlükler tek manifeste konur', () {
       final details = buildDetails(
-        videoOnlyStreams: [video('2160p'), video('1080p60')],
+        videoOnlyStreams: [
+          dashVideo('2160p', itag: 401, bitrate: 14000000),
+          dashVideo('1080p60', itag: 137, bitrate: 4000000),
+          dashVideo('480p', itag: 135, bitrate: 1000000),
+        ],
         audioStreams: [audio(160)],
       );
 
       final selected =
           selectStreams(details, audioOnly: false, maxHeight: null);
 
-      expect(selected!.qualityLabel, '2160p');
+      expect(selected!.qualityLabel, 'Otomatik');
+      expect(selected.videoUrl, startsWith(dashDataUriPrefix),
+          reason: 'çözünürlüğü oynatıcı seçebilsin diye manifest verilmeli');
+      expect(selected.audioUrl, contains('audio-160'),
+          reason: 'ses ayrı akıştan gelmeye devam etmeli');
+
+      final manifest = utf8.decode(
+        base64Decode(selected.videoUrl!.substring(dashDataUriPrefix.length)),
+      );
+      expect(manifest, contains('video-2160p'));
+      expect(manifest, contains('video-1080p60'));
+      expect(manifest, contains('video-480p'));
+    });
+
+    test('manifest kurulamıyorsa otomatik sessizce 1080p sınırına düşer', () {
+      // Parça baytları olmayan akışlar (OTF) manifeste giremez; kullanıcı
+      // hata değil, oynayan bir video görmeli.
+      final details = buildDetails(
+        videoOnlyStreams: [video('2160p'), video('1080p60'), video('720p')],
+        audioStreams: [audio(160)],
+      );
+
+      final selected =
+          selectStreams(details, audioOnly: false, maxHeight: null);
+
+      expect(selected!.videoUrl, contains('video-1080p60'));
+      expect(selected.qualityLabel, '1080p60');
+    });
+
+    test('elle çözünürlük seçilirse manifest kullanılmaz', () {
+      final details = buildDetails(
+        videoOnlyStreams: [dashVideo('1080p60'), dashVideo('720p')],
+        audioStreams: [audio(160)],
+      );
+
+      final selected =
+          selectStreams(details, audioOnly: false, maxHeight: 720);
+
+      expect(selected!.videoUrl, contains('video-720p'));
+      expect(selected.qualityLabel, '720p');
+    });
+
+    test('sesli modda otomatik olsa bile manifest kurulmaz', () {
+      final details = buildDetails(
+        videoOnlyStreams: [dashVideo('1080p60'), dashVideo('720p')],
+        audioStreams: [audio(160)],
+      );
+
+      final selected = selectStreams(details, audioOnly: true, maxHeight: null);
+
+      expect(selected!.videoUrl, isNull);
+      expect(selected.audioUrl, contains('audio-160'));
     });
 
     test('maxHeight sınırı aşılmaz', () {

@@ -29,7 +29,8 @@ class SettingsScreen extends StatelessWidget {
                 title: const Text('Video kalitesi'),
                 subtitle: Text(
                   settings.maxHeight == null
-                      ? 'En yüksek (veri ve pil tüketimi yüksek)'
+                      ? 'Otomatik — çözünürlük ağ hızına göre kendiliğinden '
+                          'ayarlanır'
                       : 'En fazla ${settings.qualityLabel} — video daha düşük '
                           'çözünürlük sunuyorsa onunki geçerli olur',
                 ),
@@ -40,7 +41,7 @@ class SettingsScreen extends StatelessWidget {
                     for (final option in SettingsStore.qualityOptions)
                       DropdownMenuItem(
                         value: option,
-                        child: Text(option == null ? 'En yüksek' : '${option}p'),
+                        child: Text(option == null ? 'Otomatik' : '${option}p'),
                       ),
                   ],
                 ),

@@ -184,13 +184,28 @@ object ExtractionService {
         "thumbnailUrl" to thumbnails.bestThumbnailUrl()
     )
 
+    /**
+     * Kodek, boyut ve parça baytları da gönderiliyor: "Otomatik" kalitede
+     * Dart tarafı bu akışlardan uyarlanabilir bir DASH manifesti kuruyor
+     * (bkz. `stream_selection.dart`). Bunlar olmadan oynatıcıya tek bir sabit
+     * çözünürlükten başka bir şey verilemez.
+     */
     private fun VideoStream.toMap(): Map<String, Any?> = mapOf(
         "url" to content,
         "resolution" to resolution,
         "format" to format?.name,
+        "mimeType" to format?.mimeType,
         "isVideoOnly" to isVideoOnly,
         "fps" to fps,
-        "bitrate" to bitrate
+        "bitrate" to bitrate,
+        "itag" to itag,
+        "codec" to codec,
+        "width" to width,
+        "height" to height,
+        "initStart" to initStart,
+        "initEnd" to initEnd,
+        "indexStart" to indexStart,
+        "indexEnd" to indexEnd
     )
 
     private fun AudioStream.toMap(): Map<String, Any?> = mapOf(

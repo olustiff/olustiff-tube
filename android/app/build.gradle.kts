@@ -56,6 +56,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.0")
     // Canlı yayınlar (7/24 radyo vb.) yalnızca HLS manifesti üzerinden gelir.
     implementation("androidx.media3:media3-exoplayer-hls:1.11.0")
+    // "Otomatik" kalite: tüm çözünürlükler tek bir DASH manifestinde toplanır
+    // ve oynatıcı bant genişliğine göre aralarında geçiş yapar.
+    implementation("androidx.media3:media3-exoplayer-dash:1.11.0")
     implementation("androidx.media3:media3-session:1.11.0")
     implementation("androidx.media3:media3-ui:1.11.0")
     implementation("androidx.media3:media3-datasource-okhttp:1.11.0")

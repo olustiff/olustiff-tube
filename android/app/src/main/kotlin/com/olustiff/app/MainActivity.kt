@@ -281,6 +281,7 @@ class MainActivity : FlutterActivity() {
      * çalışmadığı için telefon o televizyonu hiç bulamaz.
      */
     private fun bringToFront() {
+        wakeScreen()
         startActivity(
             Intent(this, MainActivity::class.java).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -288,6 +289,32 @@ class MainActivity : FlutterActivity() {
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
         )
+    }
+
+    /**
+     * Ekranı uyandırır ve ekran koruyucuyu düşürür.
+     *
+     * Bu olmadan yayın "yalnızca ses" gibi görünüyordu: televizyon boştayken
+     * ekran koruyucuya (dream) geçiyor, uygulama arka planda kalıyor ve
+     * Android 10+ arka plandaki uygulamanın ekran açmasını engellediği için
+     * video hiç görünmüyordu — ses çalıyor, ekranda ekran koruyucu duruyordu.
+     * Ekranı uyandırmak koruyucuyu kapatıyor ve altta duran aktivitemiz
+     * kendiliğinden öne geliyor.
+     *
+     * Kilit ZAMAN AŞIMIYLA alınıyor: ekranı açık tutmak oynatma ekranının
+     * işi (FLAG_KEEP_SCREEN_ON), buradaki tek amaç uyandırmak.
+     */
+    private fun wakeScreen() {
+        val power = getSystemService(PowerManager::class.java) ?: return
+        runCatching {
+            @Suppress("DEPRECATION")
+            power.newWakeLock(
+                PowerManager.FULL_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE,
+                "olustiff:cast"
+            ).acquire(WAKE_TIMEOUT_MS)
+        }
     }
 
     // ------------------------------------------------------------ sesli arama
@@ -447,6 +474,9 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val ACTION_PIP_TOGGLE = "com.olustiff.app.PIP_TOGGLE"
         const val REQUEST_PIP_TOGGLE = 1001
+
+        /** Ekranı uyandırmak için yeterli; sonrası oynatma ekranının işi. */
+        const val WAKE_TIMEOUT_MS = 10_000L
     }
 
     private val REQ_BLUETOOTH = 4711

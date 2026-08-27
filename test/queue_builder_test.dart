@@ -123,4 +123,75 @@ void main() {
       expect(queue, hasLength(3));
     });
   });
+
+  group('QueueBuilder — dizi bölümleri', () {
+    test('sıradaki bölüm kuyruğun başına gelir', () {
+      // Kullanıcının şikâyeti: "1. Bölüm"den sonra "54. Bölüm" çalıyordu.
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'Kanal D',
+            title: 'Arka Sıradakiler 1. Bölüm', duration: 7200),
+        candidates: [
+          v('e54', 'Kanal D',
+              title: 'Arka Sıradakiler 54. Bölüm', duration: 7200),
+          v('e18', 'Kanal D',
+              title: 'Arka Sıradakiler 18. Bölüm', duration: 7200),
+          v('e2', 'Kanal D',
+              title: 'Arka Sıradakiler 2. Bölüm', duration: 7200),
+        ],
+        watchedIds: const {},
+      );
+
+      expect(queue[1].videoId, 'e2');
+      expect(queue.map((e) => e.videoId), ['seed', 'e2', 'e18', 'e54'],
+          reason: 'bölümler numara sırasına dizilmeli');
+    });
+
+    test('geride kalan bölümler kuyruğa hiç girmez', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'Kanal D',
+            title: 'Arka Sıradakiler 20. Bölüm', duration: 7200),
+        candidates: [
+          v('e21', 'Kanal D',
+              title: 'Arka Sıradakiler 21. Bölüm', duration: 7200),
+          v('e3', 'Kanal D',
+              title: 'Arka Sıradakiler 3. Bölüm', duration: 7200),
+          v('baska', 'Kanal D', title: 'Doğa Belgeseli', duration: 7200),
+        ],
+        watchedIds: const {},
+      );
+
+      expect(queue.map((e) => e.videoId), ['seed', 'e21', 'baska']);
+    });
+
+    test('dizi olmayan içerikte benzerlik sırası korunur', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'Tarkan', title: 'Tarkan - Kuzu Kuzu'),
+        candidates: [
+          v('uzak', 'Baska Kanal', title: 'Doga Belgeseli'),
+          v('yakin', 'Tarkan', title: 'Tarkan - Simarik'),
+        ],
+        watchedIds: const {},
+      );
+
+      expect(queue[1].videoId, 'yakin');
+    });
+
+    test('bölümlerden sonra kuyruk başka kanalla devam eder', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'Kanal D',
+            title: 'Arka Sıradakiler 1. Bölüm', duration: 7200),
+        candidates: [
+          v('e2', 'Kanal D',
+              title: 'Arka Sıradakiler 2. Bölüm', duration: 7200),
+          v('ayni', 'Kanal D', title: 'Kanal D Haber', duration: 7200),
+          v('farkli', 'Show TV', title: 'Haber Bülteni', duration: 7200),
+        ],
+        watchedIds: const {},
+      );
+
+      expect(queue[1].videoId, 'e2');
+      expect(queue[2].uploaderName, 'Show TV',
+          reason: 'bölüm dizisi bitince aynı kanalda yığılmamalı');
+    });
+  });
 }

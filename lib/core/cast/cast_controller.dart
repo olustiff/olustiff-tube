@@ -17,13 +17,32 @@ class CastController extends ChangeNotifier {
   CastController({
     CastDiscovery discovery = const CastDiscovery(),
     CastClient Function(CastDevice)? clientFactory,
+    Duration pollInterval = const Duration(seconds: 2),
   })  : _discovery = discovery,
-        _clientFactory = clientFactory ?? CastClient.new;
+        _clientFactory = clientFactory ?? CastClient.new,
+        _pollInterval = pollInterval;
 
-  static final CastController instance = CastController();
+  static CastController _instance = CastController();
+
+  /// Uygulama genelinde tek yayın oturumu. Oynatma isteği nereden gelirse
+  /// gelsin buraya bakıyor; iki ayrı yerde durum tutulsaydı "kontrol
+  /// televizyonda, ses telefonda" gibi ayrışmalar kaçınılmaz olurdu.
+  static CastController get instance => _instance;
+
+  /// Testlerde sahte bir oturum kurabilmek için.
+  @visibleForTesting
+  static void overrideInstance(CastController controller) {
+    _instance = controller;
+  }
+
+  @visibleForTesting
+  static void resetInstance() {
+    _instance = CastController();
+  }
 
   final CastDiscovery _discovery;
   final CastClient Function(CastDevice) _clientFactory;
+  final Duration _pollInterval;
 
   CastClient? _client;
   Timer? _poll;
@@ -41,10 +60,10 @@ class CastController extends ChangeNotifier {
 
   /// Ses düğmelerinin bir basışta ne kadar oynattığı.
   ///
-  /// Televizyonun kendi kademesi (0..100 aralığında 1 birim) çok küçük:
-  /// kullanıcı sesi duyulur şekilde açmak için yirmi kez basmak zorunda
-  /// kalırdı.
-  static const double volumeStep = 0.05;
+  /// Televizyonun ses ölçeği 0..100; bu oran orada tam 2 birime denk geliyor.
+  /// Cihazın kendi kademesi (1 birim) fazla küçük, %5 ise fazla kabaydı.
+  /// Televizyondaki karşılığıyla aynı tutuluyor (bkz. CastReceiver.kt).
+  static const double volumeStep = 0.02;
 
   CastDevice? _device;
 
@@ -117,6 +136,13 @@ class CastController extends ChangeNotifier {
       return false;
     }
 
+    // BAŞKA bir televizyona geçiliyorsa eskisi susturulur: kullanıcı artık
+    // kumanda edemediği bir cihazı çalar hâlde bırakmamalı.
+    final previous = _device;
+    if (previous != null && previous != target) {
+      await _send(CastCommand.stop);
+    }
+
     _client?.close();
     _client = client;
     _device = target;
@@ -126,11 +152,22 @@ class CastController extends ChangeNotifier {
       title: title,
       position: position,
       isPlaying: true,
+      // Ses seviyesi videodan videoya değişmiyor; sıfırlamak kaydırıcıyı her
+      // parça değişiminde bir yoklama boyunca kaybediyordu.
+      volume: _remoteState?.volume,
+      isMuted: _remoteState?.isMuted ?? false,
     );
     _lastError = null;
     notifyListeners();
 
-    await PlaybackClient.shared.pause();
+    // Telefonu susturmak başarısız olsa bile (kanal hatası) yayın kurulmuş
+    // sayılmalı: yoklama ve ses tuşları bağlanmazsa kullanıcı kopmayı hiç
+    // fark edemez ve ses tuşları yanlış cihazı yönetir.
+    try {
+      await PlaybackClient.shared.pause();
+    } catch (e) {
+      debugPrint('cast: telefon duraklatılamadı: $e');
+    }
     _bindVolumeKeys(true);
     _startPolling();
     return true;
@@ -181,9 +218,21 @@ class CastController extends ChangeNotifier {
   Future<void> toggleMute() => _send(CastCommand.mute);
 
   /// Televizyonda çalanı durdurup yayını kapatır.
-  Future<void> stopRemote() async {
-    await _send(CastCommand.stop);
+  ///
+  /// Komut televizyona ULAŞMAZSA false döner ve [lastError] doldurulur:
+  /// kullanıcı "kestim" sanıp televizyonu çalar hâlde bırakmamalı. Yayın yine
+  /// de kapatılıyor — ulaşılamayan bir televizyonun kumandasını açık tutmanın
+  /// anlamı yok.
+  Future<bool> stopRemote() async {
+    final name = _device?.name;
+    final delivered = await _send(CastCommand.stop);
     await disconnect();
+    if (!delivered) {
+      _lastError = '${name ?? "Televizyon"} durdurulamadı; '
+          'oynatma orada sürüyor olabilir.';
+      notifyListeners();
+    }
+    return delivered;
   }
 
   /// Yayını kapatır; televizyondaki oynatmaya DOKUNMAZ.
@@ -216,17 +265,31 @@ class CastController extends ChangeNotifier {
     });
   }
 
-  Future<void> _send(String action, {Duration? position, double? volume}) async {
+  /// Testlerde televizyonun bildirdiği durumu taklit eder.
+  @visibleForTesting
+  void applyRemoteStateForTest(CastRemoteState state) {
+    _remoteState = state;
+    notifyListeners();
+  }
+
+  /// Komutu gönderir; televizyona ulaştıysa true döner.
+  Future<bool> _send(
+    String action, {
+    Duration? position,
+    double? volume,
+  }) async {
     final client = _client;
-    if (client == null) return;
+    if (client == null) return false;
     try {
       await client.command(action, position: position, volume: volume);
       // Kullanıcı düğmeye bastığında arayüz beklemeden tepki vermeli;
       // yoklama saniyeler sonra geliyor.
       _applyOptimistic(action, position, volume);
+      return true;
     } on CastException catch (e) {
       _lastError = e.message;
       notifyListeners();
+      return false;
     }
   }
 
@@ -260,10 +323,13 @@ class CastController extends ChangeNotifier {
   void _startPolling() {
     _poll?.cancel();
     _missedPolls = 0;
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
+    _poll = Timer.periodic(_pollInterval, (_) async {
       final client = _client;
       if (client == null) return;
       final state = await client.remoteState();
+      // Cevap gelene kadar oturum kapanmış ya da başka bir televizyona
+      // geçilmiş olabilir; geç gelen sonuç kapanmış oturumu diriltmemeli.
+      if (!identical(client, _client)) return;
       if (state == null) {
         // Tek bir kayıp paket oturumu bitirmez; ısrarla cevapsız kalması
         // televizyonun gittiği anlamına gelir.
@@ -282,6 +348,9 @@ class CastController extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Bırakılmazsa native yönlendirme açık kalıyor ve ses tuşuna basıldığında
+    // atılmış bir dinleyici çağrılıyor.
+    _bindVolumeKeys(false);
     _poll?.cancel();
     _client?.close();
     super.dispose();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/cast/cast_controller.dart';
 import '../../core/cast/cast_protocol.dart';
 import '../../core/playback/playback_coordinator.dart';
+import 'cast_disconnect.dart';
 
 /// "TV'ye gönder" düğmesi.
 ///
@@ -89,11 +90,13 @@ class _CastPickerState extends State<_CastPicker> {
     setState(() => _sending = false);
 
     Navigator.of(context).pop();
-    final message = ok
-        ? '${device.name} cihazında açılıyor…'
-        : (_cast.lastError ?? 'Gönderilemedi.');
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    if (!ok) _cast.clearError();
+    // Hata mesajını oynatma ekranı gösteriyor (tek yerden), burada yalnızca
+    // başarı bildiriliyor — yoksa aynı hata iki kez belirirdi.
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${device.name} cihazında açılıyor…')),
+      );
+    }
   }
 
   @override
@@ -124,10 +127,10 @@ class _CastPickerState extends State<_CastPicker> {
               subtitle: const Text('Şu an bu cihaza gönderiliyor'),
               trailing: TextButton(
                 onPressed: () {
-                  _cast.disconnect();
                   Navigator.of(context).pop();
+                  showCastDisconnectOptions(context);
                 },
-                child: const Text('Bağlantıyı kes'),
+                child: const Text('Yayını bitir'),
               ),
             ),
           if (devices == null)

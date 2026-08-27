@@ -14,11 +14,15 @@ import org.schabi.newpipe.extractor.stream.VideoStream
 object StreamSelector {
 
     /**
-     * Varsayılan üst kalite sınırı. YouTube sık sık 1440p/2160p sunar;
-     * telefonda bu fark edilmezken veri, pil ve kod çözücüyü gereksiz zorlar
-     * (bazı cihazlarda 4K hiç çözülemez ve video siyah kalır).
+     * "Otomatik" kurulamadığında düşülen üst kalite sınırı. YouTube sık sık
+     * 1440p/2160p sunar; telefonda bu fark edilmezken veri, pil ve kod
+     * çözücüyü gereksiz zorlar (bazı cihazlarda 4K hiç çözülemez ve video
+     * siyah kalır).
      */
     const val DEFAULT_MAX_HEIGHT = 1080
+
+    /** Kalite menüsünde "Otomatik" seçiliyken gösterilen etiket. */
+    const val AUTO_LABEL = "Otomatik"
 
     data class Selection(
         val videoUrl: String?,
@@ -27,10 +31,15 @@ object StreamSelector {
         val isLive: Boolean
     )
 
+    /**
+     * [maxHeight] `null` ise kalite OTOMATİK: tüm çözünürlükler tek bir DASH
+     * manifestine konur ve hangisinin oynatılacağına oynatıcı bant genişliğine
+     * bakarak karar verir. Bir sayı verilirse o çözünürlük sabitlenir.
+     */
     fun select(
         info: StreamInfo,
         audioOnly: Boolean,
-        maxHeight: Int = DEFAULT_MAX_HEIGHT
+        maxHeight: Int? = null
     ): Selection? {
         val isLive = info.streamType == StreamType.LIVE_STREAM ||
             info.streamType == StreamType.AUDIO_LIVE_STREAM
@@ -57,7 +66,16 @@ object StreamSelector {
         // sesi ayrıca birleştiriyoruz.
         val audioUrl = audio?.contentUrl()
         if (audioUrl != null && info.videoOnlyStreams.isNotEmpty()) {
-            val chosen = pickVideo(info.videoOnlyStreams, maxHeight)
+            if (maxHeight == null) {
+                val manifest = DashManifestBuilder.videoOnlyDataUri(info)
+                if (manifest != null) {
+                    return Selection(manifest, audioUrl, AUTO_LABEL, false)
+                }
+            }
+            // Manifest kurulamadıysa (ör. parça baytları gelmeyen OTF akışlar)
+            // kullanıcıya hata göstermek yerine sessizce sabit çözünürlüğe
+            // düşüyoruz.
+            val chosen = pickVideo(info.videoOnlyStreams, maxHeight ?: DEFAULT_MAX_HEIGHT)
             val videoUrl = chosen?.contentUrl()
             if (videoUrl != null) {
                 return Selection(videoUrl, audioUrl, chosen.resolution, false)
@@ -66,7 +84,7 @@ object StreamSelector {
 
         // Ayrık ses yoksa: sesi zaten içeren birleşik akışı tek kaynak yap.
         if (info.videoStreams.isNotEmpty()) {
-            val chosen = pickVideo(info.videoStreams, maxHeight)
+            val chosen = pickVideo(info.videoStreams, maxHeight ?: DEFAULT_MAX_HEIGHT)
             val url = chosen?.contentUrl()
             if (url != null) {
                 return Selection(null, url, chosen.resolution, false)

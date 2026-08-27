@@ -1,4 +1,6 @@
+import '../data/library_store.dart';
 import '../extraction/models.dart';
+import 'episode.dart';
 import 'similarity.dart';
 
 /// Oynatma kuyruğunu, "radyo" hissi verecek şekilde kurar.
@@ -9,6 +11,11 @@ import 'similarity.dart';
 ///   sıkılır.
 /// - **Çeşitlilik**: aynı sanatçının şarkıları arka arkaya yığılmamalı —
 ///   "Selena Gomez" arayınca kuyruk baştan sona Selena Gomez olmamalı.
+///
+/// Dizi izlenirken bu denge YANLIŞ soruyu cevaplıyor: "1. Bölüm"den sonra en
+/// benzer video "54. Bölüm" olabiliyor. Bölüm sırası anlaşılabiliyorsa
+/// (bkz. [episodeRunFor]) kuyruğun başı benzerliğe değil bölüm numarasına
+/// göre kurulur; anlaşılamazsa hiçbir şey değişmez.
 class QueueBuilder {
   /// Aynı kanaldan üst üste kaç video çalabileceği.
   ///
@@ -26,14 +33,39 @@ class QueueBuilder {
   /// dil bonusunu (+4) götürdüğü için bu içerikler eşiği geçemez.
   static const _minScore = 0;
 
+  /// Kuyruğun başına en fazla kaç bölüm konacağı. Kalan yerler yine benzer
+  /// içerikle dolar; dizi bitince kuyruk boşalmasın.
+  static const _maxEpisodeRun = 20;
+
   /// [seed] çalınan video, [candidates] aday havuzu (arama sonuçları ve/veya
   /// ilgili videolar). Sonuç, [seed] ile başlayan benzer ama tekdüze olmayan
   /// bir sıradır.
+  ///
+  /// [watchedIds] verilmezse izleme geçmişi [LibraryStore]'dan okunur;
+  /// parametre yalnızca testlerin geçmişi kendilerinin belirlemesi için var.
   static List<VideoSummary> build({
     required VideoSummary seed,
     required List<VideoSummary> candidates,
+    Set<String>? watchedIds,
   }) {
     final seen = <String>{if (seed.videoId != null) seed.videoId!};
+
+    // Dizi izleniyorsa sıradaki bölümler kuyruğun BAŞINA gelir; aynı dizinin
+    // seçilmeyen bölümleri (geride kalanlar, aynı bölümün başka yüklemeleri)
+    // ise hiç girmesin diye görülmüş sayılır.
+    final run = episodeRunFor(
+      seed: seed,
+      candidates: candidates,
+      watchedIds: watchedIds ?? _watchedVideoIds(),
+      limit: _maxEpisodeRun,
+    );
+    final episodes = <VideoSummary>[];
+    for (final episode in run.upcoming) {
+      final id = episode.videoId;
+      if (id == null || !seen.add(id)) continue;
+      episodes.add(episode);
+    }
+    seen.addAll(run.excludedIds);
 
     // Adayları benzerliğe göre puanla ve eşiği geçemeyenleri ele.
     final scored = <({VideoSummary video, int score})>[];
@@ -47,9 +79,12 @@ class QueueBuilder {
     scored.sort((a, b) => b.score.compareTo(a.score));
 
     final pool = scored.map((e) => e.video).toList();
-    final result = <VideoSummary>[seed];
-    var lastChannel = seed.uploaderName;
-    var streak = 1;
+    final result = <VideoSummary>[seed, ...episodes];
+
+    // Bölüm dizisinden sonra üst üste aynı kanal sınırı DOLMUŞ sayılır:
+    // bölümler bittiğinde kuyruk aynı kanalda devam etmek yerine açılsın.
+    var lastChannel = result.last.uploaderName;
+    var streak = episodes.isEmpty ? 1 : _maxConsecutiveSameChannel;
 
     while (pool.isNotEmpty && result.length < _maxQueueLength) {
       // En benzer adayla devam et; ama aynı kanaldan üst üste çalma sınırına
@@ -73,4 +108,13 @@ class QueueBuilder {
 
     return result;
   }
+
+  /// İzleme geçmişindeki video kimlikleri.
+  ///
+  /// Yalnızca bellekteki listeyi okur (disk erişimi yok), bu yüzden kuyruk
+  /// kurmayı yavaşlatmaz.
+  static Set<String> _watchedVideoIds() => {
+        for (final video in LibraryStore.instance.watched)
+          if (video.videoId != null) video.videoId!,
+      };
 }

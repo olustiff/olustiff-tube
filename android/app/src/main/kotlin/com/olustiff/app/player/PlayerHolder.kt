@@ -10,6 +10,8 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.dash.manifest.DashManifestParser
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -47,6 +49,20 @@ object PlayerHolder {
     @Volatile
     var audioOnlyMode: Boolean = false
         private set
+
+    /**
+     * Kullanıcının seçtiği kalite tavanı; `null` = "Otomatik".
+     *
+     * Kuyrukta sıradakine geçiş NATIVE tarafta yapıldığı için (ekran kapalıyken
+     * de ilerlemeli) tercih burada da tutulmak zorunda: Dart o anda uykuda
+     * olabilir ve seçimi yapamaz.
+     */
+    @Volatile
+    var preferredMaxHeight: Int? = null
+
+    /** Çalan medya uyarlanabilir bir manifestten mi geliyor. */
+    @Volatile
+    private var adaptiveQuality: Boolean = false
 
     /** Mevcut medyanın, moddan bağımsız olarak saklanan kaynakları. */
     private var currentRequest: PlayRequest? = null
@@ -125,6 +141,19 @@ object PlayerHolder {
                     onQueueAdvanced?.invoke()
                 }
 
+                // "Otomatik" seçiliyken oynatılan çözünürlük bant genişliğiyle
+                // birlikte değişiyor; kullanıcı o an neyi izlediğini görebilsin
+                // diye etiket her değişimde güncelleniyor.
+                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                    if (!adaptiveQuality) return
+                    val height = videoSize.height
+                    currentQualityLabel = if (height > 0) {
+                        "${StreamSelector.AUTO_LABEL} • ${height}p"
+                    } else {
+                        StreamSelector.AUTO_LABEL
+                    }
+                }
+
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState != Player.STATE_ENDED) return
                     if (!PlaybackQueue.autoplay || advancing) return
@@ -153,7 +182,8 @@ object PlayerHolder {
         val info = withContext(Dispatchers.IO) {
             ExtractionService.streamInfo(item.videoId)
         }
-        val selection = StreamSelector.select(info, audioOnlyMode) ?: return
+        val selection =
+            StreamSelector.select(info, audioOnlyMode, preferredMaxHeight) ?: return
         currentQualityLabel = selection.qualityLabel
         play(
             context,
@@ -229,6 +259,7 @@ object PlayerHolder {
         val player = getPlayer(context)
         currentRequest = request
         audioOnlyMode = audioOnly
+        adaptiveQuality = !audioOnly && DashManifestBuilder.isManifest(request.videoUrl)
         // Yeni medya: eski karenin "yeni video" sanılmaması için bayrak sıfırlanır.
         hasVideoFrame = false
         applyAudioOnlyTrackSelection(player, request, audioOnly)
@@ -296,6 +327,7 @@ object PlayerHolder {
         val player = getPlayer(context)
         audioOnlyMode = audioOnly
         currentQualityLabel = null
+        adaptiveQuality = false
         hasVideoFrame = false
 
         val metadata = MediaMetadata.Builder()
@@ -360,6 +392,7 @@ object PlayerHolder {
             audioUrl = audioUrl ?: existing.audioUrl
         )
         currentRequest = request
+        adaptiveQuality = !audioOnly && DashManifestBuilder.isManifest(request.videoUrl)
 
         val player = getPlayer(context)
         val position = player.currentPosition
@@ -409,9 +442,16 @@ object PlayerHolder {
 
         if (videoUrl == null) return audioSource
 
-        val videoSource = ProgressiveMediaSource.Factory(factory).createMediaSource(
-            MediaItem.Builder().setUri(videoUrl).setMediaMetadata(metadata).build()
-        )
+        // "Otomatik" kalitede video adresi tek bir dosya değil, tüm
+        // çözünürlükleri listeleyen bir DASH manifestidir; çözünürlüğü
+        // indirme hızına bakarak oynatıcı seçer.
+        val videoSource = if (DashManifestBuilder.isManifest(videoUrl)) {
+            dashSource(factory, videoUrl, metadata) ?: return audioSource
+        } else {
+            ProgressiveMediaSource.Factory(factory).createMediaSource(
+                MediaItem.Builder().setUri(videoUrl).setMediaMetadata(metadata).build()
+            )
+        }
 
         // YouTube'un yüksek çözünürlüklü akışları video ve sesi ayrı verir;
         // ikisini aynı zaman çizgisinde birleştiriyoruz.
@@ -421,6 +461,36 @@ object PlayerHolder {
             videoSource,
             audioSource
         )
+    }
+
+    /**
+     * Manifest ağdan değil elimizden geldiği için çözümlenip doğrudan
+     * kaynağa veriliyor; oynatıcı yalnızca içindeki video parçalarını indirir.
+     *
+     * Çözümleme başarısız olursa null döner ve çağıran taraf sese düşer —
+     * kullanıcı hata ekranı yerine (görüntüsüz de olsa) devam eden bir
+     * oynatma görür.
+     */
+    private fun dashSource(
+        factory: DataSource.Factory,
+        manifestUri: String,
+        metadata: MediaMetadata
+    ): MediaSource? = try {
+        val manifest = DashManifestParser().parse(
+            // Tüm adresler manifest içinde mutlak; bu taban adres yalnızca
+            // çözümleyicinin istediği bir yer tutucu.
+            Uri.parse("dash://otomatik"),
+            java.io.ByteArrayInputStream(DashManifestBuilder.decode(manifestUri))
+        )
+        DashMediaSource.Factory(factory).createMediaSource(
+            manifest,
+            MediaItem.Builder()
+                .setUri("dash://otomatik")
+                .setMediaMetadata(metadata)
+                .build()
+        )
+    } catch (e: Exception) {
+        null
     }
 
     @Synchronized

@@ -9,6 +9,9 @@ import 'package:olustiff/core/cast/cast_client.dart';
 import 'package:olustiff/core/cast/cast_controller.dart';
 import 'package:olustiff/core/cast/cast_discovery.dart';
 import 'package:olustiff/core/cast/cast_protocol.dart';
+import 'package:olustiff/core/extraction/models.dart';
+import 'package:olustiff/core/playback/playback_coordinator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _device = CastDevice(
   id: 'tv-1',
@@ -21,6 +24,23 @@ void main() {
   // CastController yayın başlarken telefonu susturuyor; bu bir kanal
   // çağrısı olduğu için bağlama (binding) gerekiyor.
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // Yayın başlarken telefonun oynatıcısı susturuluyor ve ses tuşları
+  // televizyona yönlendiriliyor; ikisi de native kanaldan geçiyor.
+  void mock(String channel, Future<Object?> Function(MethodCall)? handler) {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(MethodChannel(channel), handler);
+  }
+
+  setUp(() {
+    mock('olustiff/player', (_) async => null);
+    mock('olustiff/ui', (_) async => null);
+  });
+
+  tearDown(() {
+    mock('olustiff/player', null);
+    mock('olustiff/ui', null);
+  });
 
   group('keşif mesajları', () {
     test('telefonun sorduğu paketi televizyon tanır', () {
@@ -313,6 +333,390 @@ void main() {
 
       expect(await client.remoteState(), isNull);
       expect(await client.ping(), isFalse);
+    });
+  });
+
+
+  group('ses kontrolü', () {
+    late List<Map<String, Object?>> commands;
+
+    CastController controllerWith() {
+      commands = [];
+      return CastController(
+        clientFactory: (device) => CastClient(
+          device,
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/command') {
+              commands.add(
+                jsonDecode(utf8.decode(request.bodyBytes))
+                    as Map<String, Object?>,
+              );
+            }
+            return http.Response('{"ok":true}', 200);
+          }),
+        ),
+      );
+    }
+
+    Future<CastController> casting() async {
+      final controller = controllerWith();
+      await controller.castTo(_device, videoId: 'abc', title: 'Şarkı');
+      // Televizyonun bildirdiği ses seviyesi olmadan kaydırıcı gösterilmiyor.
+      controller.applyRemoteStateForTest(
+        const CastRemoteState(videoId: 'abc', volume: 0.5),
+      );
+      return controller;
+    }
+
+    test('mutlak ses seviyesi gönderilir', () async {
+      final controller = await casting();
+
+      await controller.setVolume(0.8);
+
+      expect(commands.last['action'], CastCommand.volume);
+      expect(commands.last['volume'], 0.8);
+      // Arayüz yoklamayı beklemeden yeni seviyeyi gösterir.
+      expect(controller.volume, 0.8);
+      controller.dispose();
+    });
+
+    test('ses seviyesi 0..1 aralığına sıkıştırılır', () async {
+      final controller = await casting();
+
+      await controller.setVolume(1.7);
+
+      expect(commands.last['volume'], 1.0);
+      controller.dispose();
+    });
+
+    test('bir kademe artırma sessizliği de bozar', () async {
+      final controller = await casting();
+      controller.applyRemoteStateForTest(
+        const CastRemoteState(videoId: 'abc', volume: 0.5, isMuted: true),
+      );
+
+      await controller.volumeUp();
+
+      expect(commands.last['action'], CastCommand.volumeUp);
+      expect(controller.volume, closeTo(0.52, 0.0001));
+      expect(controller.isMuted, isFalse);
+      controller.dispose();
+    });
+
+    test('kademe azaltma sıfırın altına inmez', () async {
+      final controller = await casting();
+      controller.applyRemoteStateForTest(
+        const CastRemoteState(videoId: 'abc', volume: 0.02),
+      );
+
+      await controller.volumeDown();
+
+      expect(controller.volume, 0.0);
+      controller.dispose();
+    });
+
+    test('sessize alma aç/kapa çalışır', () async {
+      final controller = await casting();
+
+      await controller.toggleMute();
+      expect(commands.last['action'], CastCommand.mute);
+      expect(controller.isMuted, isTrue);
+
+      await controller.toggleMute();
+      expect(controller.isMuted, isFalse);
+      controller.dispose();
+    });
+
+    test('televizyon ses seviyesini bildirmiyorsa tahmin yürütülmez', () async {
+      final controller = controllerWith();
+      await controller.castTo(_device, videoId: 'abc', title: 'Şarkı');
+
+      await controller.volumeUp();
+
+      expect(controller.volume, isNull);
+      controller.dispose();
+    });
+  });
+
+  group('kopan oturum', () {
+    test('televizyon cevap vermeyi bırakınca yayın kapanır', () async {
+      var reachable = true;
+      final controller = CastController(
+        pollInterval: const Duration(milliseconds: 20),
+        clientFactory: (device) => CastClient(
+          device,
+          httpClient: MockClient((request) async {
+            if (!reachable) throw const SocketException('yok');
+            return http.Response(
+              request.url.path == '/state'
+                  ? '{"ok":true,"state":{"positionMs":0}}'
+                  : '{"ok":true}',
+              200,
+            );
+          }),
+        ),
+      );
+      await controller.castTo(_device, videoId: 'abc', title: 'Şarkı');
+      expect(controller.isCasting, isTrue);
+
+      reachable = false;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      // Kullanıcı ölü bir kumandayla kalmamalı.
+      expect(controller.isCasting, isFalse);
+      expect(controller.lastError, contains('koptu'));
+      controller.dispose();
+    });
+
+    test('tek bir cevapsız yoklama oturumu bitirmez', () async {
+      var failNext = true;
+      final controller = CastController(
+        pollInterval: const Duration(milliseconds: 20),
+        clientFactory: (device) => CastClient(
+          device,
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/state' && failNext) {
+              failNext = false;
+              throw const SocketException('geçici');
+            }
+            return http.Response(
+              request.url.path == '/state'
+                  ? '{"ok":true,"state":{"positionMs":0}}'
+                  : '{"ok":true}',
+              200,
+            );
+          }),
+        ),
+      );
+      await controller.castTo(_device, videoId: 'abc', title: 'Şarkı');
+
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      expect(controller.isCasting, isTrue);
+      controller.dispose();
+    });
+  });
+
+  group('oturum yönetimi', () {
+    test('başka televizyona geçilince eskisi durdurulur', () async {
+      final commands = <String>[];
+      final controller = CastController(
+        clientFactory: (device) => CastClient(
+          device,
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/command') {
+              commands.add(
+                '${request.url.host}:'
+                '${(jsonDecode(utf8.decode(request.bodyBytes)) as Map)['action']}',
+              );
+            }
+            return http.Response('{"ok":true}', 200);
+          }),
+        ),
+      );
+      await controller.castTo(_device, videoId: 'a', title: 'A');
+
+      const other = CastDevice(
+        id: 'tv-2',
+        name: 'Yatak Odası',
+        host: '192.168.1.41',
+        port: castControlPort,
+      );
+      await controller.castTo(other, videoId: 'b', title: 'B');
+
+      // Kullanıcı artık kumanda edemediği bir televizyonu çalar bırakmamalı.
+      expect(commands, contains('192.168.1.40:stop'));
+      expect(controller.device, other);
+      controller.dispose();
+    });
+
+    test('ses seviyesi yeni videoda kaybolmaz', () async {
+      final controller = CastController(
+        clientFactory: (device) => CastClient(
+          device,
+          httpClient: MockClient((_) async => http.Response('{"ok":true}', 200)),
+        ),
+      );
+      await controller.castTo(_device, videoId: 'a', title: 'A');
+      controller.applyRemoteStateForTest(
+        const CastRemoteState(videoId: 'a', volume: 0.4),
+      );
+
+      await controller.castTo(_device, videoId: 'b', title: 'B');
+
+      expect(controller.volume, 0.4);
+      controller.dispose();
+    });
+  });
+
+  group('yayın açıkken oynatma', () {
+    late List<String> castedVideos;
+    late List<MethodCall> playerCalls;
+    late bool castFails;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      castedVideos = [];
+      playerCalls = [];
+      castFails = false;
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('olustiff/extractor'),
+        (call) async => call.method == 'videoDetails'
+            ? {
+                'videoId': call.arguments['videoId'],
+                'title': 'Video ${call.arguments['videoId']}',
+                'uploaderName': 'Kanal',
+                'durationSeconds': 100,
+                'viewCount': 1,
+                'description': '',
+                'tags': <String>[],
+                'isLive': false,
+                'videoStreams': <Object?>[],
+                'videoOnlyStreams': <Object?>[],
+                'audioStreams': <Object?>[],
+                'relatedItems': <Object?>[],
+              }
+            : null,
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('olustiff/player'),
+        (call) async {
+          playerCalls.add(call);
+          return null;
+        },
+      );
+
+      CastController.overrideInstance(
+        CastController(
+          clientFactory: (device) => CastClient(
+            device,
+            httpClient: MockClient((request) async {
+              if (request.url.path == '/cast') {
+                if (castFails) throw const SocketException('ulaşılamadı');
+                castedVideos.add(
+                  (jsonDecode(utf8.decode(request.bodyBytes))
+                      as Map)['videoId'] as String,
+                );
+              }
+              return http.Response('{"ok":true}', 200);
+            }),
+          ),
+        ),
+      );
+      await CastController.instance
+          .castTo(_device, videoId: 'ilk', title: 'İlk');
+      playerCalls.clear();
+    });
+
+    tearDown(() {
+      CastController.instance.dispose();
+      CastController.resetInstance();
+      for (final name in ['olustiff/extractor', 'olustiff/player']) {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(MethodChannel(name), null);
+      }
+    });
+
+    // Kullanıcının bulduğu hata: yayın açıkken listeden seçilen video
+    // telefonda çalmaya başlıyor, düğmeler ise televizyondakini yönetiyordu.
+    test('yeni seçilen video televizyona gider, telefonda çalmaz', () async {
+      await PlaybackCoordinator.instance.play('yeni');
+
+      expect(castedVideos, contains('yeni'));
+      expect(
+        playerCalls.map((c) => c.method),
+        isNot(contains('play')),
+        reason: 'telefonun kendi oynatıcısı hiç başlamamalı',
+      );
+      expect(PlaybackCoordinator.instance.details?.videoId, 'yeni');
+    });
+
+    test('telefonun geç gelen durum bildirimi ekranı geri almaz', () async {
+      await PlaybackCoordinator.instance.play('yeni');
+
+      // Telefonun oynatıcısı hâlâ ESKİ medyayı bildiriyor.
+      await PlaybackCoordinator.instance.syncFromNative('eski', 0);
+
+      expect(PlaybackCoordinator.instance.details?.videoId, 'yeni');
+    });
+
+    test('telefonun oynatıcısı durdu diye televizyondaki silinmez', () async {
+      await PlaybackCoordinator.instance.play('yeni');
+
+      PlaybackCoordinator.instance.handleStoppedExternally();
+
+      expect(PlaybackCoordinator.instance.details?.videoId, 'yeni');
+    });
+
+    // İnceleme bulgusu: kuyruk bir ÖNCEKİ oynatmanın listesinden kuruluyordu.
+    test('kuyruk yeni seçilen listeden kurulur', () async {
+      const first = VideoSummary(
+        videoId: 'a',
+        title: 'A',
+        url: 'u',
+        uploaderName: 'K',
+        durationSeconds: 10,
+        viewCount: 1,
+        textualUploadDate: null,
+        thumbnailUrl: null,
+      );
+      const second = VideoSummary(
+        videoId: 'b',
+        title: 'B',
+        url: 'u',
+        uploaderName: 'K',
+        durationSeconds: 10,
+        viewCount: 1,
+        textualUploadDate: null,
+        thumbnailUrl: null,
+      );
+
+      await PlaybackCoordinator.instance.play('a', context: [first]);
+      await PlaybackCoordinator.instance.play('b', context: [second]);
+
+      expect(
+        PlaybackCoordinator.instance.queue.map((v) => v.videoId),
+        isNot(contains('a')),
+        reason: 'eski listenin videosu yeni kuyruğa sızmamalı',
+      );
+    });
+
+    test('gönderim başarısızsa video televizyonda çalıyor gibi gösterilmez',
+        () async {
+      await PlaybackCoordinator.instance.play('yeni');
+      castFails = true;
+
+      await PlaybackCoordinator.instance.play('ulasilamayan');
+
+      // Telefon, televizyonda çalmayan bir videoyu "TV'de oynatılıyor" diye
+      // göstermemeli; hata ekrana çıkmalı.
+      expect(PlaybackCoordinator.instance.details?.videoId,
+          isNot('ulasilamayan'));
+      expect(PlaybackCoordinator.instance.lastError, isNotNull);
+    });
+
+    test('oynat/duraklat komutu televizyona gider', () async {
+      await PlaybackCoordinator.instance.pause();
+      await PlaybackCoordinator.instance.resume();
+
+      expect(
+        playerCalls.map((c) => c.method),
+        isNot(anyOf(contains('pause'), contains('resume'))),
+        reason: 'telefonda ikinci bir ses başlamamalı',
+      );
+    });
+
+    test('sıradakine geçme komutu televizyona gider', () async {
+      await PlaybackCoordinator.instance.playNext();
+
+      expect(
+        playerCalls.map((c) => c.method),
+        isNot(contains('next')),
+        reason: 'telefonun sessiz oynatıcısını ilerletmenin anlamı yok',
+      );
     });
   });
 

@@ -435,7 +435,7 @@ class _TvPlayerState extends State<TvPlayer> {
     LogicalKeyboardKey key,
     Set<LogicalKeyboardKey> ok,
   ) {
-    // 0 = "En yüksek", sonrası gerçek çözünürlükler.
+    // 0 = "Otomatik", sonrası gerçek çözünürlükler.
     final count = widget.coordinator.availableQualities.length + 1;
     if (key == LogicalKeyboardKey.arrowDown) {
       setState(() => _qualityIndex = (_qualityIndex + 1) % count);
@@ -1072,11 +1072,11 @@ class _QualityOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Seçenek yoksa liste de boş kalmalı: "En yüksek" tek başına seçilebilir
+    // Seçenek yoksa liste de boş kalmalı: "Otomatik" tek başına seçilebilir
     // görünüp hiçbir şey yapmıyordu.
     final labels = options.isEmpty
         ? const <String>[]
-        : ['En yüksek', for (final h in options) '${h}p'];
+        : ['Otomatik', for (final h in options) '${h}p'];
 
     return Center(
       child: Container(

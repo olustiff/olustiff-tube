@@ -97,6 +97,22 @@ class VideoStreamInfo {
   final int fps;
   final int bitrate;
 
+  /// Aşağıdakiler yalnızca "Otomatik" kalite için gerekli: tüm çözünürlükleri
+  /// tek bir DASH manifestinde toplayabilmek için kodek, boyut ve akışın
+  /// başlangıç/dizin bayt aralıkları lazım (bkz. `buildDashManifest`).
+  ///
+  /// YouTube bunları her akış için vermez (ör. OTF akışlarda aralıklar -1
+  /// gelir); eksikse o akış manifeste alınmaz.
+  final String? mimeType;
+  final String? codec;
+  final int itag;
+  final int width;
+  final int height;
+  final int initStart;
+  final int initEnd;
+  final int indexStart;
+  final int indexEnd;
+
   const VideoStreamInfo({
     required this.url,
     required this.resolution,
@@ -104,9 +120,21 @@ class VideoStreamInfo {
     required this.isVideoOnly,
     required this.fps,
     required this.bitrate,
+    this.mimeType,
+    this.codec,
+    this.itag = 0,
+    this.width = 0,
+    this.height = 0,
+    this.initStart = -1,
+    this.initEnd = -1,
+    this.indexStart = -1,
+    this.indexEnd = -1,
   });
 
   factory VideoStreamInfo.fromMap(Map<Object?, Object?> map) {
+    // Eksik bayt aralığı 0 değil -1 olmalı: 0 geçerli bir başlangıç.
+    int range(Object? value) => value == null ? -1 : (value as num).toInt();
+
     return VideoStreamInfo(
       url: _asString(map['url']) ?? '',
       resolution: _asString(map['resolution']),
@@ -114,6 +142,15 @@ class VideoStreamInfo {
       isVideoOnly: map['isVideoOnly'] as bool? ?? false,
       fps: _asInt(map['fps']),
       bitrate: _asInt(map['bitrate']),
+      mimeType: _asString(map['mimeType']),
+      codec: _asString(map['codec']),
+      itag: _asInt(map['itag']),
+      width: _asInt(map['width']),
+      height: _asInt(map['height']),
+      initStart: range(map['initStart']),
+      initEnd: range(map['initEnd']),
+      indexStart: range(map['indexStart']),
+      indexEnd: range(map['indexEnd']),
     );
   }
 }

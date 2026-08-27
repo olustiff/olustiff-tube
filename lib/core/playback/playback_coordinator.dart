@@ -102,11 +102,18 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// [context] videonun içinden seçildiği liste (arama sonuçları, geçmiş,
   /// çalma listesi). Kuyruk buradan ve videonun ilgili videolarından
   /// karıştırılarak kurulur — böylece hep aynı sanatçı tekrarlanmaz.
+  /// [forceVideo] sesli mod tespitini atlar.
+  ///
+  /// Telefondan yayınlanan içerik televizyonda AÇILIRKEN kullanılır: müzik
+  /// içeriği telefonda bilerek sesli modda açılıyor, ama televizyonda ekran
+  /// zaten karşıda — orada sesli mod diye bir senaryo yok ve kullanıcı
+  /// "görüntü gelmedi" diye görüyor.
   Future<void> play(
     String videoId, {
     List<VideoSummary> context = const [],
     List<VideoSummary>? exactQueue,
     int? index,
+    bool forceVideo = false,
   }) async {
     final requestId = ++_requestId;
     _targetVideoId = videoId;
@@ -123,7 +130,7 @@ class PlaybackCoordinator extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _play(videoId, context, exactQueue, index, requestId);
+      await _play(videoId, context, exactQueue, index, requestId, forceVideo);
     } catch (e) {
       // Hazırlık başarısız oldu: hedefi bırak ki kullanıcı aynı videoya
       // yeniden dokunduğunda tekrar denensin. Hata fırlatılmıyor — çağıranlar
@@ -152,6 +159,7 @@ class PlaybackCoordinator extends ChangeNotifier {
     List<VideoSummary>? exactQueue,
     int? index,
     int requestId,
+    bool forceVideo,
   ) async {
     final details = await _extraction.videoDetails(videoId);
     if (_isStale(requestId)) return;
@@ -164,6 +172,28 @@ class PlaybackCoordinator extends ChangeNotifier {
     // "sırada"dan — nereden seçilirse seçilsin video televizyona gider.
     // Kontrolün telefonda, sesin televizyonda olduğu bir ara durum bırakmıyor.
     if (CastController.instance.isCasting) {
+      // Önce GÖNDER, sonra ekranı güncelle.
+      //
+      // Tersi denenmişti: gönderim başarısız olduğunda telefon yeni videonun
+      // başlığını gösterirken televizyon eskisini çalmaya devam ediyordu —
+      // kullanıcı hangisinin doğru olduğunu anlayamıyordu.
+      final sent = await CastController.instance.sendCurrent(
+        videoId: videoId,
+        title: details.title,
+        artist: details.uploaderName,
+        thumbnailUrl: details.thumbnailUrl,
+      );
+      if (_isStale(requestId)) return;
+      if (!sent) {
+        throw CastException(
+          CastController.instance.lastError ??
+              'Video televizyona gönderilemedi.',
+        );
+      }
+
+      // Kuyruğun kurulacağı kaynak liste burada da GÜNCELLENMELİ; yoksa
+      // "Sırada" bir önceki oynatmanın listesinden üretiliyordu.
+      _sourceList = context;
       _prepareQueue(seed, details, exactQueue, index, videoId);
       _details = details;
       // Kalite ve ses/video seçimi televizyonun işi; telefon çözümleme bile
@@ -172,19 +202,6 @@ class PlaybackCoordinator extends ChangeNotifier {
       _qualityLabel = null;
       notifyListeners();
 
-      if (_isStale(requestId)) return;
-      final sent = await CastController.instance.sendCurrent(
-        videoId: videoId,
-        title: details.title,
-        artist: details.uploaderName,
-        thumbnailUrl: details.thumbnailUrl,
-      );
-      if (!sent) {
-        throw CastException(
-          CastController.instance.lastError ??
-              'Video televizyona gönderilemedi.',
-        );
-      }
       await _library.recordWatch(seed);
       return;
     }
@@ -195,7 +212,8 @@ class PlaybackCoordinator extends ChangeNotifier {
     // Televizyonda sesli mod hiç kullanılmıyor: ekran zaten karşıda ve
     // "ekranı kapatıp dinleme" diye bir senaryo yok — müzik videosu da
     // izlemek için açılıyor.
-    final audioOnly = !TvMode.isTv.value &&
+    final audioOnly = !forceVideo &&
+        !TvMode.isTv.value &&
         _settings.musicAsAudio &&
         detectContentKind(details) == ContentKind.music;
     final streams = selectStreams(
@@ -437,7 +455,36 @@ class PlaybackCoordinator extends ChangeNotifier {
     }
     final target = _queue.elementAtOrNull(index)?.videoId;
     if (target == null) return;
+    // Kuyruk KİPİ korunuyor: `exactQueue` vermek onu kalıcı olarak
+    // "liste sırası"na çeviriyor ve yayın bittikten sonra kullanıcının
+    // seçtiği filtre sessizce değişmiş oluyordu.
+    final mode = _queueMode;
     await play(target, exactQueue: _queue, index: index);
+    _queueMode = mode;
+  }
+
+  /// Oynatmayı sürdürür; yayın açıkken komut televizyona gider.
+  ///
+  /// Telefonun kendi oynatıcısını başlatmak, televizyon da çalarken aynı sesin
+  /// iki yerden gelmesine yol açıyordu.
+  Future<void> resume() async {
+    if (CastController.instance.isCasting) {
+      return CastController.instance.resume();
+    }
+    await _playback.resume();
+  }
+
+  Future<void> pause() => CastController.instance.isCasting
+      ? CastController.instance.pause()
+      : _playback.pause();
+
+  /// Bulunulan yerden [offset] kadar sarar.
+  Future<void> seekBy(Duration offset, Duration current) {
+    final target = current + offset;
+    final clamped = target < Duration.zero ? Duration.zero : target;
+    return CastController.instance.isCasting
+        ? CastController.instance.seekTo(clamped)
+        : _playback.seekTo(clamped);
   }
 
   Future<void> setAutoplay(bool value) async {

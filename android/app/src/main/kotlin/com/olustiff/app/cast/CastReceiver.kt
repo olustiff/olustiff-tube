@@ -49,7 +49,14 @@ class CastReceiver(
     @Volatile
     private var running = false
 
+    // @Volatile: soketler işçi thread'lerde açılıyor, [stop] ana thread'den
+    // çağrılıyor. İşaretlenmezse [stop] bayat (null) değer okuyup soketleri
+    // kapatamıyor; thread'ler accept/receive üzerinde sonsuza kadar bloke
+    // kalıyor ve portlar bağlı kalıyordu.
+    @Volatile
     private var udpSocket: DatagramSocket? = null
+
+    @Volatile
     private var serverSocket: ServerSocket? = null
     private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -85,10 +92,7 @@ class CastReceiver(
 
     private fun handleMethod(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "startReceiver" -> {
-                start()
-                result.success(running)
-            }
+            "startReceiver" -> result.success(start())
 
             "publishState" -> {
                 playbackState = call.arguments as? Map<*, *>
@@ -101,10 +105,10 @@ class CastReceiver(
 
     // ------------------------------------------------------------- yaşam döngüsü
 
+    /** Alıcı gerçekten dinlemeye başladıysa true döner. */
     @Synchronized
-    fun start() {
-        if (running) return
-        running = true
+    fun start(): Boolean {
+        if (running) return true
 
         // Wi-Fi sürücüsü, kilit alınmadan gelen yayın/çok noktaya yayın
         // paketlerini uygulamaya HİÇ vermiyor: keşif bu kilit olmadan sessizce
@@ -118,8 +122,32 @@ class CastReceiver(
             }
         }.onFailure { Log.w(TAG, "Multicast kilidi alınamadı", it) }
 
+        // Bağlama (bind) THREAD'DEN ÖNCE ve burada yapılıyor: eskiden
+        // döngünün içindeydi, hatası sessizce yutuluyordu ve televizyon
+        // keşifte görünüp hiçbir komutu çalıştırmıyordu — kullanıcıya
+        // "gönderildi" deniyor ama hiçbir şey olmuyordu.
+        val bound = runCatching {
+            udpSocket = DatagramSocket(null).apply {
+                reuseAddress = true
+                broadcast = true
+                bind(InetSocketAddress(DISCOVERY_PORT))
+            }
+            serverSocket = ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(CONTROL_PORT))
+            }
+        }.isSuccess
+
+        if (!bound) {
+            Log.w(TAG, "Portlar bağlanamadı; alıcı açılmıyor")
+            stop()
+            return false
+        }
+
+        running = true
         startThread("olustiff-cast-udp", ::runDiscoveryLoop)
         startThread("olustiff-cast-http", ::runHttpLoop)
+        return true
     }
 
     @Synchronized
@@ -150,13 +178,7 @@ class CastReceiver(
     // ------------------------------------------------------------------- keşif
 
     private fun runDiscoveryLoop() {
-        val socket = DatagramSocket(null).apply {
-            reuseAddress = true
-            broadcast = true
-            bind(InetSocketAddress(DISCOVERY_PORT))
-        }
-        udpSocket = socket
-
+        val socket = udpSocket ?: return
         val buffer = ByteArray(1024)
         while (running) {
             val packet = DatagramPacket(buffer, buffer.size)
@@ -221,11 +243,7 @@ class CastReceiver(
     // -------------------------------------------------------------------- komut
 
     private fun runHttpLoop() {
-        val server = ServerSocket()
-        server.reuseAddress = true
-        server.bind(InetSocketAddress(CONTROL_PORT))
-        serverSocket = server
-
+        val server = serverSocket ?: return
         while (running) {
             val client = try {
                 server.accept()
@@ -337,8 +355,11 @@ class CastReceiver(
         return runCatching {
             when (action) {
                 "volume" -> {
-                    val level = json?.optDouble("volume", 0.0) ?: 0.0
-                    val index = (level.coerceIn(0.0, 1.0) * max).roundToInt()
+                    // Alan eksikse sesi SIFIRLAMIYORUZ: eskiden eksik istek
+                    // sessizce televizyonu susturup "ok" dönüyordu.
+                    val level = json?.opt("volume") as? Number ?: return false
+                    val index =
+                        (level.toDouble().coerceIn(0.0, 1.0) * max).roundToInt()
                     // Sesi elle ayarlamak sessizliği de bozar: kullanıcı
                     // kaydırıcıyı çektiğinde ses gelmesini bekler.
                     if (manager.isStreamMute(AudioManager.STREAM_MUSIC)) {
@@ -356,9 +377,8 @@ class CastReceiver(
                 }
 
                 "volumeUp", "volumeDown" -> {
-                    // Cihazın kendi kademesi (0..100 aralığında 1 birim) çok
-                    // küçük; duyulur bir fark için sabit oranlı adım
-                    // kullanılıyor.
+                    // Cihazın kendi kademesi ölçeğe göre değişiyor; sabit
+                    // oranlı adım her cihazda aynı hissi veriyor.
                     val step = (max * VOLUME_STEP).roundToInt().coerceAtLeast(1)
                     val current = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
                     val delta = if (action == "volumeUp") step else -step
@@ -510,8 +530,13 @@ class CastReceiver(
             setOf("resume", "pause", "seek", "next", "previous", "stop") +
                 VOLUME_COMMANDS
 
-        /** Bir ses düğmesi basışının oynattığı oran. */
-        private const val VOLUME_STEP = 0.05
+        /**
+         * Bir ses düğmesi basışının oynattığı oran.
+         *
+         * Televizyonun ölçeği 0..100 olduğu için tam 2 birime denk geliyor.
+         * Telefondaki karşılığıyla aynı tutulmalı (CastController.volumeStep).
+         */
+        private const val VOLUME_STEP = 0.02
 
         private const val HEADER_END = 0x0D0A0D0A
         private const val MAX_HEADER_BYTES = 8 * 1024

@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../playback/playback_client.dart';
 
 /// Kullanıcının oynatma tercihleri.
 class SettingsStore extends ChangeNotifier {
@@ -13,15 +16,16 @@ class SettingsStore extends ChangeNotifier {
   static const _kMusicAsAudio = 'music_as_audio';
   static const _kBluetoothAutoPlay = 'bluetooth_autoplay';
 
-  /// Seçilebilir kalite tavanları. `null` = sınırsız (kaynağın en iyisi).
+  /// Seçilebilir kalite tavanları. `null` = "Otomatik": çözünürlüğü ağ hızına
+  /// göre oynatıcı seçer.
   static const qualityOptions = <int?>[null, 2160, 1440, 1080, 720, 480, 360];
   static const speedOptions = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
   SharedPreferences? _prefs;
 
-  /// Varsayılan 1080p: telefonda 4K fark edilmezken veri, pil ve kod çözücüyü
-  /// gereksiz zorlar.
-  int? _maxHeight = 1080;
+  /// Varsayılan "Otomatik": sabit bir çözünürlük, ağ yavaşladığında kalite
+  /// düşürmek yerine videoyu takılmaya bırakıyordu.
+  int? _maxHeight;
   double _speed = 1.0;
   bool _autoplay = true;
 
@@ -38,13 +42,14 @@ class SettingsStore extends ChangeNotifier {
   bool get musicAsAudio => _musicAsAudio;
   bool get bluetoothAutoPlay => _bluetoothAutoPlay;
 
-  String get qualityLabel => _maxHeight == null ? 'En yüksek' : '${_maxHeight}p';
+  String get qualityLabel => _maxHeight == null ? 'Otomatik' : '${_maxHeight}p';
 
   Future<void> load() async {
     final prefs = _prefs ??= await SharedPreferences.getInstance();
-    // -1, "sınırsız" için saklanan değer (SharedPreferences null tutamaz).
+    // -1, "Otomatik" için saklanan değer (SharedPreferences null tutamaz).
     final stored = prefs.getInt(_kMaxHeight);
-    _maxHeight = stored == null ? 1080 : (stored < 0 ? null : stored);
+    _maxHeight = (stored == null || stored < 0) ? null : stored;
+    await _syncQualityToNative();
     _speed = prefs.getDouble(_kSpeed) ?? 1.0;
     _autoplay = prefs.getBool(_kAutoplay) ?? true;
     _musicAsAudio = prefs.getBool(_kMusicAsAudio) ?? true;
@@ -55,7 +60,24 @@ class SettingsStore extends ChangeNotifier {
   Future<void> setMaxHeight(int? value) async {
     _maxHeight = value;
     await _prefs?.setInt(_kMaxHeight, value ?? -1);
+    await _syncQualityToNative();
     notifyListeners();
+  }
+
+  /// Kalite tercihi native tarafta da bilinmeli: kuyrukta sıradakine geçiş
+  /// orada yapılıyor (ekran kapalıyken de ilerlemeli) ve o an kaynağı Dart
+  /// değil native seçiyor.
+  ///
+  /// Kanal yoksa (birim testleri) sessizce geçilir — ayar deposu oynatıcıya
+  /// bağımlı olmamalı.
+  Future<void> _syncQualityToNative() async {
+    try {
+      await PlaybackClient.shared.setMaxHeight(_maxHeight);
+    } on MissingPluginException {
+      // Yoksay.
+    } on PlatformException {
+      // Yoksay.
+    }
   }
 
   Future<void> setSpeed(double value) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/data/settings_store.dart';
+import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
 
 /// Kalite seçimi.
@@ -8,6 +9,10 @@ import '../../core/playback/playback_coordinator.dart';
 /// Seçenekler videonun GERÇEKTEN sunduğu çözünürlüklerden üretilir; sabit bir
 /// liste, 4K sunmayan bir videoda "2160p" göstermeye yol açardı. Seçim çalan
 /// videoya hemen uygulanır ve oynatma konumu korunur.
+///
+/// Listenin başındaki "Otomatik" bir çözünürlük SABİTLEMEZ: oynatıcıya tüm
+/// çözünürlükleri içeren bir manifest verilir ve o, indirme hızına göre
+/// aralarında geçiş yapar.
 Future<void> showQualityMenu(BuildContext context) async {
   final coordinator = PlaybackCoordinator.instance;
   final settings = SettingsStore.instance;
@@ -29,12 +34,7 @@ Future<void> showQualityMenu(BuildContext context) async {
         shrinkWrap: true,
         children: [
           const ListTile(title: Text('Video kalitesi')),
-          _QualityTile(
-            label: 'En yüksek',
-            subtitle: '${available.first}p',
-            selected: current == null,
-            height: null,
-          ),
+          const _AutoQualityTile(),
           for (final height in available)
             _QualityTile(
               label: '${height}p',
@@ -51,7 +51,7 @@ Future<void> showQualityMenu(BuildContext context) async {
 }
 
 /// Dropdown yerine radyo listesi kullanıldığı için seçim değerini sarmalıyoruz;
-/// `null` ("en yüksek") ile bir yüksekliği aynı tipte taşıyabilmek gerekiyor.
+/// `null` ("Otomatik") ile bir yüksekliği aynı tipte taşıyabilmek gerekiyor.
 class _QualityChoice {
   const _QualityChoice(this.height);
 
@@ -63,6 +63,32 @@ class _QualityChoice {
 
   @override
   int get hashCode => height.hashCode;
+}
+
+/// "Otomatik" satırı, o an gerçekten oynatılan çözünürlüğü de gösterir.
+///
+/// Çözünürlük ağ hızıyla birlikte değiştiği için sabit bir metin yanıltıcı
+/// olurdu; değer oynatıcının anlık durumundan okunuyor.
+class _AutoQualityTile extends StatelessWidget {
+  const _AutoQualityTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<PlaybackState>(
+      stream: PlaybackClient.shared.stateStream,
+      builder: (context, snapshot) {
+        final height = snapshot.data?.videoHeight ?? 0;
+        return _QualityTile(
+          label: 'Otomatik',
+          subtitle: height > 0
+              ? 'Ağ hızına göre — şu an ${height}p'
+              : 'Ağ hızına göre ayarlanır',
+          selected: SettingsStore.instance.maxHeight == null,
+          height: null,
+        );
+      },
+    );
+  }
 }
 
 class _QualityTile extends StatelessWidget {

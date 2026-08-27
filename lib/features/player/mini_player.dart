@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/playback/playback_coordinator.dart';
+import '../../core/cast/cast_controller.dart';
 import '../../core/playback/playback_client.dart';
 import 'player_route.dart';
 
@@ -78,20 +79,31 @@ class MiniPlayer extends StatelessWidget {
                   StreamBuilder<PlaybackState>(
                     stream: _playback.stateStream,
                     builder: (context, snapshot) {
-                      final playing =
-                          snapshot.data?.playWhenReady ?? false;
+                      final cast = CastController.instance;
+                      // Yayın açıkken telefonun oynatıcısı duraklatılmış
+                      // durumda; düğme onun değil TELEVİZYONUN durumunu
+                      // göstermeli ve onu yönetmeli. Aksi hâlde bu düğme
+                      // telefonda ikinci bir ses başlatıyordu.
+                      final playing = cast.isCasting
+                          ? (cast.remoteState?.isPlaying ?? false)
+                          : (snapshot.data?.playWhenReady ?? false);
+                      final coordinator = PlaybackCoordinator.instance;
                       return IconButton(
                         icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-                        onPressed: () => playing
-                            ? _playback.pause()
-                            : _playback.resume(),
+                        onPressed: () =>
+                            playing ? coordinator.pause() : coordinator.resume(),
                       );
                     },
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: () {
-                      PlaybackCoordinator.instance.stop();
+                    onPressed: () async {
+                      // Yayın açıkken kapatmak televizyonu da susturmalı;
+                      // yoksa kullanıcı durduramadığı bir oynatmayla kalıyor.
+                      if (CastController.instance.isCasting) {
+                        await CastController.instance.stopRemote();
+                      }
+                      await PlaybackCoordinator.instance.stop();
                     },
                   ),
                 ],

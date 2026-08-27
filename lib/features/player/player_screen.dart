@@ -54,12 +54,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_coordinator.isCurrent(widget.videoId)) _start();
     _applyKeepScreenOn();
     _coordinator.addListener(_applyKeepScreenOn);
+    CastController.instance.addListener(_showCastError);
     if (TvMode.isTv.value) WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     _coordinator.removeListener(_applyKeepScreenOn);
+    CastController.instance.removeListener(_showCastError);
     // Ekran kısıtı yalnızca video izlerken geçerli olmalı.
     UiChannel.instance.setKeepScreenOn(false);
     if (TvMode.isTv.value) {
@@ -83,6 +85,18 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (UiChannel.instance.isInPictureInPicture.value) return;
       _coordinator.stop();
     }
+  }
+
+  /// Yayınla ilgili hatayı bir kez gösterir.
+  ///
+  /// Tek yerden gösteriliyor: televizyon bağlantısı kopabilir, gönderim
+  /// başarısız olabilir, komut gidemeyebilir — hepsi aynı yerden geçiyor ve
+  /// kullanıcı ölü bir kumandayla sessizce baş başa kalmıyor.
+  void _showCastError() {
+    final error = CastController.instance.lastError;
+    if (error == null || !mounted) return;
+    CastController.instance.clearError();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 
   /// Video izlenirken ekran kapanmasın; sesli modda telefon normal uyusun.
@@ -273,19 +287,27 @@ class _PlayerScreenState extends State<PlayerScreen>
             _coordinator.playPrevious,
       };
 
+  /// Tuş kısayolları oynatmayı çalanın ÜZERİNDE uygulamalı: yayın açıkken
+  /// televizyonda, kapalıyken telefonda. Doğrudan yerel oynatıcıya gitmek,
+  /// televizyon çalarken telefonda ikinci bir ses başlatıyordu.
   Future<void> _togglePlay() async {
-    final playing = _lastState?.playWhenReady ?? false;
+    final cast = CastController.instance;
+    final playing = cast.isCasting
+        ? (cast.remoteState?.isPlaying ?? false)
+        : (_lastState?.playWhenReady ?? false);
     if (playing) {
-      await _playback.pause();
+      await _coordinator.pause();
     } else {
-      await _playback.resume();
+      await _coordinator.resume();
     }
   }
 
   Future<void> _seekRelative(Duration offset) async {
-    final position = _lastState?.position ?? Duration.zero;
-    final target = position + offset;
-    await _playback.seekTo(target < Duration.zero ? Duration.zero : target);
+    final cast = CastController.instance;
+    final position = cast.isCasting
+        ? (cast.remoteState?.position ?? Duration.zero)
+        : (_lastState?.position ?? Duration.zero);
+    await _coordinator.seekBy(offset, position);
   }
 
   /// Kısayolların o anki konumu/durumu bilmesi için son durum saklanır.

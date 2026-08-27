@@ -243,6 +243,14 @@ class PlaybackController(
                 result.success(null)
             }
 
+            // Kalite tercihi native tarafta da saklanmalı: kuyrukta sıradakine
+            // geçiş burada yapılıyor ve o an Dart uykuda olabilir.
+            // Değer yoksa (null) kalite "Otomatik" demektir.
+            "setMaxHeight" -> {
+                PlayerHolder.preferredMaxHeight = call.argument<Int>("maxHeight")
+                result.success(null)
+            }
+
             // Kalite değişimi: kaynaklar değişir, konum ve mod korunur.
             "replaceSources" -> {
                 PlayerHolder.replaceSources(
@@ -284,6 +292,12 @@ class PlaybackController(
             "stop" -> {
                 player().stop()
                 player().clearMediaItems()
+                // Kuyruk da BOŞALTILIYOR: yoksa durum akışı durduktan sonra
+                // bile son videonun kimliğini bildirmeye devam ediyor ve
+                // arayüz "hâlâ bir şey çalıyor" sanıp mini oynatıcıyı
+                // ekranda bırakıyordu (yayın televizyonda bırakılıp telefon
+                // susturulduğunda görülüyordu).
+                PlaybackQueue.clear()
                 PlayerHolder.abandonAudioFocus()
                 context.stopService(Intent(context, PlaybackService::class.java))
                 emitState()

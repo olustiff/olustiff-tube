@@ -40,8 +40,12 @@ class CastReceiver {
 
     _channel.setMethodCallHandler(_handleNativeCall);
     try {
-      await _channel.invokeMethod<void>('startReceiver');
+      final ready = await _channel.invokeMethod<bool>('startReceiver');
+      if (ready != true) throw StateError('alıcı hazır değil');
     } catch (e) {
+      // Bayrak GERİ ALINIYOR: yoksa başarısız bir başlatmadan sonra tekrar
+      // denemek imkânsız kalıyordu.
+      _started = false;
       debugPrint('cast: alıcı başlatılamadı: $e');
       return;
     }
@@ -75,10 +79,22 @@ class CastReceiver {
   }
 
   Future<void> _play(String videoId, int positionMs) async {
-    // Ekranı önce aç: çözümleme saniyeler sürebiliyor, televizyonda bu
-    // sürede hiçbir şey olmaması "gitmedi" hissi veriyor.
+    // Sıra ÖNEMLİ: oynatma isteği önce başlatılıyor (beklenmeden), ekran
+    // sonra açılıyor.
+    //
+    // Sebep: oynatma ekranı açılırken "bu video zaten çalıyor mu" diye
+    // soruyor ve çalmıyorsa KENDİ isteğini başlatıyor. Ekranı önce açsaydık
+    // ikinci bir istek doğar, kuyruk iki kez kurulur ve o istek video
+    // modunu zorlamadığı için müzik içerik televizyonda sesli modda
+    // açılırdı — kullanıcı "görüntü gelmedi" diyordu.
+    //
+    // [forceVideo]: televizyonda sesli mod diye bir senaryo yok.
+    final playing = PlaybackCoordinator.instance.play(
+      videoId,
+      forceVideo: true,
+    );
     onOpenRequested?.call(videoId);
-    await PlaybackCoordinator.instance.play(videoId);
+    await playing;
     if (positionMs > 0) {
       await PlaybackClient.shared.seekTo(Duration(milliseconds: positionMs));
     }
@@ -99,11 +115,22 @@ class CastReceiver {
         await PlaybackCoordinator.instance.playPrevious();
       case CastCommand.stop:
         await PlaybackCoordinator.instance.stop();
+        // Durum HEMEN temizleniyor: native kuyruk son videonun kimliğini
+        // tutmaya devam ediyor ve telefon "hâlâ o çalıyor" sanıyordu.
+        _publishNow(const CastRemoteState());
       default:
         // Tanımadığımız komutu sessizce yutmuyoruz: telefon "gitti" sanmasın.
         return false;
     }
     return true;
+  }
+
+  /// Durumu kısıtlama olmadan bildirir (duraksız değişimler için).
+  void _publishNow(CastRemoteState state) {
+    _lastPublish = DateTime.now();
+    _channel
+        .invokeMethod<void>('publishState', state.toJson())
+        .catchError((Object e) => debugPrint('cast: durum bildirilemedi: $e'));
   }
 
   void _publish(PlaybackState state) {

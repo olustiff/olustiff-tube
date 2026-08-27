@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cast/cast_controller.dart';
-import '../../core/playback/playback_client.dart';
+import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
+import 'cast_disconnect.dart';
 
 /// Yayın açıkken oynatma ekranının yerini alan kumanda.
 ///
@@ -135,48 +136,24 @@ class CastPanel extends StatelessWidget {
                   onToggleMute: cast.toggleMute,
                 ),
               const SizedBox(height: 8),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.phone_android),
-                    label: const Text('Telefonda devam et'),
-                    onPressed: () => _continueOnPhone(position),
-                  ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.stop_circle_outlined),
-                    label: const Text("TV'de durdur"),
-                    onPressed: cast.stopRemote,
-                  ),
-                ],
+              // Tek düğme: "bitir" dendiğinde ne olacağını kullanıcı seçiyor
+              // (televizyonda dursun mu, telefonda devam mı, ikisi de sussun
+              // mu). Üç düğmeyi yan yana koymak bu küçük ekranda hem
+              // sığmıyor hem de hangisinin ne yaptığı okunmuyordu.
+              FilledButton.tonalIcon(
+                icon: const Icon(Icons.cast_connected),
+                label: const Text('Bağlantıyı kes'),
+                onPressed: () => showCastDisconnectOptions(context),
               ),
+              const SizedBox(height: 16),
+              // Kumandanın altında "sırada ne var": kullanıcı televizyonun
+              // karşısına gitmeden hem görebilsin hem de atlayabilsin.
+              const _CastQueue(),
             ],
           ),
         );
       },
     );
-  }
-
-  /// Yayını kapatıp telefonu televizyonun kaldığı yerden sürdürür.
-  ///
-  /// Video telefonda YENİDEN açılıyor; kaldığı yerden "devam ettirmek"
-  /// yetmiyordu: yayın açıkken seçilen videolar telefonun oynatıcısına hiç
-  /// uğramıyor, dolayısıyla orada bambaşka (ya da hiç) bir medya duruyor.
-  Future<void> _continueOnPhone(Duration position) async {
-    final coordinator = PlaybackCoordinator.instance;
-    final target = videoId ?? coordinator.details?.videoId;
-    // Önce yayın kapatılır: oturum açıkken [PlaybackCoordinator.play]
-    // videoyu yine televizyona gönderirdi.
-    await CastController.instance.stopRemote();
-    if (target == null) return;
-    // Kuyruk korunuyor: kullanıcı "sırada"da gördüğü listeyi kaybetmesin.
-    await coordinator.play(
-      target,
-      exactQueue: coordinator.queue.isEmpty ? null : coordinator.queue,
-      index: coordinator.queueIndex,
-    );
-    await PlaybackClient.shared.seekTo(position);
   }
 
   static Duration _clamp(Duration value) =>
@@ -314,6 +291,94 @@ class _RemoteVolumeState extends State<_RemoteVolume> {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+/// Yayın açıkken "Sırada" listesi.
+///
+/// Dokunulan video televizyonda açılıyor: [PlaybackCoordinator.playQueueIndex]
+/// yayın açıkken komutu televizyona yönlendiriyor, telefonda ses açılmıyor.
+class _CastQueue extends StatelessWidget {
+  const _CastQueue();
+
+  @override
+  Widget build(BuildContext context) {
+    final coordinator = PlaybackCoordinator.instance;
+    return AnimatedBuilder(
+      animation: coordinator,
+      builder: (context, _) {
+        final queue = coordinator.queue;
+        // Çalan videodan sonrası. Kuyruk tek parçadan ibaretse gösterecek bir
+        // şey yok; boş bir başlık bırakmıyoruz.
+        final start = coordinator.queueIndex + 1;
+        if (start < 1 || start >= queue.length) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Sırada', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            for (var i = start; i < queue.length; i++)
+              _CastQueueTile(
+                summary: queue[i],
+                onTap: () => coordinator.playQueueIndex(i),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CastQueueTile extends StatelessWidget {
+  const _CastQueueTile({required this.summary, required this.onTap});
+
+  final VideoSummary summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final thumbnail = summary.thumbnailUrl;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: SizedBox(
+        width: 84,
+        height: 48,
+        child: thumbnail == null
+            ? const ColoredBox(
+                color: Colors.black26,
+                child: Icon(Icons.music_note),
+              )
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  thumbnail,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const ColoredBox(
+                    color: Colors.black26,
+                    child: Icon(Icons.music_note),
+                  ),
+                ),
+              ),
+      ),
+      title: Text(
+        summary.title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      subtitle: summary.uploaderName == null
+          ? null
+          : Text(
+              summary.uploaderName!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+      // Yayın açıkken televizyonda açılır; telefonda ses çıkmaz.
+      trailing: const Icon(Icons.cast, size: 18),
+      onTap: onTap,
     );
   }
 }

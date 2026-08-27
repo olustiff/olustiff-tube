@@ -179,6 +179,13 @@ class PlaybackClient {
         'audioOnly': audioOnly,
       });
 
+  /// Kalite tercihini native tarafa bildirir; `null` = "Otomatik".
+  ///
+  /// Kuyrukta sıradakine geçiş native tarafta yapıldığı için (ekran kapalıyken
+  /// de ilerlemeli) tercih orada da bilinmek zorunda.
+  Future<void> setMaxHeight(int? maxHeight) =>
+      _method.invokeMethod<void>('setMaxHeight', {'maxHeight': maxHeight});
+
   /// Kaynakları değiştirir (kalite seçimi); konum ve mod korunur.
   Future<void> replaceSources({String? videoUrl, String? audioUrl}) =>
       _method.invokeMethod<void>('replaceSources', {
