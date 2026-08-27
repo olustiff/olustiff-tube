@@ -62,6 +62,21 @@ object ExtractionService {
         extractor.initialPage.toResult(session)
     }
 
+    /**
+     * Arama kutusuna yazarken YouTube'un önerdiği tamamlamalar.
+     *
+     * Sayfalanabilir listelerden farklı olarak oturum TUTULMAZ: kullanıcı
+     * yazdıkça peş peşe istek geliyor, saklanan bir oturum hemen eskiyeceği
+     * için yalnızca bellek işgal ederdi.
+     */
+    suspend fun suggestions(query: String): List<String> = withContext(Dispatchers.IO) {
+        ensureInitialized()
+        if (query.isBlank()) {
+            return@withContext emptyList()
+        }
+        ServiceList.YouTube.suggestionExtractor.suggestionList(query)
+    }
+
     suspend fun trending(): Map<String, Any?> = withContext(Dispatchers.IO) {
         ensureInitialized()
         val kioskList = ServiceList.YouTube.kioskList

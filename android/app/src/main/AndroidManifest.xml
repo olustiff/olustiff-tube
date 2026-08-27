@@ -128,5 +128,14 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Sesli arama: mikrofon düğmesini yalnızca cihazda ses tanıma
+             VARSA göstermek istiyoruz. Android 11+ paket görünürlüğü
+             kısıtladığı için queryIntentActivities bu kayıt olmadan boş
+             döner ve düğme hiçbir cihazda görünmezdi.
+             Aramayı sistemin ses tanıma ekranı yapıyor; bu yüzden
+             RECORD_AUDIO iznine gerek yok. -->
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH"/>
+        </intent>
     </queries>
 </manifest>

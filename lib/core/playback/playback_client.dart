@@ -114,18 +114,21 @@ class PlaybackClient {
   final MethodChannel _method;
   final EventChannel _events;
 
-  Stream<PlaybackState>? _stateStream;
+  Stream<dynamic>? _rawEvents;
 
   /// Durum akışı.
   ///
-  /// Aynı EventChannel'a ikinci kez abone olmak native taraftaki `onListen`'i
-  /// yeniden tetikler ve önceki aboneliği iptal ettirir; bu yüzden oynatma
-  /// ekranı ile mini oynatıcının paylaşabileceği TEK bir broadcast akışı
-  /// önbelleğe alınıyor.
-  Stream<PlaybackState> get stateStream => _stateStream ??= _events
-      .receiveBroadcastStream()
-      .map((e) => PlaybackState.fromMap(e as Map<Object?, Object?>))
-      .asBroadcastStream();
+  /// `receiveBroadcastStream()` her çağrıldığında YENİ bir kanal aboneliği
+  /// kurar ve native taraftaki `onListen`/`onCancel` bir öncekini iptal
+  /// ettirir; bu yüzden ham akış bir kez alınıp saklanıyor. Kendisi zaten bir
+  /// broadcast akışı olduğundan üzerine `asBroadcastStream()` EKLENMİYOR:
+  /// o sarmalayıcı tek bir kaynak aboneliğini kendi denetimindeki bir
+  /// denetleyiciye aktarıyor ve sonradan katılan dinleyicilere (oynatma ekranı
+  /// açıldığında kurulan `StreamBuilder`) olay akmayabiliyordu — televizyonda
+  /// konum göstergesi bu yüzden donuk kalıyordu.
+  Stream<PlaybackState> get stateStream =>
+      (_rawEvents ??= _events.receiveBroadcastStream())
+          .map((e) => PlaybackState.fromMap(e as Map<Object?, Object?>));
 
   Future<void> play({
     required String audioUrl,

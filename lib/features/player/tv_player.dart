@@ -51,6 +51,17 @@ class TvPlayer extends StatefulWidget {
 enum _Row { play, buttons }
 
 class _TvPlayerState extends State<TvPlayer> {
+  /// "Onayla" sayılan tuşlar. Kumandaların OK tuşu cihaza göre `select` ya da
+  /// `enter` olarak geliyor; oyun kumandası takılıysa A düğmesi de aynı işi
+  /// yapmalı.
+  static final _okKeys = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.select,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.space,
+    LogicalKeyboardKey.gameButtonA,
+  };
+
   /// Kumandada tuşlar arasında telefondakinden uzun aralıklar oluyor; 3 saniye
   /// kullanıcı daha düğmeye bakarken kontrolleri kapatıyordu.
   static const _autoHide = Duration(seconds: 5);
@@ -223,14 +234,6 @@ class _TvPlayerState extends State<TvPlayer> {
     }
     final key = event.logicalKey;
 
-    const okKeys = {
-      LogicalKeyboardKey.select,
-      LogicalKeyboardKey.enter,
-      LogicalKeyboardKey.numpadEnter,
-      LogicalKeyboardKey.space,
-      LogicalKeyboardKey.gameButtonA,
-    };
-
     // Medya tuşları her durumda aynı işi yapar.
     if (key == LogicalKeyboardKey.mediaPlayPause ||
         key == LogicalKeyboardKey.mediaPlay ||
@@ -261,8 +264,8 @@ class _TvPlayerState extends State<TvPlayer> {
       return _handleBack() ? KeyEventResult.handled : KeyEventResult.ignored;
     }
 
-    if (_qualityOpen) return _qualityKey(key, okKeys);
-    if (_panelOpen) return _panelKey(key, okKeys);
+    if (_qualityOpen) return _qualityKey(key, _okKeys);
+    if (_panelOpen) return _panelKey(key, _okKeys);
 
     if (!_controlsVisible) {
       if (key == LogicalKeyboardKey.arrowRight) {
@@ -283,7 +286,7 @@ class _TvPlayerState extends State<TvPlayer> {
       return KeyEventResult.handled;
     }
 
-    if (okKeys.contains(key)) {
+    if (_okKeys.contains(key)) {
       if (_row == _Row.play) {
         _togglePlay();
         _touch();

@@ -16,6 +16,7 @@ import '../search/video_list.dart';
 import 'double_tap_seek.dart';
 import 'download_menu.dart';
 import 'quality_menu.dart';
+import 'tv_player.dart';
 import 'video_player_view.dart';
 
 /// Oynatma ekranı.
@@ -39,7 +40,8 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen>
+    with WidgetsBindingObserver {
   final _coordinator = PlaybackCoordinator.instance;
   final _playback = PlaybackClient.shared;
 
@@ -49,6 +51,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!_coordinator.isCurrent(widget.videoId)) _start();
     _applyKeepScreenOn();
     _coordinator.addListener(_applyKeepScreenOn);
+    if (TvMode.isTv.value) WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -56,7 +59,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _coordinator.removeListener(_applyKeepScreenOn);
     // Ekran kısıtı yalnızca video izlerken geçerli olmalı.
     UiChannel.instance.setKeepScreenOn(false);
+    if (TvMode.isTv.value) {
+      WidgetsBinding.instance.removeObserver(this);
+      // Televizyonda "arka planda çalma" diye bir senaryo yok: ekran karşıda
+      // ve kullanıcı çıktığında sesin sürmesi hata gibi duruyor. TELEFONDA
+      // tam tersi geçerli — orada oynatma bilerek sürdürülüyor.
+      _coordinator.stop();
+    }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Televizyonda uygulamadan çıkılınca (ana ekran tuşu, başka uygulama)
+    // oynatma sürmemeli. `inactive` sayılmıyor: o durum kısa süreli ve
+    // uygulama hâlâ görünür olabiliyor.
+    if (!TvMode.isTv.value) return;
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (UiChannel.instance.isInPictureInPicture.value) return;
+      _coordinator.stop();
+    }
   }
 
   /// Video izlenirken ekran kapanmasın; sesli modda telefon normal uyusun.
@@ -267,17 +290,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: _shortcuts(),
-      child: Focus(
-        autofocus: true,
-        child: ValueListenableBuilder<bool>(
-          valueListenable: UiChannel.instance.isInPictureInPicture,
-          builder: (context, pip, _) => AnimatedBuilder(
-            animation: _coordinator,
-            builder: (context, _) => _buildScreen(context, pip),
-          ),
-        ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: UiChannel.instance.isInPictureInPicture,
+      builder: (context, pip, _) => AnimatedBuilder(
+        animation: _coordinator,
+        builder: (context, _) {
+          // Televizyonda oynatma tam ekran ve tuş haritası [TvPlayer]'a ait.
+          // Buradaki kısayollar ve odak düğümü ona KARIŞMAMALI: ikisi de
+          // ok tuşlarını isteyince sarma iki kez uygulanıyordu.
+          if (TvMode.isTv.value && !pip) {
+            return TvPlayer(
+              details: _coordinator.details,
+              playback: _playback,
+              coordinator: _coordinator,
+            );
+          }
+          return CallbackShortcuts(
+            bindings: _shortcuts(),
+            child: Focus(
+              autofocus: true,
+              child: _buildScreen(context, pip),
+            ),
+          );
+        },
       ),
     );
   }
@@ -285,18 +320,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildScreen(BuildContext context, bool pip) {
     final details = _coordinator.details;
     final audioOnly = _coordinator.audioOnly;
-
-    // Televizyonda oynatma tam ekran: kumandayla gezilen bir arayüzde üstteki
-    // menü çubuğu ve alttaki liste hem odağı dağıtıyor hem de görüntüyü
-    // küçültüyor. Kontroller görüntünün üzerinde beliriyor.
-    if (TvMode.isTv.value && !pip) {
-      return _TvPlayer(
-        details: details,
-        audioOnly: audioOnly,
-        playback: _playback,
-        coordinator: _coordinator,
-      );
-    }
 
     return Scaffold(
       // Küçük pencerede yalnızca görüntü kalır: başlık çubuğu, listeler

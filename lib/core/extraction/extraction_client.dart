@@ -42,6 +42,16 @@ class ExtractionClient {
     return PagedVideos.fromMap(raw);
   }
 
+  /// Arama kutusuna yazarken YouTube'un önerdiği tamamlamalar.
+  ///
+  /// Yazdıkça çağrıldığı için çağıran taraf istekleri geciktirmeli ve
+  /// eskiyeni atmalı (bkz. [SuggestionLoader]).
+  Future<List<String>> suggestions(String query) async {
+    final raw =
+        await _invoke<List<Object?>>('suggestions', {'query': query});
+    return raw.whereType<String>().toList();
+  }
+
   Future<PagedVideos> trending() async {
     final raw = await _invoke<Map<Object?, Object?>>('trending');
     return PagedVideos.fromMap(raw);

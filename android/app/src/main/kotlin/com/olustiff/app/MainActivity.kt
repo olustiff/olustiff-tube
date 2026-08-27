@@ -14,6 +14,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import android.speech.RecognizerIntent
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
@@ -126,6 +127,13 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                // Sesli arama: kumandanın/telefonun mikrofonuyla arama.
+                // Cihazda ses tanıma yoksa arayüz mikrofon düğmesini hiç
+                // göstermesin diye önce sorulur.
+                "isVoiceSearchAvailable" -> result.success(isVoiceSearchAvailable())
+
+                "startVoiceSearch" -> startVoiceSearch(result)
+
                 "isBatteryOptimizationIgnored" -> {
                     val power = getSystemService(PowerManager::class.java)
                     result.success(
@@ -163,6 +171,10 @@ class MainActivity : FlutterActivity() {
                             "search" -> {
                                 val query = call.argument<String>("query").orEmpty()
                                 result.success(ExtractionService.search(query))
+                            }
+                            "suggestions" -> {
+                                val query = call.argument<String>("query").orEmpty()
+                                result.success(ExtractionService.suggestions(query))
                             }
                             "trending" -> {
                                 result.success(ExtractionService.trending())
@@ -206,6 +218,67 @@ class MainActivity : FlutterActivity() {
         // özelliği daha güvenilir bir işaret.
         return packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
     }
+
+    // ------------------------------------------------------------ sesli arama
+
+    /**
+     * Ses tanıma SİSTEMİN kendi ekranıyla yapılıyor.
+     *
+     * Bu yüzden uygulamanın RECORD_AUDIO iznine ihtiyacı YOK: mikrofonu açan
+     * da izni soran da ses tanıma uygulaması. Kendi kaydımızı alsaydık izin
+     * istemek ve reddedilme durumunu yönetmek gerekirdi.
+     */
+    private fun voiceSearchIntent(): Intent =
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Ne aramak istiyorsun?")
+
+    private fun isVoiceSearchAvailable(): Boolean =
+        runCatching {
+            packageManager.queryIntentActivities(voiceSearchIntent(), 0).isNotEmpty()
+        }.getOrDefault(false)
+
+    /**
+     * Ses tanıma ekranını açar. Sonuç [onActivityResult]'ta geldiği için
+     * yanıt burada verilmez, [pendingVoiceResult]'ta bekletilir.
+     */
+    private fun startVoiceSearch(result: MethodChannel.Result) {
+        // Bir MethodChannel.Result yalnızca BİR kez yanıtlanabilir: önceki
+        // istek hâlâ bekliyorsa (kullanıcı hızlı hızlı bastıysa) boş
+        // sonuçla kapatılır.
+        pendingVoiceResult?.success(null)
+        pendingVoiceResult = null
+        try {
+            startActivityForResult(voiceSearchIntent(), REQ_VOICE)
+            pendingVoiceResult = result
+        } catch (e: Exception) {
+            // Ses tanıma yoksa uygulama çökmemeli; arayüz sessizce vazgeçer.
+            result.success(null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_VOICE) return
+        val pending = pendingVoiceResult ?: return
+        pendingVoiceResult = null
+        // Kullanıcı vazgeçtiyse ya da hiçbir şey anlaşılmadıysa null döner;
+        // arayüz arama kutusunu olduğu gibi bırakır.
+        val spoken = if (resultCode == RESULT_OK) {
+            data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+        pending.success(spoken)
+    }
+
+    private var pendingVoiceResult: MethodChannel.Result? = null
 
     private fun enterPip(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
@@ -307,9 +380,14 @@ class MainActivity : FlutterActivity() {
 
     private val REQ_BLUETOOTH = 4711
     private val REQ_STORAGE = 4712
+    private val REQ_VOICE = 4713
 
     override fun onDestroy() {
         scope.cancel()
+        // Ses tanıma ekranı açıkken uygulama kapanırsa Dart tarafı sonsuza
+        // kadar beklemesin.
+        pendingVoiceResult?.success(null)
+        pendingVoiceResult = null
         // Yalnızca kanal dinleyicileri bırakılır; player bilerek serbest
         // BIRAKILMAZ — aktivite kapansa da arka planda oynatma sürsün.
         playbackController?.dispose()

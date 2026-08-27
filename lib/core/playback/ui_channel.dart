@@ -60,6 +60,31 @@ class UiChannel {
   Future<bool> isTelevision() async =>
       await _channel.invokeMethod<bool>('isTelevision') ?? false;
 
+  /// Cihazda sistem ses tanıma var mı.
+  ///
+  /// Yoksa arayüz mikrofon düğmesini hiç göstermez — basılınca hiçbir şey
+  /// olmayan bir düğme, olmayan düğmeden kötüdür.
+  Future<bool> isVoiceSearchAvailable() async {
+    try {
+      return await _channel.invokeMethod<bool>('isVoiceSearchAvailable') ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Sistemin ses tanıma ekranını açar; anlaşılan metni döndürür.
+  ///
+  /// Kullanıcı vazgeçerse, hiçbir şey anlaşılmazsa ya da cihaz
+  /// desteklemiyorsa null döner: arama kutusu olduğu gibi kalır.
+  Future<String?> startVoiceSearch() async {
+    try {
+      return await _channel.invokeMethod<String>('startVoiceSearch');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Videoyu küçük pencereye alır. Cihaz desteklemiyorsa false döner.
   Future<bool> enterPictureInPicture() async =>
       await _channel.invokeMethod<bool>('enterPictureInPicture') ?? false;
