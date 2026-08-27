@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -47,7 +48,7 @@ class CastDiscovery {
         final datagram = socket!.receive();
         if (datagram == null) return;
         final device = parseDeviceAnnouncement(
-          String.fromCharCodes(datagram.data),
+          decodePayload(datagram.data),
           datagram.address.address,
         );
         // Aynı televizyon birden çok adrese cevap verebilir; kimliğe göre
@@ -103,6 +104,7 @@ class CastDiscovery {
         includeLoopback: false,
       );
       return interfaces
+          .where((i) => isLocalNetworkInterface(i.name))
           .expand((i) => i.addresses)
           .map((a) => a.address)
           .toList(growable: false);
@@ -148,6 +150,32 @@ class CastDiscovery {
     }
     return targets.map(InternetAddress.new).toList(growable: false);
   }
+
+  /// Bu arayüz üzerinden televizyon aranır mı.
+  ///
+  /// Mobil veri arayüzleri (rmnet/ccmni/pdp) ELENİYOR: telefon aynı anda hem
+  /// Wi-Fi'da hem mobil veride olabiliyor ve operatörün taşıyıcı ağına 254
+  /// yoklama paketi göndermenin hiçbir karşılığı yok — orada televizyon
+  /// olamaz. Tünel arayüzleri de (VPN) aynı sebeple eleniyor.
+  @visibleForTesting
+  static bool isLocalNetworkInterface(String name) {
+    const mobileOrTunnel = ['rmnet', 'ccmni', 'pdp', 'tun', 'ppp', 'clat'];
+    final lower = name.toLowerCase();
+    return !mobileOrTunnel.any(lower.startsWith);
+  }
+
+  /// Gelen paketi metne çevirir.
+  ///
+  /// UTF-8 ŞART: cihaz adları Türkçe karakter içeriyor ("Oturma Odası TV'si")
+  /// ve baytları doğrudan karakter saymak (`String.fromCharCodes`) adı
+  /// "Oturma OdasÄ± TV'si"ye çeviriyordu.
+  ///
+  /// [allowMalformed]: ağda dolaşan her paket bizim değil; bozuk bir bayt
+  /// dizisi istisna fırlatıp keşfi kesmemeli — o paket zaten sonraki adımda
+  /// elenir.
+  @visibleForTesting
+  static String decodePayload(List<int> bytes) =>
+      utf8.decode(bytes, allowMalformed: true);
 
   /// Yerel adreslerden /24 ağ öneklerini (ör. `192.168.1`) çıkarır.
   static Set<String> _subnets(Iterable<String> addresses) {

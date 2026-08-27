@@ -354,13 +354,17 @@ class _PlayerScreenState extends State<PlayerScreen>
                     MaterialPageRoute(builder: (_) => const SearchScreen()),
                   ),
                 ),
-                IconButton(
-                  tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
-                  icon: Icon(
-                    audioOnly ? Icons.videocam_outlined : Icons.headphones,
+                // Yayın açıkken ses/video seçimi televizyonun işi; telefonda
+                // göstermek hem anlamsız hem de başlığı kısaltacak kadar yer
+                // kaplıyordu.
+                if (!CastController.instance.isCasting)
+                  IconButton(
+                    tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
+                    icon: Icon(
+                      audioOnly ? Icons.videocam_outlined : Icons.headphones,
+                    ),
+                    onPressed: details == null ? null : _coordinator.toggleMode,
                   ),
-                  onPressed: details == null ? null : _coordinator.toggleMode,
-                ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     switch (value) {

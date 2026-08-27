@@ -130,6 +130,45 @@ void main() {
     });
   });
 
+  group('arayüz seçimi', () {
+    test('Wi-Fi ve ethernet taranır', () {
+      expect(CastDiscovery.isLocalNetworkInterface('wlan0'), isTrue);
+      expect(CastDiscovery.isLocalNetworkInterface('eth0'), isTrue);
+      expect(CastDiscovery.isLocalNetworkInterface('en0'), isTrue);
+    });
+
+    test('mobil veri ve VPN arayüzleri taranmaz', () {
+      // Telefon aynı anda mobil veride olabiliyor; operatörün ağında
+      // televizyon aramanın karşılığı yok.
+      expect(CastDiscovery.isLocalNetworkInterface('rmnet_data7'), isFalse);
+      expect(CastDiscovery.isLocalNetworkInterface('ccmni0'), isFalse);
+      expect(CastDiscovery.isLocalNetworkInterface('tun0'), isFalse);
+    });
+  });
+
+  group('paket çözme', () {
+    test('Türkçe karakterli cihaz adı bozulmadan okunur', () {
+      const name = "Oturma Odası TV'si";
+      final bytes = utf8.encode(
+        encodeDeviceAnnouncement(id: 'tv-1', name: name),
+      );
+
+      final device = parseDeviceAnnouncement(
+        CastDiscovery.decodePayload(bytes),
+        '192.168.0.108',
+      );
+
+      expect(device?.name, name);
+    });
+
+    test('bozuk baytlar istisna fırlatmaz', () {
+      expect(
+        () => CastDiscovery.decodePayload([0xFF, 0xFE, 0x00]),
+        returnsNormally,
+      );
+    });
+  });
+
   group('ağ taraması', () {
     // Yayın paketini iletmeyen ağlarda tek çare: her adrese tek tek sormak.
     test('ağdaki tüm konaklar hedeflenir', () {
