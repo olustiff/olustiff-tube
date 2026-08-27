@@ -2,6 +2,15 @@ import 'package:flutter/material.dart';
 
 import 'player_screen.dart';
 
+/// Oynatma ekranı şu an açık mı.
+///
+/// Televizyona telefondan bir video gönderildiğinde ekranı AÇMAK gerekiyor;
+/// ama zaten açıksa ikinci bir kopya açmak geri tuşunda üst üste yığılmış
+/// oynatıcılar bırakırdı.
+bool get isPlayerOpen => _openPlayers > 0;
+
+int _openPlayers = 0;
+
 /// Oynatma ekranını açar.
 ///
 /// YouTube'daki gibi: ekran aşağı kaydırılarak kapatılabilir ve kapandığında
@@ -43,6 +52,18 @@ class _DismissiblePlayer extends StatefulWidget {
 class _DismissiblePlayerState extends State<_DismissiblePlayer> {
   /// Ekranın ne kadar aşağı çekildiği.
   double _offset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _openPlayers++;
+  }
+
+  @override
+  void dispose() {
+    _openPlayers--;
+    super.dispose();
+  }
 
   /// Bu mesafeyi geçen bir sürükleme "kapat" sayılır.
   static const _dismissThreshold = 140.0;

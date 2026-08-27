@@ -19,6 +19,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
 import android.view.WindowManager
+import com.olustiff.app.cast.CastReceiver
 import com.olustiff.app.download.DownloadController
 import com.olustiff.app.update.UpdateController
 import com.olustiff.app.extractor.ExtractionService
@@ -47,6 +48,7 @@ class MainActivity : FlutterActivity() {
     private var playbackController: PlaybackController? = null
     private var downloadController: DownloadController? = null
     private var updateController: UpdateController? = null
+    private var castReceiver: CastReceiver? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -85,6 +87,19 @@ class MainActivity : FlutterActivity() {
             progressChannel =
                 EventChannel(messenger, UpdateController.PROGRESS_CHANNEL)
         )
+
+        // Telefondan gelen videoyu karşılayan yayın (cast) alıcısı.
+        //
+        // Yalnızca TELEVİZYONDA kuruluyor: telefon gönderen taraf ve orada
+        // ağ dinlemek boşuna pil/port harcaması olurdu. Alıcı, uygulamayı
+        // öne getirebilmek için aktiviteye ihtiyaç duyuyor.
+        if (isTelevision()) {
+            castReceiver = CastReceiver(
+                context = applicationContext,
+                channel = MethodChannel(messenger, CastReceiver.CHANNEL),
+                bringToFront = ::bringToFront
+            )
+        }
 
         // Ekranı açık tutma ve resim-içinde-resim yalnızca aktivite üzerinden
         // yapılabildiği için ayrı bir kanalda tutuluyor.
@@ -217,6 +232,25 @@ class MainActivity : FlutterActivity() {
         // Bazı TV kutuları UiModeManager'ı doğru bildirmiyor; leanback
         // özelliği daha güvenilir bir işaret.
         return packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
+
+    /**
+     * Uygulamayı öne getirir.
+     *
+     * Telefondan video geldiğinde televizyon başka bir uygulamada olabilir.
+     * Not: Android 10+ ARKA PLANDAKİ uygulamaların aktivite açmasını
+     * engelliyor; bu çağrı yalnızca uygulama görünürken (ya da yakın zamanda
+     * görünmüşken) işe yarar. Uygulama tamamen kapalıysa alıcı zaten
+     * çalışmadığı için telefon o televizyonu hiç bulamaz.
+     */
+    private fun bringToFront() {
+        startActivity(
+            Intent(this, MainActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        )
     }
 
     // ------------------------------------------------------------ sesli arama
@@ -396,6 +430,10 @@ class MainActivity : FlutterActivity() {
         downloadController = null
         updateController?.dispose()
         updateController = null
+        // Motor kapanıyor: ağ dinleyicileri de kapanmalı, yoksa artık
+        // ulaşılamayan bir kanala komut göndermeye çalışırlar.
+        castReceiver?.stop()
+        castReceiver = null
         super.onDestroy()
     }
 }

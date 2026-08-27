@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/cast/cast_controller.dart';
 import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/extraction/models.dart';
@@ -13,6 +14,8 @@ import '../../core/playback/ui_channel.dart';
 import '../library/download_progress_bar.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
+import 'cast_button.dart';
+import 'cast_panel.dart';
 import 'double_tap_seek.dart';
 import 'download_menu.dart';
 import 'quality_menu.dart';
@@ -293,7 +296,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     return ValueListenableBuilder<bool>(
       valueListenable: UiChannel.instance.isInPictureInPicture,
       builder: (context, pip, _) => AnimatedBuilder(
-        animation: _coordinator,
+        // Yayın (cast) açılıp kapandığında ekranın tamamı değişiyor:
+        // oynatıcı yerini televizyon kumandasına bırakıyor.
+        animation: Listenable.merge([_coordinator, CastController.instance]),
         builder: (context, _) {
           // Televizyonda oynatma tam ekran ve tuş haritası [TvPlayer]'a ait.
           // Buradaki kısayollar ve odak düğümü ona KARIŞMAMALI: ikisi de
@@ -328,8 +333,19 @@ class _PlayerScreenState extends State<PlayerScreen>
       appBar: pip
           ? null
           : AppBar(
-              title: Text(audioOnly ? 'Dinleniyor' : 'İzleniyor'),
+              title: Text(
+                CastController.instance.isCasting
+                    ? "TV'de oynatılıyor"
+                    : (audioOnly ? 'Dinleniyor' : 'İzleniyor'),
+              ),
               actions: [
+                // Televizyona gönderme yalnızca çalacak bir şey varken
+                // anlamlı; hazırlık sürerken gönderilecek video henüz belli
+                // değil.
+                if (details != null)
+                  CastButton(
+                    positionOf: () => _lastState?.position ?? Duration.zero,
+                  ),
                 // Yeni bir şey aramak için listeye geri dönmek gerekmiyor.
                 IconButton(
                   icon: const Icon(Icons.search),
@@ -391,6 +407,19 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Widget _buildBody(VideoDetails? details, bool audioOnly, bool pip) {
+    // Yayın açıkken video televizyonda: telefonda oynatıcı değil kumanda
+    // gösterilir. Yerel oynatma [CastController] tarafından duraklatıldı,
+    // burada ayrıca durdurulmuyor.
+    final cast = CastController.instance;
+    if (cast.isCasting) {
+      return SingleChildScrollView(
+        child: CastPanel(
+          title: details?.title ?? cast.remoteState?.title ?? '',
+          thumbnailUrl: details?.thumbnailUrl,
+        ),
+      );
+    }
+
     final error = _coordinator.lastError;
     if (error != null && details == null) {
       return Center(

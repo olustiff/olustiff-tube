@@ -1,18 +1,26 @@
-import 'dart:convert';
-
 /// Telefon ↔ televizyon arasındaki yayın (cast) protokolü.
 ///
-/// Neden hazır bir çözüm değil de kendi protokolümüz:
-/// - Google Cast SDK'sı, alıcı uygulamanın Cast Developer Console'a
-///   kaydedilip bir uygulama kimliği alınmasını ve alıcı cihazın geliştirici
-///   olarak tanıtılmasını şart koşuyor. Bu uygulama mağazaya girmeyecek, o
-///   yüzden o yol pratikte kapalı.
-/// - DIAL / YouTube Lounge yolu resmî değil; Google istediği an kesebilir ve
-///   kesildiğinde elimizde hiçbir kontrol kalmaz.
+/// Neden hazır bir çözüm değil de kendi protokolümüz — elenen yollar:
 ///
-/// İki uçta da BİZİM uygulamamız çalıştığı için en sade yol yetiyor: UDP
-/// yayınıyla keşif, HTTP ile komut. Kayıt yok, bulut yok, bağımlılık yok.
+/// - **Google Cast SDK**: alıcı uygulamanın Cast Developer Console'a (ücretli)
+///   kaydını, televizyonun seri numarasının tek tek beyaz listeye eklenmesini
+///   ve uygulamanın Play Store'dan kurulmuş olmasını istiyor. Üstüne, cihaz
+///   uygulama kimliğini Google'ın sunucusundan çözüyor — yani "buluta bağımlı
+///   olmasın" şartını da bozardı.
+/// - **DIAL ile televizyonun YouTube uygulamasını açmak**: Android TV /
+///   Google TV cihazlar keşfe (SSDP) cevap veriyor ama `/apps/YouTube`
+///   isteğine 404 dönüyor; YouTube o cihazlarda DIAL kaydında değil. Bu yol
+///   Fire TV / webOS / Tizen'de yaşıyor, bizim televizyonda ölü.
+/// - **YouTube Lounge API**: çalışıyor, ama komutların tamamı
+///   `youtube.com/api/lounge` üzerinden İNTERNETTEN geçiyor ve resmî değil —
+///   hem "sunucu yok" şartına aykırı hem de Google istediği an kesebilir.
+///
+/// Geriye kalan ve şartların tamamını karşılayan tek yol: iki uçta da BİZİM
+/// uygulamamız çalıştığı için kendi protokolümüz. UDP yayınıyla keşif, HTTP
+/// ile komut. Kayıt yok, bulut yok, bağımlılık yok.
 library;
+
+import 'dart:convert';
 
 /// Keşif paketlerinin gittiği port (televizyon burayı dinler).
 const int castDiscoveryPort = 45632;
@@ -97,7 +105,7 @@ String encodeDeviceAnnouncement({
       'id': id,
       'name': name,
       'port': port,
-      if (appVersion != null) 'app': appVersion,
+      'app': ?appVersion,
     });
 
 /// Televizyonun cevabını çözer.
@@ -205,7 +213,7 @@ class CastException implements Exception {
 Map<String, Object?>? _decode(String raw) {
   try {
     final decoded = jsonDecode(raw);
-    return decoded is Map<String, Object?> ? decoded : null;
+    return decoded is Map ? decoded.cast<String, Object?>() : null;
   } catch (_) {
     // Ağda dolaşan her paket JSON değil; bu bir hata değil, "bize ait değil".
     return null;

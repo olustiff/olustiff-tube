@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/cast/cast_receiver.dart';
 import 'core/data/downloads_store.dart';
 import 'core/data/library_store.dart';
 import 'core/ui/tv_mode.dart';
@@ -8,6 +9,7 @@ import 'core/data/settings_store.dart';
 import 'core/playback/playback_client.dart';
 import 'core/playback/playback_coordinator.dart';
 import 'features/home/home_screen.dart';
+import 'features/player/player_route.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,8 +50,33 @@ Future<void> main() async {
     }
   });
 
+  // Televizyonda telefondan gelen videoları karşıla.
+  //
+  // Yalnızca televizyonda: telefon gönderen taraf, orada ağ dinlemek boşuna.
+  if (TvMode.isTv.value) {
+    CastReceiver.instance.onOpenRequested = _openCastedVideo;
+    await CastReceiver.instance.start();
+  }
+
   runApp(const AkisApp());
 }
+
+/// Telefondan gelen video televizyonda açılırken kullanılır.
+///
+/// Oynatma ekranı ZATEN açıksa yeni bir kopya açılmaz: [PlaybackCoordinator]
+/// çalanı değiştirdiğinde açık ekran kendiliğinden yeni videoyu gösterir.
+/// İkinci bir ekran açmak, geri tuşunda üst üste yığılmış oynatıcılar
+/// bırakırdı.
+void _openCastedVideo(String videoId) {
+  if (isPlayerOpen) return;
+  final context = appNavigatorKey.currentContext;
+  if (context == null) return;
+  openPlayer(context, videoId);
+}
+
+/// Yayın isteği bir widget'tan değil, ağdan geliyor: ekranı açmak için
+/// bağlamsız bir gezinme noktası gerekiyor.
+final appNavigatorKey = GlobalKey<NavigatorState>();
 
 class AkisApp extends StatelessWidget {
   const AkisApp({super.key});
@@ -58,6 +85,7 @@ class AkisApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'oLusTifF',
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

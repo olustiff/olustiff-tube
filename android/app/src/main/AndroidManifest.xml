@@ -9,6 +9,16 @@
     <!-- Uygulama içi güncelleme: indirilen APK'nın kurulumunu başlatmak için.
          Kurulumu sistem yapar, kullanıcı onaylar. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- Telefondan televizyona video gönderme (cast): televizyon, telefonun
+         ağa saldığı keşif paketini alabilmek için Wi-Fi çoklu yayın kilidini
+         alıyor. Android, bu kilit olmadan gelen yayın (broadcast) paketlerini
+         uygulamalara HİÇ vermiyor — izin olmasa keşif sessizce çalışmazdı.
+         Komut trafiği için ek izin gerekmiyor; INTERNET yeterli.
+         Not: Android 17 (targetSdk 37) yerel ağ erişimini ayrı bir çalışma
+         anı iznine bağlıyor; targetSdk yükseltilirken bu özellik yeniden
+         gözden geçirilmeli. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+
     <!-- İndirilen MP3'ler herkesin eriştiği Music/oLusTifF klasörüne kaydediliyor.
          Android 10+ bunu MediaStore üzerinden izinsiz yapar; yalnızca Android 9
          ve öncesinde ortak depolamaya yazmak/okumak için izin gerekiyor. -->
