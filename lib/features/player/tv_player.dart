@@ -47,6 +47,17 @@ class TvPlayer extends StatefulWidget {
   State<TvPlayer> createState() => _TvPlayerState();
 }
 
+/// Sarma adımı: tuşa kaç kez tekrar geldiyse ona göre 10 / 20 / 30 saniye.
+///
+/// Tek basışta 10 saniye doğru ölçü — kullanıcı küçük bir düzeltme yapıyor.
+/// Ama uzun bir videoda dakikalarca ileri gitmek için tuş basılı tutuluyor ve
+/// sabit adımda bu çok yavaş kalıyordu; basılı tutuldukça adım büyür.
+int tvSeekStepSeconds(int repeat) {
+  if (repeat < 6) return 10;
+  if (repeat < 14) return 20;
+  return 30;
+}
+
 /// Kontroller açıkken seçimin hangi sırada olduğu.
 enum _Row { play, buttons }
 
@@ -65,8 +76,6 @@ class _TvPlayerState extends State<TvPlayer> {
   /// Kumandada tuşlar arasında telefondakinden uzun aralıklar oluyor; 3 saniye
   /// kullanıcı daha düğmeye bakarken kontrolleri kapatıyordu.
   static const _autoHide = Duration(seconds: 5);
-  static const _seekStep = Duration(seconds: 10);
-
   final _focus = FocusNode(debugLabel: 'tvPlayer');
 
   bool _controlsVisible = false;
@@ -91,6 +100,12 @@ class _TvPlayerState extends State<TvPlayer> {
   /// kez bassa da video 10 saniye ilerlerdi.
   Duration? _seekTarget;
   Timer? _seekSettle;
+
+  /// Basılı tutmada kaçıncı tekrar olduğumuz ve son sarmanın zamanı.
+  /// Tekrar olayları saniyede onlarca kez geliyor; hepsini native'e göndermek
+  /// hem gereksiz hem de videoyu kontrolsüz uçuruyordu.
+  int _seekRepeat = 0;
+  DateTime _lastSeekAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   PlaybackState _state = const PlaybackState();
 
@@ -118,6 +133,10 @@ class _TvPlayerState extends State<TvPlayer> {
 
   void _touch() {
     _hideTimer?.cancel();
+    // Kalite menüsü ya da sırada listesi açıkken kullanıcı seçim yapıyor;
+    // bunların zaman aşımıyla kaybolması seçimi yarıda kesiyordu. Geri tuşu
+    // ikisini de kapatıyor.
+    if (_qualityOpen || _panelOpen) return;
     _hideTimer = Timer(_autoHide, () {
       if (!mounted) return;
       setState(() {
@@ -159,7 +178,37 @@ class _TvPlayerState extends State<TvPlayer> {
     }
   }
 
+  /// Bu tuş olayı için sarma adımı. İlk basış 10 sn; basılı tutuldukça
+  /// 20 ve 30 saniyeye çıkar.
+  Duration _stepFor(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      _seekRepeat = 0;
+    } else {
+      _seekRepeat++;
+    }
+    return Duration(seconds: tvSeekStepSeconds(_seekRepeat));
+  }
+
+  /// Tekrar olayları çok sık geliyor; aralarında en az bu kadar bekleniyor.
+  bool _seekThrottled(KeyEvent event) {
+    if (event is! KeyRepeatEvent) return false;
+    final now = DateTime.now();
+    if (now.difference(_lastSeekAt) < const Duration(milliseconds: 130)) {
+      _seekRepeat--;
+      return true;
+    }
+    return false;
+  }
+
+  /// Bir sarma tuşunu karşılar: adımı olaydan hesaplar ve tekrarları seyreltir.
+  void _seekKey(KeyEvent event, {required bool forward}) {
+    final step = _stepFor(event);
+    if (_seekThrottled(event)) return;
+    _seekBy(forward ? step : -step);
+  }
+
   void _seekBy(Duration offset) {
+    _lastSeekAt = DateTime.now();
     // Canlı yayında sarma yok: konum çubuğu da yok, hedef anlamsız.
     if (_state.isLive) return;
 
@@ -230,6 +279,8 @@ class _TvPlayerState extends State<TvPlayer> {
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     // Tuşu basılı tutmak sarmayı sürdürsün diye tekrar olayları da işleniyor.
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      // Tuş bırakıldı: bir sonraki basış yine 10 saniyeden başlasın.
+      if (event is KeyUpEvent) _seekRepeat = 0;
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
@@ -243,11 +294,11 @@ class _TvPlayerState extends State<TvPlayer> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.mediaFastForward) {
-      _seekBy(_seekStep);
+      _seekKey(event, forward: true);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.mediaRewind) {
-      _seekBy(-_seekStep);
+      _seekKey(event, forward: false);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.mediaTrackNext) {
@@ -269,11 +320,11 @@ class _TvPlayerState extends State<TvPlayer> {
 
     if (!_controlsVisible) {
       if (key == LogicalKeyboardKey.arrowRight) {
-        _seekBy(_seekStep);
+        _seekKey(event, forward: true);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowLeft) {
-        _seekBy(-_seekStep);
+        _seekKey(event, forward: false);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowDown) {
@@ -301,7 +352,7 @@ class _TvPlayerState extends State<TvPlayer> {
         setState(() => _buttonIndex = (_buttonIndex + 1) % 3);
         _touch();
       } else {
-        _seekBy(_seekStep);
+        _seekKey(event, forward: true);
       }
       return KeyEventResult.handled;
     }
@@ -310,13 +361,15 @@ class _TvPlayerState extends State<TvPlayer> {
         setState(() => _buttonIndex = (_buttonIndex + 2) % 3);
         _touch();
       } else {
-        _seekBy(-_seekStep);
+        _seekKey(event, forward: false);
       }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowDown) {
-      if (_row == _Row.buttons) {
-        setState(() => _row = _Row.play);
+      // Düğmeler ekranın altında: aşağı inerken önce onlara, sonra sıradaki
+      // listesine geçmek yönle uyumlu. Yukarı ile geçmek ters geliyordu.
+      if (_row == _Row.play) {
+        setState(() => _row = _Row.buttons);
         _touch();
       } else {
         _openPanel();
@@ -324,8 +377,10 @@ class _TvPlayerState extends State<TvPlayer> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowUp) {
-      setState(() => _row = _Row.buttons);
-      _touch();
+      if (_row == _Row.buttons) {
+        setState(() => _row = _Row.play);
+        _touch();
+      }
       return KeyEventResult.handled;
     }
 
@@ -479,7 +534,10 @@ class _TvPlayerState extends State<TvPlayer> {
             child: AnimatedOpacity(
               opacity: _seekHint == null ? 0 : 1,
               duration: const Duration(milliseconds: 120),
-              child: Center(
+              // Ortadaki oynat/duraklat düğmesinin üstünde değil, ÜSTÜNDE
+              // (yukarısında) duruyor: aynı yere denk gelince okunmuyordu.
+              child: Align(
+                alignment: const Alignment(0, -0.45),
                 child: _SeekBadge(text: _seekHint ?? ''),
               ),
             ),
@@ -489,7 +547,9 @@ class _TvPlayerState extends State<TvPlayer> {
         Positioned.fill(
           child: IgnorePointer(
             child: AnimatedOpacity(
-              opacity: _controlsVisible ? 1 : 0,
+              // Panel açıkken kontroller çizilmez: ikisi üst üste binince
+              // ekran okunmaz hale geliyordu.
+              opacity: (_controlsVisible && !_panelOpen) ? 1 : 0,
               duration: const Duration(milliseconds: 180),
               child: _buildControls(context, state, details),
             ),
@@ -602,7 +662,8 @@ class _TvPlayerState extends State<TvPlayer> {
           const SizedBox(height: 8),
           const Center(
             child: Text(
-              'Sırada olanlar için AŞAĞI • sarmak için SOL/SAĞ',
+              'AŞAĞI: kalite ve parça • bir daha AŞAĞI: sırada olanlar • '
+              'SOL/SAĞ: sarma',
               style: TextStyle(color: Colors.white38, fontSize: 13),
             ),
           ),

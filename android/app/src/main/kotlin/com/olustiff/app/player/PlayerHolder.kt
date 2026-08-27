@@ -40,6 +40,9 @@ object PlayerHolder {
     /** Arama/bildirim geldiğinde duraklatmayı sağlayan ses odağı yöneticisi. */
     private var audioFocus: AudioFocusHandler? = null
 
+    /** Sesi YouTube seviyesine yaklaştıran kazanç. */
+    private val loudness = LoudnessBoost()
+
     /** Kullanıcının seçtiği mod. Uygulamanın hiçbir yerinde otomatik değişmez. */
     @Volatile
     var audioOnlyMode: Boolean = false
@@ -106,10 +109,17 @@ object PlayerHolder {
             .also { player ->
             exoPlayer = player
             audioFocus = AudioFocusHandler(appContext, player)
+            loudness.attach(player.audioSessionId)
             // Otomatik geçiş NATIVE tarafta dinleniyor: ekran kapalıyken de
             // parça bitince sıradakine geçilmeli. Bu dinleyici Dart'ta olsaydı
             // Flutter motoru askıya alındığında hiç tetiklenmezdi.
             player.addListener(object : Player.Listener {
+                // Ses oturumu yeniden kurulduğunda (ör. çıkış cihazı değişince)
+                // efekt eski oturuma bağlı kalıyor ve ses tekrar kısılıyordu.
+                override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                    loudness.attach(audioSessionId)
+                }
+
                 override fun onRenderedFirstFrame() {
                     hasVideoFrame = true
                     onQueueAdvanced?.invoke()
@@ -417,6 +427,7 @@ object PlayerHolder {
     fun release() {
         audioFocus?.abandon()
         audioFocus = null
+        loudness.release()
         exoPlayer?.release()
         exoPlayer = null
         currentRequest = null

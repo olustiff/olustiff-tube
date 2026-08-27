@@ -24,7 +24,12 @@ import 'video_list.dart';
 /// - Sol/Sağ/Yukarı/Aşağı: ızgarada gezinir. Izgaranın sağ kenarından sağa
 ///   basmak sağdaki listeye geçirir; listede sola basmak ızgaraya döndürür.
 /// - OK: ızgarada tuşu uygular, listede öneriyi arar / videoyu oynatır.
-/// - Geri: liste seçiliyken ızgaraya döner, ızgaradayken ekrandan çıkar.
+/// - Geçmişten gelen bir öneri seçiliyken sağ ok, o satırın "kaldır"
+///   düğmesine geçer; OK aramayı geçmişten siler. Ayrı bir düğmeye D-pad
+///   ile gitmek yerine satırın kendi içinde kalıyor: televizyonda odak
+///   ekranın öbür ucuna atlarsa kullanıcı nerede olduğunu kaybediyor.
+/// - Geri: kaldır düğmesindeyken satıra, liste seçiliyken ızgaraya döner,
+///   ızgaradayken ekrandan çıkar.
 class TvSearchScreen extends StatefulWidget {
   const TvSearchScreen({super.key, this.initialQuery});
 
@@ -50,6 +55,12 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
   _Pane _pane = _Pane.keyboard;
   TvKeyPosition _selection = const TvKeyPosition(0, 0);
   int _listIndex = 0;
+
+  /// Seçili satırın "kaldır" düğmesi mi seçili.
+  ///
+  /// Yalnızca geçmişten gelen öneri satırlarında anlamlı: kullanıcı
+  /// televizyonda eski aramalarını silemiyordu.
+  bool _removeSelected = false;
 
   /// Cihazda ses tanıma varsa mikrofon tuşu çizilir.
   bool _voiceAvailable = false;
@@ -127,6 +138,7 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
       // Yazmaya devam edilince eldeki sonuçlar artık bu metne ait değil.
       _showResults = false;
       _listIndex = 0;
+      _removeSelected = false;
     });
     _loader.request(next, _onRemote);
   }
@@ -142,6 +154,7 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
       _results = const [];
       _showResults = true;
       _listIndex = 0;
+      _removeSelected = false;
       // Arama sonrası kullanıcı sonuçlara bakacak; seçim oraya taşınır.
       _pane = _Pane.list;
     });
@@ -227,7 +240,12 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
     if (length == 0) return;
     final next = (_listIndex + delta).clamp(0, length - 1);
     if (next == _listIndex) return;
-    setState(() => _listIndex = next);
+    setState(() {
+      _listIndex = next;
+      // Satır değişince kaldır düğmesi seçili kalmamalı; kullanıcı yanlışlıkla
+      // başka bir aramayı silerdi.
+      _removeSelected = false;
+    });
     _scrollToSelection();
     // Liste sonuna yaklaşınca devamı yüklensin ki sonuçlar ~20'de bitmesin.
     if (_showResults && _hasMore && next >= _results.length - 3) {
@@ -248,9 +266,43 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
     }
   }
 
+  /// Seçili satır kullanıcının kendi arama geçmişinden mi geliyor.
+  ///
+  /// Yalnızca bu satırlarda "kaldır" düğmesi var: YouTube'un önerisini
+  /// silmek diye bir şey yok.
+  String? get _selectedHistoryEntry {
+    if (_pane != _Pane.list || _showResults) return null;
+    final suggestions = _suggestions;
+    if (_listIndex >= suggestions.length) return null;
+    final entry = suggestions[_listIndex];
+    return SearchSuggestions.isFromHistory(entry, LibraryStore.instance.searches)
+        ? entry
+        : null;
+  }
+
+  Future<void> _removeSelectedHistory() async {
+    final entry = _selectedHistoryEntry;
+    if (entry == null) return;
+    setState(() => _removeSelected = false);
+    await LibraryStore.instance.removeSearch(entry);
+    if (!mounted) return;
+    // Liste kısaldı; seçim taşmasın.
+    setState(() {
+      final length = _listLength;
+      _listIndex = length == 0 ? 0 : _listIndex.clamp(0, length - 1);
+      // Son kayıt da silindiyse sağ taraf boş kalıyor; odak orada kalırsa
+      // kullanıcı ok tuşlarına basıp hiçbir şeyin oynamadığını görür.
+      if (length == 0) _pane = _Pane.keyboard;
+    });
+  }
+
   void _activate() {
     if (_pane == _Pane.keyboard) {
       _pressKey(_selection);
+      return;
+    }
+    if (_removeSelected) {
+      _removeSelectedHistory();
       return;
     }
     if (_showResults) {
@@ -264,6 +316,10 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
   /// Geri tuşu: liste seçiliyken ızgaraya döner. Kapatacak bir şey yoksa
   /// false döner ve ekrandan çıkılır.
   bool _handleBack() {
+    if (_removeSelected) {
+      setState(() => _removeSelected = false);
+      return true;
+    }
     if (_pane == _Pane.list) {
       setState(() => _pane = _Pane.keyboard);
       return true;
@@ -310,8 +366,22 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
         _moveList(1);
         return KeyEventResult.handled;
       }
+      if (key == LogicalKeyboardKey.arrowRight) {
+        // Geçmiş satırının kaldır düğmesi satırın kendi içinde: odak ekranın
+        // öbür ucuna atlamıyor.
+        if (!_removeSelected && _selectedHistoryEntry != null) {
+          setState(() => _removeSelected = true);
+        }
+        return KeyEventResult.handled;
+      }
       if (key == LogicalKeyboardKey.arrowLeft) {
-        setState(() => _pane = _Pane.keyboard);
+        setState(() {
+          if (_removeSelected) {
+            _removeSelected = false;
+          } else {
+            _pane = _Pane.keyboard;
+          }
+        });
         return KeyEventResult.handled;
       }
       return KeyEventResult.handled;
@@ -427,30 +497,62 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
             controller: _listScroll,
             itemExtent: _suggestionExtent,
             itemCount: suggestions.length,
-            itemBuilder: (context, index) => _SelectableRow(
-              selected: _pane == _Pane.list && _listIndex == index,
-              onTap: () => _runSearch(suggestions[index]),
-              child: Row(
-                children: [
-                  const SizedBox(width: 12),
-                  Icon(
-                    SearchSuggestions.isFromHistory(suggestions[index], history)
-                        ? Icons.history
-                        : Icons.search,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      suggestions[index],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 18),
+            itemBuilder: (context, index) {
+              final suggestion = suggestions[index];
+              final fromHistory =
+                  SearchSuggestions.isFromHistory(suggestion, history);
+              final rowSelected = _pane == _Pane.list && _listIndex == index;
+              return _SelectableRow(
+                // Satırın kendisi seçili değilken bile çerçeve kaybolmasın:
+                // kaldır düğmesindeyken hangi aramanın silineceği görünmeli.
+                selected: rowSelected,
+                onTap: () => _runSearch(suggestion),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    Icon(fromHistory ? Icons.history : Icons.search, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        suggestion,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 18),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    if (fromHistory) ...[
+                      // İpucu yalnızca seçili satırda: kullanıcı silmenin
+                      // nasıl yapılacağını ekranda görsün.
+                      if (rowSelected && !_removeSelected)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text(
+                            'Kaldırmak için ▶',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      _RemoveButton(
+                        selected: rowSelected && _removeSelected,
+                        onTap: () {
+                          setState(() {
+                            _pane = _Pane.list;
+                            _listIndex = index;
+                            _removeSelected = true;
+                          });
+                          _removeSelectedHistory();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -582,6 +684,48 @@ class _SelectableRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: child,
+      ),
+    );
+  }
+}
+
+/// Geçmiş satırındaki "kaldır" düğmesi.
+///
+/// Kumandayla satırdan sağ ok ile geliniyor; seçiliyken televizyon
+/// mesafesinden ayırt edilebilsin diye dolu bir daire olarak çiziliyor.
+class _RemoveButton extends StatelessWidget {
+  const _RemoveButton({required this.selected, this.onTap});
+
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'Geçmişten kaldır',
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: selected ? scheme.error : Colors.transparent,
+            border: Border.all(
+              color: selected ? scheme.onError : scheme.outlineVariant,
+              width: 2,
+            ),
+          ),
+          child: Icon(
+            Icons.close,
+            size: 20,
+            color: selected ? scheme.onError : scheme.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }
