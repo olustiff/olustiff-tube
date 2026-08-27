@@ -71,10 +71,19 @@ class DialDiscovery {
       _sendAll(socket, probe, [InternetAddress('239.255.255.250')]);
       await Future<void>.delayed(_sweepDelay);
 
-      // Çok noktaya yayın işe yaradıysa 254 paket göndermeye gerek yok.
-      if (responses.isEmpty) {
-        _sendAll(socket, probe, _sweepTargets(addresses));
-      }
+      // Tarama HER ZAMAN yapılıyor — çok noktaya yayından cevap gelmiş olsa
+      // bile.
+      //
+      // "Cevap geldiyse taramayı atla" kısayolu gerçek ağda cihaz
+      // KAYBETTİRİYORDU: evdeki iki Cast cihazından biri çok noktaya yayına
+      // cevap veriyor, diğeri (asıl televizyon) yalnızca kendisine doğrudan
+      // sorulduğunda. İlkinin cevabı gelince tarama atlanıyor ve televizyon
+      // hiç sorulmadığı için listede görünmüyordu — arama arada bir boş
+      // dönüyor, arada bir doluyordu.
+      //
+      // Bedeli 254 küçük UDP paketi; birkaç milisaniye sürüyor ve keşfin
+      // süresini uzatmıyor (cevaplar zaten aynı pencerede toplanıyor).
+      _sendAll(socket, probe, _sweepTargets(addresses));
 
       final remaining = timeout - _sweepDelay;
       if (remaining > Duration.zero) {
