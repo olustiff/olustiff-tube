@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/playback/playback_client.dart';
+import '../../core/ui/tv_mode.dart';
 import 'bluetooth_setting.dart';
 import 'feedback_tile.dart';
 import 'update_section.dart';
@@ -62,16 +63,19 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              SwitchListTile(
-                secondary: const Icon(Icons.headphones),
-                title: const Text('Müzikleri sesli modda başlat'),
-                subtitle: const Text(
-                  'Şarkı ve müzik videoları görüntü indirilmeden açılır. '
-                  'Kapatırsan her şey video olarak başlar.',
+              // Televizyonda sesli mod hiç kullanılmıyor (ekran zaten
+              // karşıda); orada bu ayarı göstermek kafa karıştırıyor.
+              if (!TvMode.isTv.value)
+                SwitchListTile(
+                  secondary: const Icon(Icons.headphones),
+                  title: const Text('Müzikleri sesli modda başlat'),
+                  subtitle: const Text(
+                    'Şarkı ve müzik videoları görüntü indirilmeden açılır. '
+                    'Kapatırsan her şey video olarak başlar.',
+                  ),
+                  value: settings.musicAsAudio,
+                  onChanged: settings.setMusicAsAudio,
                 ),
-                value: settings.musicAsAudio,
-                onChanged: settings.setMusicAsAudio,
-              ),
               const BluetoothSetting(),
               SwitchListTile(
                 secondary: const Icon(Icons.playlist_play),

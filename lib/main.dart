@@ -73,15 +73,18 @@ class AkisApp extends StatelessWidget {
         if (child == null) return const SizedBox.shrink();
         return ValueListenableBuilder<bool>(
           valueListenable: TvMode.isTv,
-          builder: (context, isTv, _) => isTv
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
-                  ),
-                  child: child,
-                )
-              : child,
+          builder: (context, isTv, _) => ValueListenableBuilder<bool>(
+            valueListenable: TvMode.fullBleed,
+            builder: (context, fullBleed, _) => (isTv && !fullBleed)
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    child: child,
+                  )
+                : child,
+          ),
         );
       },
     );

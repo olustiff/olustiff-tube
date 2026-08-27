@@ -4,6 +4,7 @@ import '../data/library_store.dart';
 import '../data/settings_store.dart';
 import '../extraction/extraction_client.dart';
 import '../extraction/models.dart';
+import '../ui/tv_mode.dart';
 import 'content_kind.dart';
 import 'playback_client.dart';
 import 'queue_builder.dart';
@@ -155,7 +156,12 @@ class PlaybackCoordinator extends ChangeNotifier {
 
     // Açılış modu içeriğin türünden belirlenir; sonrası yalnızca kullanıcının.
     // Kullanıcı tercihi kapalıysa müzik de video modunda açılır.
-    final audioOnly = _settings.musicAsAudio &&
+    //
+    // Televizyonda sesli mod hiç kullanılmıyor: ekran zaten karşıda ve
+    // "ekranı kapatıp dinleme" diye bir senaryo yok — müzik videosu da
+    // izlemek için açılıyor.
+    final audioOnly = !TvMode.isTv.value &&
+        _settings.musicAsAudio &&
         detectContentKind(details) == ContentKind.music;
     final streams = selectStreams(
       details,

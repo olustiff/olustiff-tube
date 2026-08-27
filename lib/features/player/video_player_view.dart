@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/ui_channel.dart';
@@ -28,8 +29,9 @@ class VideoPlayerView extends StatefulWidget {
     required this.state,
     required this.playback,
     required this.isFullscreen,
+    this.tvMode = false,
     this.pipMode = false,
-    required this.onToggleFullscreen,
+    this.onToggleFullscreen,
     this.onEnterPip,
     this.posterUrl,
   });
@@ -40,7 +42,10 @@ class VideoPlayerView extends StatefulWidget {
 
   /// Küçük pencerede: yalnızca görüntü kalır, tüm düğmeler gizlenir.
   final bool pipMode;
-  final VoidCallback onToggleFullscreen;
+  final VoidCallback? onToggleFullscreen;
+
+  /// Televizyon: kumandayla gezilen, dokunmaya dayanmayan kontroller.
+  final bool tvMode;
   final VoidCallback? onEnterPip;
 
   /// İlk kare gelene kadar gösterilecek kapak.
@@ -118,7 +123,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return GestureDetector(
+        final gesture = GestureDetector(
           onTap: widget.pipMode ? null : _toggleControls,
           onDoubleTapDown: (d) {
             if (widget.pipMode) return;
@@ -145,6 +150,25 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
               ],
             ),
           ),
+        );
+
+        if (!widget.tvMode) return gesture;
+
+        // Kumandanın herhangi bir tuşu kontrolleri geri getirsin; gizliyken
+        // kullanıcının elinde başka bir yol kalmıyor.
+        return Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+            if (!_controlsVisible) {
+              setState(() => _controlsVisible = true);
+              _scheduleHide();
+              return KeyEventResult.handled;
+            }
+            _scheduleHide();
+            return KeyEventResult.ignored;
+          },
+          child: gesture,
         );
       },
     );
@@ -265,6 +289,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
             child: _RoundButton(
               icon: state.playWhenReady ? Icons.pause : Icons.play_arrow,
               size: 44,
+              autofocus: widget.tvMode,
               onPressed: () {
                 state.playWhenReady
                     ? widget.playback.pause()
@@ -305,7 +330,7 @@ class _BottomBar extends StatelessWidget {
   final PlaybackState state;
   final PlaybackClient playback;
   final bool isFullscreen;
-  final VoidCallback onToggleFullscreen;
+  final VoidCallback? onToggleFullscreen;
   final VoidCallback onInteraction;
 
   String _fmt(Duration d) {
@@ -358,14 +383,16 @@ class _BottomBar extends StatelessWidget {
             _fmt(duration),
             style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
-        _RoundButton(
-          icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-          tooltip: isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran',
-          onPressed: () {
-            onToggleFullscreen();
-            onInteraction();
-          },
-        ),
+        // Televizyonda oynatma zaten tam ekran; düğme oraya konmuyor.
+        if (onToggleFullscreen != null)
+          _RoundButton(
+            icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+            tooltip: isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran',
+            onPressed: () {
+              onToggleFullscreen!();
+              onInteraction();
+            },
+          ),
       ],
     );
   }
@@ -377,6 +404,7 @@ class _RoundButton extends StatelessWidget {
     required this.onPressed,
     this.tooltip,
     this.size = 22,
+    this.autofocus = false,
   });
 
   final IconData icon;
@@ -384,12 +412,24 @@ class _RoundButton extends StatelessWidget {
   final String? tooltip;
   final double size;
 
+  /// Televizyonda kontroller açılınca kumandanın odağı buraya gelsin.
+  final bool autofocus;
+
   @override
   Widget build(BuildContext context) {
     return IconButton(
       icon: Icon(icon, color: Colors.white, size: size),
       tooltip: tooltip,
       onPressed: onPressed,
+      autofocus: autofocus,
+      // Kumandayla gezerken hangi düğmede olunduğu görünmeli; varsayılan
+      // vurgu televizyon mesafesinden seçilemiyor.
+      focusColor: Colors.white.withValues(alpha: 0.4),
+      style: IconButton.styleFrom(
+        shape: const CircleBorder(
+          side: BorderSide(color: Colors.transparent, width: 2),
+        ),
+      ),
     );
   }
 }

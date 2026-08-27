@@ -8,6 +8,7 @@ import '../../core/extraction/models.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../../core/playback/sleep_timer.dart';
+import '../../core/ui/tv_mode.dart';
 import '../../core/playback/ui_channel.dart';
 import '../library/download_progress_bar.dart';
 import '../search/search_screen.dart';
@@ -284,6 +285,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildScreen(BuildContext context, bool pip) {
     final details = _coordinator.details;
     final audioOnly = _coordinator.audioOnly;
+
+    // Televizyonda oynatma tam ekran: kumandayla gezilen bir arayüzde üstteki
+    // menü çubuğu ve alttaki liste hem odağı dağıtıyor hem de görüntüyü
+    // küçültüyor. Kontroller görüntünün üzerinde beliriyor.
+    if (TvMode.isTv.value && !pip) {
+      return _TvPlayer(
+        details: details,
+        audioOnly: audioOnly,
+        playback: _playback,
+        coordinator: _coordinator,
+      );
+    }
 
     return Scaffold(
       // Küçük pencerede yalnızca görüntü kalır: başlık çubuğu, listeler
@@ -820,6 +833,70 @@ class _PreparingView extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Televizyonda oynatma ekranı: yalnızca görüntü ve üzerine binen kontroller.
+class _TvPlayer extends StatefulWidget {
+  const _TvPlayer({
+    required this.details,
+    required this.audioOnly,
+    required this.playback,
+    required this.coordinator,
+  });
+
+  final VideoDetails? details;
+  final bool audioOnly;
+  final PlaybackClient playback;
+  final PlaybackCoordinator coordinator;
+
+  @override
+  State<_TvPlayer> createState() => _TvPlayerState();
+}
+
+class _TvPlayerState extends State<_TvPlayer> {
+  @override
+  void initState() {
+    super.initState();
+    // Video ekranın tamamını doldursun: arayüz için bırakılan kenar payı
+    // burada siyah çerçeve olarak görünüyordu.
+    TvMode.fullBleed.value = true;
+  }
+
+  @override
+  void dispose() {
+    TvMode.fullBleed.value = false;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final video = widget.details;
+    if (video == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: StreamBuilder<PlaybackState>(
+        stream: widget.playback.stateStream,
+        builder: (context, snapshot) {
+          final state = snapshot.data ?? const PlaybackState();
+
+          return VideoPlayerView(
+            state: state,
+            playback: widget.playback,
+            // Televizyonda zaten tam ekran: "tam ekran" düğmesi anlamsız.
+            isFullscreen: true,
+            posterUrl: video.thumbnailUrl,
+            tvMode: true,
+          );
+        },
+      ),
     );
   }
 }
