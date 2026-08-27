@@ -608,6 +608,16 @@ class CastMediaStatus {
   /// Konum çubuğu "yükleniyor" göstermeli mi.
   bool get isBuffering => playerState == 'BUFFERING';
 
+  /// Kullanıcı açısından "oynuyor" sayılır mı.
+  ///
+  /// Yükleniyor da buna dahil ve bu bilinçli: gerçek cihazda yayın kurulduğu
+  /// anda alıcı birkaç saniye `BUFFERING` diyor. Yalnızca [isPlaying]'e
+  /// bakıldığında düğme o birkaç saniye "Oynat" yazıyordu — video birazdan
+  /// başlayacakken duraklatılmış gibi görünüyor ve kullanıcı basınca gerçekten
+  /// duruyordu. [isPlaying]'den AYRI duruyor çünkü konumu ilerletmek için
+  /// kullanılamaz: yüklenirken video ilerlemiyor.
+  bool get isActive => isPlaying || isBuffering;
+
   /// Televizyonda oynatılacak bir şey kalmadı mı.
   bool get isIdle => playerState == 'IDLE';
 

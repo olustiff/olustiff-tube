@@ -103,7 +103,10 @@ class YouTubeCastController extends ChangeNotifier {
   bool get hasLiveStatus => _status != null;
 
   /// Televizyonda video çalıyor mu; bilinmiyorsa null.
-  bool? get isPlaying => _status?.isPlaying;
+  ///
+  /// Yükleniyor durumu da "çalıyor" sayılıyor — gerekçesi
+  /// [CastMediaStatus.isActive] belgesinde.
+  bool? get isPlaying => _status?.isActive;
 
   Duration? get duration => _status?.duration;
 

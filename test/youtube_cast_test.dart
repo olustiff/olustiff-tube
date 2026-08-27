@@ -345,6 +345,24 @@ void main() {
       expect(status.title, 'Never Gonna Give You Up');
     });
 
+    // Yayın kurulduğu anda alıcı birkaç saniye BUFFERING diyor; düğmenin o
+    // sırada "Oynat" yazması videoyu duraklatılmış gösteriyordu.
+    test('yükleniyor durumu düğme için çalıyor sayılır', () {
+      final status = parseMediaStatus({
+        'type': 'MEDIA_STATUS',
+        'status': [
+          {
+            'mediaSessionId': 1,
+            'playerState': 'BUFFERING',
+            'currentTime': 3.0,
+          },
+        ],
+      })!;
+      expect(status.isActive, isTrue);
+      // Konumu ilerletmek için kullanılmamalı: yüklenirken video durgun.
+      expect(status.isPlaying, isFalse);
+    });
+
     test('yüklü video yoksa null döner', () {
       expect(
         parseMediaStatus({'type': 'MEDIA_STATUS', 'status': const []}),
