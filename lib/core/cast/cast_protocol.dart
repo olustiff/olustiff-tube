@@ -152,6 +152,8 @@ class CastRemoteState {
     this.position = Duration.zero,
     this.duration,
     this.isPlaying = false,
+    this.volume,
+    this.isMuted = false,
   });
 
   final String? videoId;
@@ -160,17 +162,44 @@ class CastRemoteState {
   final Duration? duration;
   final bool isPlaying;
 
+  /// Televizyonun medya ses seviyesi, 0..1 aralığında.
+  ///
+  /// null = televizyon bildirmedi (eski sürüm ya da ses seviyesi okunamadı);
+  /// arayüz o zaman kaydırıcıyı göstermez. 0 ile null AYRI şeyler: 0 "sesi
+  /// kısılmış", null "bilmiyoruz".
+  final double? volume;
+  final bool isMuted;
+
   Map<String, Object?> toJson() => {
         'videoId': videoId,
         'title': title,
         'positionMs': position.inMilliseconds,
         'durationMs': duration?.inMilliseconds,
         'isPlaying': isPlaying,
+        'volume': volume,
+        'muted': isMuted,
       };
+
+  CastRemoteState copyWith({
+    Duration? position,
+    bool? isPlaying,
+    double? volume,
+    bool? isMuted,
+  }) =>
+      CastRemoteState(
+        videoId: videoId,
+        title: title,
+        position: position ?? this.position,
+        duration: duration,
+        isPlaying: isPlaying ?? this.isPlaying,
+        volume: volume ?? this.volume,
+        isMuted: isMuted ?? this.isMuted,
+      );
 
   static CastRemoteState? tryParse(Object? raw) {
     if (raw is! Map) return null;
     final durationMs = raw['durationMs'];
+    final volume = raw['volume'];
     return CastRemoteState(
       videoId: raw['videoId'] as String?,
       title: raw['title'] as String?,
@@ -181,6 +210,8 @@ class CastRemoteState {
           ? Duration(milliseconds: durationMs.toInt())
           : null,
       isPlaying: raw['isPlaying'] as bool? ?? false,
+      volume: volume is num ? volume.toDouble().clamp(0.0, 1.0) : null,
+      isMuted: raw['muted'] as bool? ?? false,
     );
   }
 }
@@ -197,7 +228,29 @@ class CastCommand {
   static const String previous = 'previous';
   static const String stop = 'stop';
 
-  static const Set<String> all = {resume, pause, seek, next, previous, stop};
+  /// Mutlak ses seviyesi; `volume` alanıyla 0..1 arasında gelir.
+  static const String volume = 'volume';
+
+  /// Bir kademe artır/azalt. Kademe büyüklüğünü televizyon belirler —
+  /// telefon cihazın kaç kademesi olduğunu bilmek zorunda kalmasın.
+  static const String volumeUp = 'volumeUp';
+  static const String volumeDown = 'volumeDown';
+
+  /// Sessize alma; aç/kapa olarak çalışır.
+  static const String mute = 'mute';
+
+  static const Set<String> all = {
+    resume,
+    pause,
+    seek,
+    next,
+    previous,
+    stop,
+    volume,
+    volumeUp,
+    volumeDown,
+    mute,
+  };
 }
 
 /// Yayınla ilgili, kullanıcıya gösterilebilir hata.
