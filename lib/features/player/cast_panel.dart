@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/cast/cast_controller.dart';
 import '../../core/playback/playback_client.dart';
+import '../../core/playback/playback_coordinator.dart';
 
 /// Yayın açıkken oynatma ekranının yerini alan kumanda.
 ///
@@ -9,10 +10,18 @@ import '../../core/playback/playback_client.dart';
 /// davranmaya çalışması (kararmış bir video yüzeyi göstermesi) "bozuldu"
 /// hissi veriyordu; bunun yerine ekran açıkça bir kumandaya dönüşüyor.
 class CastPanel extends StatelessWidget {
-  const CastPanel({super.key, required this.title, this.thumbnailUrl});
+  const CastPanel({
+    super.key,
+    required this.title,
+    this.thumbnailUrl,
+    this.videoId,
+  });
 
   final String title;
   final String? thumbnailUrl;
+
+  /// Televizyonda çalan video. "Telefonda devam et" bunu telefonda açıyor.
+  final String? videoId;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +125,16 @@ class CastPanel extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              // Ses seviyesi televizyon bildirmediyse (okunamıyorsa) hiç
+              // gösterilmiyor: çalışmayan bir kaydırıcı, olmayandan kötü.
+              if (cast.volume != null)
+                _RemoteVolume(
+                  volume: cast.volume!,
+                  isMuted: cast.isMuted,
+                  onChanged: cast.setVolume,
+                  onToggleMute: cast.toggleMute,
+                ),
+              const SizedBox(height: 8),
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 8,
@@ -140,11 +159,24 @@ class CastPanel extends StatelessWidget {
   }
 
   /// Yayını kapatıp telefonu televizyonun kaldığı yerden sürdürür.
-  /// Televizyondaki oynatma durdurulur — yoksa aynı ses iki yerden gelirdi.
+  ///
+  /// Video telefonda YENİDEN açılıyor; kaldığı yerden "devam ettirmek"
+  /// yetmiyordu: yayın açıkken seçilen videolar telefonun oynatıcısına hiç
+  /// uğramıyor, dolayısıyla orada bambaşka (ya da hiç) bir medya duruyor.
   Future<void> _continueOnPhone(Duration position) async {
+    final coordinator = PlaybackCoordinator.instance;
+    final target = videoId ?? coordinator.details?.videoId;
+    // Önce yayın kapatılır: oturum açıkken [PlaybackCoordinator.play]
+    // videoyu yine televizyona gönderirdi.
     await CastController.instance.stopRemote();
+    if (target == null) return;
+    // Kuyruk korunuyor: kullanıcı "sırada"da gördüğü listeyi kaybetmesin.
+    await coordinator.play(
+      target,
+      exactQueue: coordinator.queue.isEmpty ? null : coordinator.queue,
+      index: coordinator.queueIndex,
+    );
     await PlaybackClient.shared.seekTo(position);
-    await PlaybackClient.shared.resume();
   }
 
   static Duration _clamp(Duration value) =>
@@ -217,5 +249,71 @@ class _RemoteProgressState extends State<_RemoteProgress> {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return d.inHours > 0 ? '${d.inHours}:$minutes:$seconds' : '$minutes:$seconds';
+  }
+}
+
+
+/// Televizyonun sesini yöneten satır.
+class _RemoteVolume extends StatefulWidget {
+  const _RemoteVolume({
+    required this.volume,
+    required this.isMuted,
+    required this.onChanged,
+    required this.onToggleMute,
+  });
+
+  final double volume;
+  final bool isMuted;
+  final ValueChanged<double> onChanged;
+  final VoidCallback onToggleMute;
+
+  @override
+  State<_RemoteVolume> createState() => _RemoteVolumeState();
+}
+
+class _RemoteVolumeState extends State<_RemoteVolume> {
+  /// Sürükleme sürerken kaydırıcının takip ettiği değer.
+  ///
+  /// Televizyondan gelen seviye saniyede bir güncelleniyor; sürükleme
+  /// sırasında onu dinlemek parmağın altındaki noktayı geri sıçratırdı.
+  double? _dragging;
+
+  IconData get _icon {
+    if (widget.isMuted || widget.volume <= 0) return Icons.volume_off;
+    return widget.volume < 0.5 ? Icons.volume_down : Icons.volume_up;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _dragging ?? widget.volume.clamp(0.0, 1.0);
+    return Row(
+      children: [
+        IconButton(
+          tooltip: widget.isMuted ? 'Sesi aç' : 'Sesi kapat',
+          icon: Icon(_icon),
+          onPressed: widget.onToggleMute,
+        ),
+        Expanded(
+          child: Slider(
+            value: value,
+            // Sessizdeyken kaydırıcı sıfırda değil, kısılmış SEVİYEDE
+            // duruyor; sessizlik ayrı bir durum ve simgeden okunuyor.
+            onChanged: (v) => setState(() => _dragging = v),
+            onChangeEnd: (v) {
+              setState(() => _dragging = null);
+              widget.onChanged(v);
+            },
+          ),
+        ),
+        SizedBox(
+          width: 44,
+          child: Text(
+            '%${(value * 100).round()}',
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
   }
 }

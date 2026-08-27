@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../playback/playback_client.dart';
+import '../playback/ui_channel.dart';
 import 'cast_client.dart';
 import 'cast_discovery.dart';
 import 'cast_protocol.dart';
@@ -27,6 +28,24 @@ class CastController extends ChangeNotifier {
   CastClient? _client;
   Timer? _poll;
 
+  /// Üst üste kaçıncı yoklamanın cevapsız kaldığı.
+  ///
+  /// Tek bir kayıp paket yüzünden kullanıcının kumandasını elinden almak
+  /// yanlış olur; ama televizyon gerçekten gittiyse (kapandı, uygulama
+  /// kapandı, ağ koptu) telefon bunu fark edip normal moda dönmeli — yoksa
+  /// kullanıcı ölü bir kumandayla kalıyor.
+  int _missedPolls = 0;
+
+  /// Bu kadar yoklama üst üste cevapsız kalırsa oturum bitmiş sayılır.
+  static const _maxMissedPolls = 3;
+
+  /// Ses düğmelerinin bir basışta ne kadar oynattığı.
+  ///
+  /// Televizyonun kendi kademesi (0..100 aralığında 1 birim) çok küçük:
+  /// kullanıcı sesi duyulur şekilde açmak için yirmi kez basmak zorunda
+  /// kalırdı.
+  static const double volumeStep = 0.05;
+
   CastDevice? _device;
 
   /// Yayının gittiği televizyon; yayın kapalıysa null.
@@ -37,6 +56,11 @@ class CastController extends ChangeNotifier {
 
   /// Televizyonda çalanın son bilinen hâli. Yoklamayla güncellenir.
   CastRemoteState? get remoteState => _remoteState;
+
+  /// Televizyonun bildirdiği ses seviyesi (0..1); bilinmiyorsa null.
+  double? get volume => _remoteState?.volume;
+
+  bool get isMuted => _remoteState?.isMuted ?? false;
 
   bool _searching = false;
   bool get isSearching => _searching;
@@ -96,6 +120,7 @@ class CastController extends ChangeNotifier {
     _client?.close();
     _client = client;
     _device = target;
+    _missedPolls = 0;
     _remoteState = CastRemoteState(
       videoId: videoId,
       title: title,
@@ -106,6 +131,7 @@ class CastController extends ChangeNotifier {
     notifyListeners();
 
     await PlaybackClient.shared.pause();
+    _bindVolumeKeys(true);
     _startPolling();
     return true;
   }
@@ -142,6 +168,18 @@ class CastController extends ChangeNotifier {
   Future<void> seekTo(Duration position) =>
       _send(CastCommand.seek, position: position);
 
+  /// Televizyonun sesini mutlak olarak ayarlar (0..1).
+  Future<void> setVolume(double value) =>
+      _send(CastCommand.volume, volume: value.clamp(0.0, 1.0));
+
+  /// Sesi bir kademe açar. Sessizdeyse önce sessizlikten çıkar — kullanıcı
+  /// ses tuşuna bastığında beklediği budur.
+  Future<void> volumeUp() => _send(CastCommand.volumeUp);
+
+  Future<void> volumeDown() => _send(CastCommand.volumeDown);
+
+  Future<void> toggleMute() => _send(CastCommand.mute);
+
   /// Televizyonda çalanı durdurup yayını kapatır.
   Future<void> stopRemote() async {
     await _send(CastCommand.stop);
@@ -153,6 +191,7 @@ class CastController extends ChangeNotifier {
   /// Kullanıcı çoğu zaman "telefonu bırakıp televizyonda izlemeye devam"
   /// istiyor; bağlantıyı kesmenin televizyonu da susturması sürpriz olurdu.
   Future<void> disconnect() async {
+    _bindVolumeKeys(false);
     _poll?.cancel();
     _poll = null;
     _client?.close();
@@ -162,14 +201,29 @@ class CastController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _send(String action, {Duration? position}) async {
+  /// Telefonun fiziksel ses tuşlarını televizyona bağlar ya da bırakır.
+  ///
+  /// Hata yutuluyor: native taraf bu yöntemi tanımıyorsa (eski kurulum)
+  /// ekrandaki kaydırıcı yine çalışıyor, yalnızca yan tuşlar telefonun kendi
+  /// sesini değiştiriyor.
+  void _bindVolumeKeys(bool enabled) {
+    final ui = UiChannel.instance;
+    ui.onCastVolumeKey = enabled
+        ? (direction) => direction == 'up' ? volumeUp() : volumeDown()
+        : null;
+    ui.setCastVolumeKeys(enabled).catchError((Object e) {
+      debugPrint('cast: ses tuşları yönlendirilemedi: $e');
+    });
+  }
+
+  Future<void> _send(String action, {Duration? position, double? volume}) async {
     final client = _client;
     if (client == null) return;
     try {
-      await client.command(action, position: position);
+      await client.command(action, position: position, volume: volume);
       // Kullanıcı düğmeye bastığında arayüz beklemeden tepki vermeli;
       // yoklama saniyeler sonra geliyor.
-      _applyOptimistic(action, position);
+      _applyOptimistic(action, position, volume);
     } on CastException catch (e) {
       _lastError = e.message;
       notifyListeners();
@@ -177,31 +231,27 @@ class CastController extends ChangeNotifier {
   }
 
   /// Komutun beklenen sonucunu yerel duruma hemen yansıtır.
-  void _applyOptimistic(String action, Duration? position) {
+  void _applyOptimistic(String action, Duration? position, double? volume) {
     final state = _remoteState;
     if (state == null) return;
+    final current = state.volume;
     _remoteState = switch (action) {
-      CastCommand.resume => CastRemoteState(
-          videoId: state.videoId,
-          title: state.title,
-          position: state.position,
-          duration: state.duration,
-          isPlaying: true,
-        ),
-      CastCommand.pause => CastRemoteState(
-          videoId: state.videoId,
-          title: state.title,
-          position: state.position,
-          duration: state.duration,
-          isPlaying: false,
-        ),
-      CastCommand.seek => CastRemoteState(
-          videoId: state.videoId,
-          title: state.title,
-          position: position ?? state.position,
-          duration: state.duration,
-          isPlaying: state.isPlaying,
-        ),
+      CastCommand.resume => state.copyWith(isPlaying: true),
+      CastCommand.pause => state.copyWith(isPlaying: false),
+      CastCommand.seek => state.copyWith(position: position ?? state.position),
+      CastCommand.volume => state.copyWith(volume: volume, isMuted: false),
+      // Ses seviyesi henüz bilinmiyorsa tahmin yürütmüyoruz; bir sonraki
+      // yoklama gerçek değeri getirecek.
+      CastCommand.volumeUp => current == null
+          ? state
+          : state.copyWith(
+              volume: (current + volumeStep).clamp(0.0, 1.0),
+              isMuted: false,
+            ),
+      CastCommand.volumeDown => current == null
+          ? state
+          : state.copyWith(volume: (current - volumeStep).clamp(0.0, 1.0)),
+      CastCommand.mute => state.copyWith(isMuted: !state.isMuted),
       _ => state,
     };
     notifyListeners();
@@ -209,13 +259,22 @@ class CastController extends ChangeNotifier {
 
   void _startPolling() {
     _poll?.cancel();
+    _missedPolls = 0;
     _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
       final client = _client;
       if (client == null) return;
       final state = await client.remoteState();
-      // null = ulaşılamadı. Bağlantıyı burada KESMİYORUZ: tek bir paket
-      // kaybı yüzünden kullanıcının kumandasını elinden almak yanlış olur.
-      if (state == null) return;
+      if (state == null) {
+        // Tek bir kayıp paket oturumu bitirmez; ısrarla cevapsız kalması
+        // televizyonun gittiği anlamına gelir.
+        if (++_missedPolls < _maxMissedPolls) return;
+        final name = _device?.name;
+        await disconnect();
+        _lastError = '${name ?? "Televizyon"} bağlantısı koptu.';
+        notifyListeners();
+        return;
+      }
+      _missedPolls = 0;
       _remoteState = state;
       notifyListeners();
     });

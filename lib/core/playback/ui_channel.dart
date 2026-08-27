@@ -9,6 +9,8 @@ class UiChannel {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'pipChanged') {
         isInPictureInPicture.value = call.arguments as bool? ?? false;
+      } else if (call.method == 'castVolumeKey') {
+        onCastVolumeKey?.call(call.arguments as String? ?? '');
       }
       return null;
     });
@@ -24,6 +26,19 @@ class UiChannel {
   /// hem okunaksız hem de gereksiz. Oynat/duraklat'ı sistem kendi düğmesiyle
   /// veriyor.
   final ValueNotifier<bool> isInPictureInPicture = ValueNotifier(false);
+
+  /// Fiziksel ses tuşuna basıldığında çağrılır: 'up' ya da 'down'.
+  ///
+  /// Yalnızca [setCastVolumeKeys] açıkken tetiklenir. Yayını yöneten taraf
+  /// (CastController) bunu doldurup boşaltıyor.
+  void Function(String direction)? onCastVolumeKey;
+
+  /// Ses tuşlarını televizyona yönlendirmeyi açar/kapatır.
+  ///
+  /// Açıkken telefonun KENDİ sesi değişmez: ses televizyondan geliyor,
+  /// telefonunkini kısmak kullanıcıyı şaşırtırdı.
+  Future<void> setCastVolumeKeys(bool enabled) =>
+      _channel.invokeMethod<void>('setCastVolumeKeys', {'enabled': enabled});
 
   /// Video izlenirken ekranın kapanmasını engeller. Sesli modda kapatılır ki
   /// telefon normal şekilde uyuyabilsin.

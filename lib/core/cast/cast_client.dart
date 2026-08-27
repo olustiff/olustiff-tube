@@ -37,13 +37,16 @@ class CastClient {
       });
 
   /// Uzaktan kumanda komutu gönderir.
-  Future<void> command(String action, {Duration? position}) {
+  ///
+  /// [volume] yalnızca mutlak ses komutunda anlamlı (0..1).
+  Future<void> command(String action, {Duration? position, double? volume}) {
     if (!CastCommand.all.contains(action)) {
       throw CastException('Bilinmeyen komut: $action');
     }
     return _post('/command', {
       'action': action,
       if (position != null) 'positionMs': position.inMilliseconds,
+      if (volume != null) 'volume': volume.clamp(0.0, 1.0),
     });
   }
 

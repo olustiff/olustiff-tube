@@ -420,6 +420,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         child: CastPanel(
           title: details?.title ?? cast.remoteState?.title ?? '',
           thumbnailUrl: details?.thumbnailUrl,
+          videoId: details?.videoId ?? cast.remoteState?.videoId,
         ),
       );
     }

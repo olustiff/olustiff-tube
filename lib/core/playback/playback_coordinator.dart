@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../cast/cast_controller.dart';
+import '../cast/cast_protocol.dart';
 import '../data/library_store.dart';
 import '../data/settings_store.dart';
 import '../extraction/extraction_client.dart';
@@ -154,6 +156,39 @@ class PlaybackCoordinator extends ChangeNotifier {
     final details = await _extraction.videoDetails(videoId);
     if (_isStale(requestId)) return;
 
+    final seed = _summaryOf(details);
+
+    // YAYIN AÇIKSA oynatma televizyonda olur.
+    //
+    // Bu dal, oynatmanın tek giriş kapısında duruyor: listeden, kuyruktan,
+    // "sırada"dan — nereden seçilirse seçilsin video televizyona gider.
+    // Kontrolün telefonda, sesin televizyonda olduğu bir ara durum bırakmıyor.
+    if (CastController.instance.isCasting) {
+      _prepareQueue(seed, details, exactQueue, index, videoId);
+      _details = details;
+      // Kalite ve ses/video seçimi televizyonun işi; telefon çözümleme bile
+      // yapmıyor.
+      _audioOnly = false;
+      _qualityLabel = null;
+      notifyListeners();
+
+      if (_isStale(requestId)) return;
+      final sent = await CastController.instance.sendCurrent(
+        videoId: videoId,
+        title: details.title,
+        artist: details.uploaderName,
+        thumbnailUrl: details.thumbnailUrl,
+      );
+      if (!sent) {
+        throw CastException(
+          CastController.instance.lastError ??
+              'Video televizyona gönderilemedi.',
+        );
+      }
+      await _library.recordWatch(seed);
+      return;
+    }
+
     // Açılış modu içeriğin türünden belirlenir; sonrası yalnızca kullanıcının.
     // Kullanıcı tercihi kapalıysa müzik de video modunda açılır.
     //
@@ -175,20 +210,8 @@ class PlaybackCoordinator extends ChangeNotifier {
       );
     }
 
-    final seed = _summaryOf(details);
-
-    if (exactQueue != null) {
-      // Çalma listesi gibi sırası kullanıcı tarafından belirlenmiş listeler
-      // karıştırılmaz.
-      _sourceList = exactQueue;
-      _queueMode = QueueMode.listOrder;
-      _queue = exactQueue;
-      _index = index ?? exactQueue.indexWhere((v) => v.videoId == videoId);
-    } else {
-      _sourceList = context;
-      _queue = _buildQueue(seed, details);
-      _index = 0;
-    }
+    _sourceList = context;
+    _prepareQueue(seed, details, exactQueue, index, videoId);
 
     _details = details;
     _audioOnly = audioOnly;
@@ -224,6 +247,28 @@ class PlaybackCoordinator extends ChangeNotifier {
       title: details.title,
       artist: details.uploaderName,
     );
+  }
+
+  /// "Sırada" listesini kurar. Yayın açıkken de kuruluyor: kullanıcı telefonda
+  /// kuyruğu görüp içinden seçebilmeli.
+  void _prepareQueue(
+    VideoSummary seed,
+    VideoDetails details,
+    List<VideoSummary>? exactQueue,
+    int? index,
+    String videoId,
+  ) {
+    if (exactQueue != null) {
+      // Çalma listesi gibi sırası kullanıcı tarafından belirlenmiş listeler
+      // karıştırılmaz.
+      _sourceList = exactQueue;
+      _queueMode = QueueMode.listOrder;
+      _queue = exactQueue;
+      _index = index ?? exactQueue.indexWhere((v) => v.videoId == videoId);
+    } else {
+      _queue = _buildQueue(seed, details);
+      _index = 0;
+    }
   }
 
   List<VideoSummary> _buildQueue(VideoSummary seed, VideoDetails details) {
@@ -293,6 +338,12 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// Native taraf kuyrukta ilerlediğinde (parça bitti → sıradaki) arayüzü
   /// gerçekte çalanla eşitler.
   Future<void> syncFromNative(String videoId, int nativeIndex) async {
+    // Yayın açıkken telefonun kendi oynatıcısı duraklatılmış olsa da SON
+    // yüklediği medyayı bildirmeye devam ediyor. Onu dinlemek ekranı
+    // televizyonda çalanla değil, telefonda kalanla eşitlerdi: kullanıcı
+    // televizyonda başka bir video izlerken telefonda eski başlığı görüyor,
+    // düğmeler de başka bir şeyi yönetiyor gibi oluyordu.
+    if (CastController.instance.isCasting) return;
     if (_details?.videoId == videoId) return;
     if (_syncFailedFor == videoId) return;
 
@@ -360,11 +411,34 @@ class PlaybackCoordinator extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> playNext() => _playback.next();
+  /// Sıradakine geçer.
+  ///
+  /// Yayın açıkken kuyrukta ilerleme TELEVİZYONDA yaşıyor (kuyruğu oraya
+  /// gönderdik); telefonun kendi oynatıcısına komut vermek sessiz bir
+  /// oynatıcıyı ilerletmekten başka işe yaramazdı.
+  Future<void> playNext() =>
+      CastController.instance.isCasting
+          ? CastController.instance.next()
+          : _playback.next();
 
-  Future<void> playPrevious() => _playback.previous();
+  Future<void> playPrevious() =>
+      CastController.instance.isCasting
+          ? CastController.instance.previous()
+          : _playback.previous();
 
-  Future<void> playQueueIndex(int index) => _playback.playQueueIndex(index);
+  /// Kuyruktan belirli bir videoya atlar.
+  ///
+  /// Yayın açıkken televizyonun kuyruğu telefonunkiyle aynı olmayabilir
+  /// (televizyon kendi ilgili videolarını da katıyor); bu yüzden "kaçıncı
+  /// sıradaki" değil, videonun KENDİSİ gönderiliyor.
+  Future<void> playQueueIndex(int index) async {
+    if (!CastController.instance.isCasting) {
+      return _playback.playQueueIndex(index);
+    }
+    final target = _queue.elementAtOrNull(index)?.videoId;
+    if (target == null) return;
+    await play(target, exactQueue: _queue, index: index);
+  }
 
   Future<void> setAutoplay(bool value) async {
     await _settings.setAutoplay(value);
@@ -375,6 +449,9 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// Oynatma uygulama DIŞINDAN bitirildiğinde (bildirimdeki kapat düğmesi)
   /// arayüzü temizler. Native'e komut göndermez — orada zaten durdu.
   void handleStoppedExternally() {
+    // Yayın açıkken telefonun oynatıcısı zaten susturuldu; onun "durdum"
+    // demesi televizyonda çalanı ekrandan silmemeli.
+    if (CastController.instance.isCasting) return;
     // Yeni bir medya hazırlanıyorsa bu, henüz medya yüklenmemiş olmasından
     // kaynaklanan geçici bir durumdur; temizlemek hazırlığı bozardı.
     if (_loading) return;

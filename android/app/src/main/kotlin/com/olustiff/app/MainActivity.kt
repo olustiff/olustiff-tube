@@ -18,6 +18,7 @@ import android.speech.RecognizerIntent
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
+import android.view.KeyEvent
 import android.view.WindowManager
 import com.olustiff.app.cast.CastReceiver
 import com.olustiff.app.download.DownloadController
@@ -118,6 +119,14 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "enterPictureInPicture" -> result.success(enterPip())
+
+                // Yayın açıkken telefonun fiziksel ses tuşları TELEVİZYONUN
+                // sesini değiştirmeli: ses oradan geliyor, kullanıcının ilk
+                // refleksi telefonun yan tuşuna basmak oluyor.
+                "setCastVolumeKeys" -> {
+                    castVolumeKeys = call.argument<Boolean>("enabled") ?: false
+                    result.success(null)
+                }
 
                 // Televizyonda kumandayla geziliyor: arayüz odak çerçevesi
                 // gösterip dokunmaya özel hareketleri devre dışı bırakıyor.
@@ -232,6 +241,34 @@ class MainActivity : FlutterActivity() {
         // Bazı TV kutuları UiModeManager'ı doğru bildirmiyor; leanback
         // özelliği daha güvenilir bir işaret.
         return packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
+
+    /** Ses tuşları televizyona mı yönlendirilsin. */
+    private var castVolumeKeys = false
+
+    /**
+     * Fiziksel ses tuşlarını yakalar.
+     *
+     * `dispatchKeyEvent` KULLANILIYOR: ses tuşları normalde Flutter'a hiç
+     * ulaşmadan sistem tarafından işleniyor, `onKeyDown` çoğu cihazda geç
+     * kalıyor. Yayın kapalıyken hiçbir şey değişmiyor — tuşlar sisteme
+     * olduğu gibi gidiyor.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        val isVolumeKey = code == KeyEvent.KEYCODE_VOLUME_UP ||
+            code == KeyEvent.KEYCODE_VOLUME_DOWN
+        if (!castVolumeKeys || !isVolumeKey) return super.dispatchKeyEvent(event)
+
+        // Tuş YUTULUYOR: telefonun kendi sesini değiştirmek anlamsız, çünkü
+        // telefon susturulmuş durumda.
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            pipChannel?.invokeMethod(
+                "castVolumeKey",
+                if (code == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down"
+            )
+        }
+        return true
     }
 
     /**

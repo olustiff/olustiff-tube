@@ -1,6 +1,7 @@
 package com.olustiff.app.cast
 
 import android.content.Context
+import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Handler
 import android.os.Looper
@@ -16,6 +17,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.charset.StandardCharsets
+import kotlin.math.roundToInt
 
 /**
  * Televizyon tarafındaki yayın (cast) alıcısı.
@@ -59,7 +61,23 @@ class CastReceiver(
      * olarak buraya YAZILIYOR, istek anında okunuyor.
      */
     @Volatile
-    private var stateJson: String = "null"
+    private var playbackState: Map<*, *>? = null
+
+    /**
+     * Televizyonun medya sesini yöneten servis.
+     *
+     * Neden ExoPlayer'ın kendi `volume` değeri DEĞİL de cihazın medya sesi:
+     * - Kullanıcının "televizyonun sesi" dediği şey bu; kumandayla
+     *   değiştirdiğiyle aynı düğme olmalı.
+     * - Cihaz sesini değiştirmek televizyonun kendi ses göstergesini de
+     *   açıyor: karşıdan bakan kullanıcı ne olduğunu görüyor.
+     * - Ses yükseltme (LoudnessBoost) ExoPlayer'ın ses oturumuna uygulanan
+     *   AYRI bir kazanç katmanı. Seviye ile kazanç birbirine karışmasın diye
+     *   seviyeyi player'ın dışında tutuyoruz; biri diğerini sıfırlamıyor.
+     */
+    private val audio: AudioManager? by lazy {
+        context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
 
     init {
         channel.setMethodCallHandler { call, result -> handleMethod(call, result) }
@@ -73,7 +91,7 @@ class CastReceiver(
             }
 
             "publishState" -> {
-                stateJson = encodeState(call.arguments)
+                playbackState = call.arguments as? Map<*, *>
                 result.success(null)
             }
 
@@ -238,7 +256,7 @@ class CastReceiver(
                 respond(client, 200, announcement())
 
             request.method == "GET" && request.path == "/state" ->
-                respond(client, 200, """{"ok":true,"state":$stateJson}""")
+                respond(client, 200, """{"ok":true,"state":${encodeState()}}""")
 
             request.method == "POST" && request.path == "/cast" ->
                 handleCast(client, request.body)
@@ -282,12 +300,99 @@ class CastReceiver(
             respond(client, 400, """{"ok":false,"error":"unknown_command"}""")
             return
         }
+
+        // Ses komutları Flutter'a UĞRAMADAN burada işleniyor: ses seviyesi
+        // AudioManager'da yaşıyor, oynatıcıda değil. Ayrıca ses tuşuna
+        // basıldığında gecikme en çok burada göze batar.
+        if (action in VOLUME_COMMANDS) {
+            val applied = applyVolume(action, json)
+            respond(
+                client,
+                if (applied) 200 else 500,
+                if (applied) """{"ok":true}"""
+                else """{"ok":false,"error":"volume_unavailable"}"""
+            )
+            return
+        }
+
         val payload = mapOf(
             "action" to action,
             "positionMs" to (json?.optLong("positionMs") ?: 0L)
         )
         mainHandler.post { channel.invokeMethod("castCommand", payload) }
         respond(client, 200, """{"ok":true}""")
+    }
+
+    /**
+     * Ses komutunu uygular.
+     *
+     * FLAG_SHOW_UI: televizyonun kendi ses göstergesi açılsın — kullanıcı
+     * telefondan bastığında ekranda karşılığını görüyor.
+     */
+    private fun applyVolume(action: String, json: JSONObject?): Boolean {
+        val manager = audio ?: return false
+        val max = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return false
+
+        return runCatching {
+            when (action) {
+                "volume" -> {
+                    val level = json?.optDouble("volume", 0.0) ?: 0.0
+                    val index = (level.coerceIn(0.0, 1.0) * max).roundToInt()
+                    // Sesi elle ayarlamak sessizliği de bozar: kullanıcı
+                    // kaydırıcıyı çektiğinde ses gelmesini bekler.
+                    if (manager.isStreamMute(AudioManager.STREAM_MUSIC)) {
+                        manager.adjustStreamVolume(
+                            AudioManager.STREAM_MUSIC,
+                            AudioManager.ADJUST_UNMUTE,
+                            0
+                        )
+                    }
+                    manager.setStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        index,
+                        AudioManager.FLAG_SHOW_UI
+                    )
+                }
+
+                "volumeUp", "volumeDown" -> {
+                    // Cihazın kendi kademesi (0..100 aralığında 1 birim) çok
+                    // küçük; duyulur bir fark için sabit oranlı adım
+                    // kullanılıyor.
+                    val step = (max * VOLUME_STEP).roundToInt().coerceAtLeast(1)
+                    val current = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    val delta = if (action == "volumeUp") step else -step
+                    if (action == "volumeUp" &&
+                        manager.isStreamMute(AudioManager.STREAM_MUSIC)
+                    ) {
+                        manager.adjustStreamVolume(
+                            AudioManager.STREAM_MUSIC,
+                            AudioManager.ADJUST_UNMUTE,
+                            0
+                        )
+                    }
+                    manager.setStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        (current + delta).coerceIn(0, max),
+                        AudioManager.FLAG_SHOW_UI
+                    )
+                }
+
+                "mute" -> manager.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.ADJUST_TOGGLE_MUTE,
+                    AudioManager.FLAG_SHOW_UI
+                )
+
+                else -> return false
+            }
+            true
+        }.getOrElse {
+            // "Rahatsız etmeyin" açıkken ses değiştirmek SecurityException
+            // fırlatabiliyor; telefona dürüstçe "olmadı" diyoruz.
+            Log.w(TAG, "Ses ayarlanamadı", it)
+            false
+        }
     }
 
     // --------------------------------------------------------------- HTTP altyapı
@@ -358,15 +463,34 @@ class CastReceiver(
         }
     }
 
-    /** Flutter'dan gelen durum haritasını JSON'a çevirir. */
-    private fun encodeState(arguments: Any?): String {
-        val map = arguments as? Map<*, *> ?: return "null"
+    /**
+     * Telefona bildirilecek durum.
+     *
+     * Oynatma bilgisi Flutter'dan geliyor, ses ise HER İSTEKTE cihazdan
+     * okunuyor: kullanıcı televizyonun kendi kumandasıyla sesi değiştirdiğinde
+     * telefondaki kaydırıcı da doğru yeri göstersin.
+     */
+    private fun encodeState(): String {
+        val map = playbackState ?: return "null"
+        val manager = audio
+        val max = manager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 0
         return JSONObject().apply {
             put("videoId", map["videoId"] ?: JSONObject.NULL)
             put("title", map["title"] ?: JSONObject.NULL)
             put("positionMs", map["positionMs"] ?: 0)
             put("durationMs", map["durationMs"] ?: JSONObject.NULL)
             put("isPlaying", map["isPlaying"] ?: false)
+            if (manager != null && max > 0) {
+                put(
+                    "volume",
+                    manager.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max
+                )
+                put("muted", manager.isStreamMute(AudioManager.STREAM_MUSIC))
+            } else {
+                // null = "bilmiyoruz"; telefon kaydırıcıyı hiç göstermiyor.
+                put("volume", JSONObject.NULL)
+                put("muted", false)
+            }
         }.toString()
     }
 
@@ -379,8 +503,15 @@ class CastReceiver(
         private const val DISCOVERY_PORT = 45632
         private const val CONTROL_PORT = 45633
 
+        private val VOLUME_COMMANDS =
+            setOf("volume", "volumeUp", "volumeDown", "mute")
+
         private val COMMANDS =
-            setOf("resume", "pause", "seek", "next", "previous", "stop")
+            setOf("resume", "pause", "seek", "next", "previous", "stop") +
+                VOLUME_COMMANDS
+
+        /** Bir ses düğmesi basışının oynattığı oran. */
+        private const val VOLUME_STEP = 0.05
 
         private const val HEADER_END = 0x0D0A0D0A
         private const val MAX_HEADER_BYTES = 8 * 1024
