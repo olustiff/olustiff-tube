@@ -74,6 +74,16 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- Video, Flutter'ın Texture widget'ıyla (harici doku) çiziliyor.
+             Impeller'ın Vulkan yolu bazı Mali sürücülerinde bu dokuyu yanlış
+             satır adımıyla okuyor ve görüntü mozaik gibi bozuluyor; Android TV
+             kutusunda (Mali-G52) A/B testiyle doğrulandı. Impeller kapalıyken
+             aynı video kusursuz çiziliyor.
+             Tek yapılandırma, tüm cihazlarda geçerli. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
