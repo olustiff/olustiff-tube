@@ -17,6 +17,7 @@ import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.content.res.Configuration
 import android.os.Build
+import android.os.Bundle
 import android.util.Rational
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -53,6 +54,36 @@ class MainActivity : FlutterActivity() {
     private var updateController: UpdateController? = null
     /** Televizyonda alıcıya takılı Flutter kanalı; telefonda null. */
     private var castChannel: MethodChannel? = null
+
+    /**
+     * Televizyonda ekranı açar ve ekran koruyucuyu düşürür.
+     *
+     * Yayın isteği geldiğinde televizyon çoğu zaman ekran koruyucudadır.
+     * Eskiden yalnızca `FULL_WAKE_LOCK` alınıyordu; o ekranı açıyor ama ekran
+     * koruyucuyu DÜŞÜRMÜYOR. Uygulama koruyucunun ARKASINDA açılıyor, video
+     * çizecek yüzey bulamadığı için hiç başlamıyordu: televizyonda saat
+     * duruyor, telefonda "gönderildi" yazıyordu. Ölçüldüğünde video doğru
+     * konumda yükleniyor ama `isPlaying` false kalıyordu.
+     *
+     * `setTurnScreenOn` + `setShowWhenLocked` bu işin desteklenen yolu.
+     *
+     * Yalnızca TELEVİZYONDA: telefonda uygulamayı kilit ekranının üstünde
+     * göstermenin bir karşılığı yok, üstelik istenmeyen bir davranış olurdu.
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (!isTelevision()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+            )
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
