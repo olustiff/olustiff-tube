@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
+import '../../core/playback/stream_selection.dart' show autoQualityLabel;
 import 'video_surface.dart';
 
 /// Televizyonda oynatma ekranı: video tam ekran, kontroller kumandayla.
@@ -588,7 +589,10 @@ class _TvPlayerState extends State<TvPlayer> {
               ? _QualityOverlay(
                   options: widget.coordinator.availableQualities,
                   selected: _qualityIndex,
-                  current: widget.coordinator.qualityLabel,
+                  current: qualityDetail(
+                    state.videoHeight,
+                    widget.coordinator.qualityLabel,
+                  ),
                 )
               : const SizedBox.shrink(),
         ),
@@ -1052,6 +1056,22 @@ class _QueueCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Kalite satırında gösterilecek "o an ne oynuyor" metni.
+///
+/// Önce oynatıcının BİLDİRDİĞİ çözünürlüğe bakılıyor. Koordinatörün etiketi
+/// bu iş için yetmiyor: "Otomatik" seçildiğinde etiket de "Otomatik" oluyor ve
+/// ekranda "Otomatik • Otomatik" yazıyordu — kullanıcıya asıl merak ettiği
+/// şeyi, o an kaç p oynadığını hiç söylemiyordu.
+///
+/// Çözünürlük bilinmiyorsa (ses açılmadan önce, sesli mod) etiket kullanılıyor;
+/// o da "Otomatik" ise null dönüyor, çünkü kelimeyi iki kez yazmaktansa hiç
+/// yazmamak doğru.
+String? qualityDetail(int videoHeight, String? label) {
+  if (videoHeight > 0) return '${videoHeight}p';
+  if (label == null || label == autoQualityLabel) return null;
+  return label;
 }
 
 /// Kalite listesi.
