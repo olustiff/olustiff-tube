@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/data/library_store.dart';
 import '../../core/extraction/models.dart';
@@ -10,6 +11,7 @@ import '../player/player_route.dart';
 import '../search/search_screen.dart';
 import '../search/video_list.dart';
 import '../settings/settings_screen.dart';
+import '../../core/ui/tv_mode.dart';
 import '../settings/update_prompt.dart';
 import 'app_title.dart';
 import 'feed_tabs.dart';
@@ -29,6 +31,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _feed = HomeFeed();
   final _library = LibraryStore.instance;
+
+  /// Televizyonda kumandanın yukarı oku bu düğmeye çıkıyor.
+  final _searchFocus = FocusNode(debugLabel: 'anaEkranArama');
 
   List<VideoSummary> _videos = const [];
   bool _loading = false;
@@ -55,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _library.removeListener(_onLibraryChanged);
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -113,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const AppTitle(),
         actions: [
           IconButton(
+            focusNode: _searchFocus,
             icon: const Icon(Icons.search),
             tooltip: 'Ara',
             onPressed: _openSearch,
@@ -153,9 +160,29 @@ class _HomeScreenState extends State<HomeScreen> {
       return const SizedBox.shrink();
     }
 
-    return FeedTabs(
+    final tabs = FeedTabs(
       selected: _tab,
       onChanged: (tab) => setState(() => _tab = tab),
+    );
+
+    // Televizyonda başlık çubuğuna kumandayla çıkılabilsin diye yukarı ok
+    // burada yakalanıyor: Flutter'ın yönlü gezinmesi başlık çubuğuna
+    // ulaşmıyor ve arama ekranı erişilemez kalıyordu.
+    return Focus(
+      // Bu düğüm yalnızca tuş yakalar, ODAK ALMAZ: odak alınca sekmelerin
+      // kendi odağını çalıyor ve sekmeler arası sol/sağ geçiş çalışmıyordu.
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        if (!TvMode.isTv.value) return KeyEventResult.ignored;
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.logicalKey != LogicalKeyboardKey.arrowUp) {
+          return KeyEventResult.ignored;
+        }
+        _searchFocus.requestFocus();
+        return KeyEventResult.handled;
+      },
+      child: tabs,
     );
   }
 
@@ -232,3 +259,4 @@ class _EmptyFeed extends StatelessWidget {
     );
   }
 }
+

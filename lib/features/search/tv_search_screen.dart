@@ -117,13 +117,17 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
 
   // ------------------------------------------------------------------ veri
 
-  /// Rakam/işaret sayfası açık mı. Harfler ve rakamlar tek ızgaraya
-  /// sığmıyordu: eylem satırı ekranın dışında kalıyordu.
-  bool _symbolPage = false;
+  /// Açık olan klavye sayfası: 0 harfler, 1 rakam/işaret, 2 aksanlı harfler.
+  ///
+  /// Hepsi tek ızgaraya sığmıyordu; ayrıca yabancı adlar (Beyoncé, Björk)
+  /// için aksanlı harfler gerekiyor.
+  int _page = 0;
 
-  TvKeyboardLayout get _layout => _symbolPage
-      ? TvKeyboardLayout.symbols(withVoice: _voiceAvailable)
-      : TvKeyboardLayout.turkish(withVoice: _voiceAvailable);
+  TvKeyboardLayout get _layout => switch (_page) {
+        1 => TvKeyboardLayout.symbols(withVoice: _voiceAvailable),
+        2 => TvKeyboardLayout.accents(withVoice: _voiceAvailable),
+        _ => TvKeyboardLayout.turkish(withVoice: _voiceAvailable),
+      };
 
   List<String> get _suggestions => SearchSuggestions.merge(
         query: _query,
@@ -267,10 +271,10 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
       case TvKeyKind.voice:
         _startVoice();
       case TvKeyKind.toggleMode:
-        // Sayfa değişince seçim ızgaranın dışında kalabilir; sınır içine
-        // çekiliyor.
+        // Üç sayfa sırayla dönüyor. Sayfa değişince seçim ızgaranın dışında
+        // kalabilir; sınır içine çekiliyor.
         setState(() {
-          _symbolPage = !_symbolPage;
+          _page = (_page + 1) % 3;
           _selection = _layout.clamp(_selection);
         });
       default:

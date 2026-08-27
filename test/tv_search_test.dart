@@ -28,13 +28,12 @@ void main() {
       // Son satır eylem tuşları; öncesi harf/rakam ızgarası.
       final gridRows = layout.rows.sublist(0, layout.rows.length - 1);
 
-      expect(gridRows, hasLength(6),
-          reason: 'Türkçe alfabe + q/w/x = 32 harf, 6 sütuna 6 satır');
-      // Son satır alfabenin kalanı kadar; öncekiler tam dolu.
-      for (final row in gridRows.take(gridRows.length - 1)) {
+      expect(gridRows, hasLength(4),
+          reason: 'Türkçe alfabe + q/w/x = 32 harf, 8 sütuna tam 4 satır');
+      // Hiç artık kalmıyor: her satır tam dolu, yarım kalan tuş yok.
+      for (final row in gridRows) {
         expect(row, hasLength(TvKeyboardLayout.columns));
       }
-      expect(gridRows.last, isNotEmpty);
 
       final harfler = gridRows
           .expand((row) => row)
@@ -106,11 +105,13 @@ void main() {
     final layout = TvKeyboardLayout.turkish();
 
     test('sağ kenardan sağa basmak ızgaradan çıkar', () {
-      expect(layout.move(const TvKeyPosition(0, 5), TraversalDirection.right),
+      const son = TvKeyboardLayout.columns - 1;
+      expect(layout.move(const TvKeyPosition(0, son), TraversalDirection.right),
           isNull,
           reason: 'ekran o zaman odağı sağdaki sonuç listesine taşıyor');
-      expect(layout.move(const TvKeyPosition(0, 4), TraversalDirection.right),
-          const TvKeyPosition(0, 5));
+      expect(
+          layout.move(const TvKeyPosition(0, son - 1), TraversalDirection.right),
+          const TvKeyPosition(0, son));
     });
 
     test('sol kenardan sola basmak ızgarada kalır', () {
@@ -315,7 +316,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Izgaranın sağ kenarına git, bir kez daha sağa basınca listeye geç.
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < TvKeyboardLayout.columns; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       }
       await tester.pumpAndSettle();
@@ -337,7 +338,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Izgaradan listeye geç (en sağdan bir kez daha sağa).
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < TvKeyboardLayout.columns; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       }
       // İkinci geçmiş kaydına in.
@@ -358,7 +359,7 @@ void main() {
       await tester.pumpWidget(wrap(const SearchScreen()));
       await tester.pumpAndSettle();
 
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < TvKeyboardLayout.columns; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       }
       await tester.pumpAndSettle();
@@ -384,7 +385,7 @@ void main() {
       await tester.pumpWidget(wrap(const SearchScreen()));
       await tester.pumpAndSettle();
 
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < TvKeyboardLayout.columns; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -410,7 +411,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < TvKeyboardLayout.columns; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -465,7 +466,7 @@ void main() {
       expect(find.byType(TvSearchScreen), findsOneWidget);
 
       // Listeye geç, geri tuşu ızgaraya döndürsün — ekran kapanmamalı.
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < TvKeyboardLayout.columns; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       }
       await tester.pumpAndSettle();

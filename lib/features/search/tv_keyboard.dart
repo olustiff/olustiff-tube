@@ -56,9 +56,10 @@ class TvKeyboardLayout {
 
   /// Izgara kaç sütun.
   ///
-  /// 6 sütun: televizyon uzaklığından tuşlar rahat okunuyor ve satırlar
-  /// ekrana sığıyor. Daha fazla sütun tuşları küçültüp okunmaz yapıyordu.
-  static const columns = 6;
+  /// 8 sütun: 32 harf tam 4 satıra oturuyor, artan tuş kalmıyor. 6 sütunda
+  /// son satırda iki harf kalıyor ve satırı doldurmak için kocaman
+  /// görünüyorlardı.
+  static const columns = 8;
 
   /// Türkçe alfabe + yabancı adlar için q/w/x.
   ///
@@ -71,7 +72,13 @@ class TvKeyboardLayout {
   ///
   /// Ayrı sayfada: hepsi harflerle aynı ızgaraya konunca 7 satır oluyor,
   /// alt sıradaki eylem tuşları ekranın dışında kalıyordu.
-  static const symbolChars = "0123456789.,'&-_!?+@#/:";
+  static const symbolChars = "0123456789.,'&-_!?+@#/:*";
+
+  /// Yabancı dillerin aksanlı harfleri.
+  ///
+  /// Türkçe klavyede olmayan bu harfler olmadan "Beyoncé", "Björk", "Señor"
+  /// gibi adlar yazılamıyordu. 24 karakter: 8 sütuna tam 3 satır.
+  static const accentChars = 'àáâäãåæèéêëìíîïñòóôõùúûß';
 
   /// Harf sayfası.
   factory TvKeyboardLayout.turkish({bool withVoice = true}) =>
@@ -80,7 +87,12 @@ class TvKeyboardLayout {
 
   /// Rakam ve işaret sayfası.
   factory TvKeyboardLayout.symbols({bool withVoice = true}) =>
-      TvKeyboardLayout._page(symbolChars, TvKeyKind.toggleMode, 'ABC',
+      TvKeyboardLayout._page(symbolChars, TvKeyKind.toggleMode, 'àé',
+          withVoice: withVoice);
+
+  /// Yabancı dillerin aksanlı harf sayfası.
+  factory TvKeyboardLayout.accents({bool withVoice = true}) =>
+      TvKeyboardLayout._page(accentChars, TvKeyKind.toggleMode, 'ABC',
           withVoice: withVoice);
 
   /// İki sayfa da aynı iskeleti kullanıyor: karakter ızgarası + eylem satırı.
@@ -104,7 +116,9 @@ class TvKeyboardLayout {
       // Eylem satırı da tam 6 sütun.
       [
         TvKey.action(toggleKind, toggleLabel),
-        const TvKey.action(TvKeyKind.space, 'Boşluk', span: 2),
+        // "Temizle" kaldırıldı: simgesi ne işe yaradığını anlatmıyordu ve
+        // "Sil" zaten var. Boşluk genişleyip yerini kapatıyor.
+        const TvKey.action(TvKeyKind.space, 'Boşluk', span: 4),
         const TvKey.action(TvKeyKind.backspace, 'Sil'),
         if (withVoice) ...[
           const TvKey.action(TvKeyKind.search, 'Ara'),
