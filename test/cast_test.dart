@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,8 @@ import 'package:olustiff/core/cast/cast_discovery.dart';
 import 'package:olustiff/core/cast/cast_protocol.dart';
 import 'package:olustiff/core/extraction/models.dart';
 import 'package:olustiff/core/playback/playback_coordinator.dart';
+import 'package:olustiff/core/playback/ui_channel.dart';
+import 'package:olustiff/features/settings/cast_receiver_setting.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _device = CastDevice(
@@ -289,6 +292,74 @@ void main() {
       await expectLater(
         client.play(videoId: 'abc', title: 'x'),
         throwsA(isA<CastException>()),
+      );
+    });
+
+    test('televizyonda uygulama kapalıysa sebebi anlaşılır söylenir', () async {
+      // Alıcı açılıştan beri çalışıyor, yani televizyon LİSTEDE görünür;
+      // ama orada oynatma yoksa kumanda komutunun karşılığı yok. Kullanıcı
+      // "503" değil, ne yapması gerektiğini görmeli.
+      final client = CastClient(
+        _device,
+        httpClient: MockClient(
+          (_) async => http.Response(
+            jsonEncode({'ok': false, 'error': 'app_not_running'}),
+            503,
+          ),
+        ),
+      );
+
+      await expectLater(
+        client.command(CastCommand.pause),
+        throwsA(
+          isA<CastException>().having(
+            (e) => e.message,
+            'mesaj',
+            allOf(contains('çalan bir şey yok'), isNot(contains('503'))),
+          ),
+        ),
+      );
+    });
+
+    test('tanınmayan hata kodunda durum kodu gösterilir', () async {
+      final client = CastClient(
+        _device,
+        httpClient: MockClient(
+          (_) async => http.Response(
+            jsonEncode({'ok': false, 'error': 'bilinmeyen_sebep'}),
+            500,
+          ),
+        ),
+      );
+
+      await expectLater(
+        client.command(CastCommand.pause),
+        throwsA(
+          isA<CastException>()
+              .having((e) => e.message, 'mesaj', contains('500')),
+        ),
+      );
+    });
+
+    test('JSON olmayan hata gövdesi istisna fırlatmaz', () async {
+      // Ağdaki bir vekil sunucu araya HTML hata sayfası koyabiliyor;
+      // bunu çözmeye çalışırken patlamak, hatayı hiç göstermemek olurdu.
+      final client = CastClient(
+        _device,
+        httpClient: MockClient(
+          // Gövde düz ASCII: http paketi charset verilmediğinde latin1
+          // varsayıyor ve Türkçe karakterli bir gövde testin kendi
+          // kurulumunda patlıyor.
+          (_) async => http.Response('<html>bad gateway</html>', 502),
+        ),
+      );
+
+      await expectLater(
+        client.command(CastCommand.pause),
+        throwsA(
+          isA<CastException>()
+              .having((e) => e.message, 'mesaj', contains('502')),
+        ),
       );
     });
 
@@ -717,6 +788,66 @@ void main() {
         isNot(contains('next')),
         reason: 'telefonun sessiz oynatıcısını ilerletmenin anlamı yok',
       );
+    });
+  });
+
+  // Televizyondaki alıcı açılıştan beri çalışıyor; ama uygulama KAPALIYKEN
+  // gelen videoyu ekrana getirmek "diğer uygulamaların üzerinde göster"
+  // iznine bağlı. İzin yoksa özellik yarım çalışır ve bunu kullanıcıya
+  // açıkça söylemek gerekiyor.
+  group('televizyonda yayın izni', () {
+    test('eski kurulumda yöntem yoksa izin yok sayılır', () async {
+      // Kanal yöntemi tanımıyorsa istisna fırlıyor; bu bir çökme sebebi
+      // değil, "izin yok" demek.
+      mock('olustiff/ui', (call) async {
+        if (call.method == 'canDrawOverlays') {
+          throw MissingPluginException('yok');
+        }
+        return null;
+      });
+
+      expect(await UiChannel.instance.canDrawOverlays(), isFalse);
+    });
+
+    test('izin verilmişse true döner', () async {
+      mock('olustiff/ui', (call) async {
+        if (call.method == 'canDrawOverlays') return true;
+        return null;
+      });
+
+      expect(await UiChannel.instance.canDrawOverlays(), isTrue);
+    });
+
+    testWidgets('izin yokken uyarı ve izin düğmesi gösterilir', (tester) async {
+      mock('olustiff/ui', (call) async {
+        if (call.method == 'canDrawOverlays') return false;
+        return null;
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: CastReceiverSetting())),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('yarım çalışıyor'), findsOneWidget);
+      expect(find.text('İzin ver'), findsOneWidget);
+    });
+
+    testWidgets('izin varken hazır olduğu söylenir', (tester) async {
+      mock('olustiff/ui', (call) async {
+        if (call.method == 'canDrawOverlays') return true;
+        return null;
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: CastReceiverSetting())),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Hazır'), findsOneWidget);
+      // Uyarı kartı ve izin düğmesi ORTADAN KALKMALI: verilmiş bir izni
+      // tekrar istemek kullanıcıyı "bir şey eksik" sanmaya itiyordu.
+      expect(find.text('İzin ver'), findsNothing);
     });
   });
 

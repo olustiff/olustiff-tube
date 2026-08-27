@@ -125,22 +125,35 @@ class CastChannel {
     // bağlanmış olmak yetmiyor.
     _send(transportId, CastNamespace.connection, {'type': 'CONNECT'});
 
-    final mdx = await _request(
-      transportId,
-      CastNamespace.youtubeMdx,
-      {'type': 'getMdxSessionStatus'},
-      accept: (message) =>
-          message.namespace == CastNamespace.youtubeMdx &&
-          message.json?['type'] == 'mdxSessionStatus',
-      onTimeout: 'Televizyondaki YouTube oturumu okunamadı.',
-    );
-
-    final data = mdx.json?['data'];
-    final screenId = data is Map ? data['screenId'] : null;
-    if (screenId is! String || screenId.isEmpty) {
-      throw const CastException('Televizyondaki YouTube oturumu okunamadı.');
+    // Soru BİRKAÇ KEZ soruluyor. Sebebi bir yarış: `CONNECT` ile hemen
+    // ardından gönderilen soru televizyona aynı anda ulaşıyor ve bağlantı
+    // henüz kurulmadığı için soru sessizce DÜŞÜYOR — cevap hiç gelmiyor.
+    // Gerçek cihazda arada bir yaşandı; tek denemede "oturum okunamadı"
+    // hatası veriyordu. Yeniden sormak, beklemekten daha güvenilir: sabit
+    // bir gecikme yavaş cihazlarda yetmiyor, hızlılarda boşuna bekletiyor.
+    for (var attempt = 0; ; attempt++) {
+      try {
+        final mdx = await _request(
+          transportId,
+          CastNamespace.youtubeMdx,
+          {'type': 'getMdxSessionStatus'},
+          accept: (message) =>
+              message.namespace == CastNamespace.youtubeMdx &&
+              message.json?['type'] == 'mdxSessionStatus',
+          onTimeout: 'Televizyondaki YouTube oturumu okunamadı.',
+          timeout: const Duration(seconds: 4),
+        );
+        final data = mdx.json?['data'];
+        final screenId = data is Map ? data['screenId'] : null;
+        if (screenId is String && screenId.isNotEmpty) return screenId;
+      } on CastException {
+        // Son denemede hatayı yukarı bırak.
+        if (attempt >= 2) rethrow;
+      }
+      if (attempt >= 2) {
+        throw const CastException('Televizyondaki YouTube oturumu okunamadı.');
+      }
     }
-    return screenId;
   }
 
   /// Televizyonun ses seviyesini ayarlar (0..1).
@@ -149,7 +162,7 @@ class CastChannel {
   /// gidiyor, anında etki ediyor ve televizyonun ana sesini değiştiriyor —
   /// kullanıcının ses tuşundan beklediği davranış bu.
   void setVolume(double level) {
-    _send(_receiverId, CastNamespace.receiver, {
+    _notify({
       'type': 'SET_VOLUME',
       'volume': {'level': level.clamp(0.0, 1.0)},
     });
@@ -157,7 +170,7 @@ class CastChannel {
 
   /// Sessize alır / açar.
   void setMuted(bool muted) {
-    _send(_receiverId, CastNamespace.receiver, {
+    _notify({
       'type': 'SET_VOLUME',
       'volume': {'muted': muted},
     });
@@ -165,9 +178,19 @@ class CastChannel {
 
   /// Televizyondaki YouTube'u kapatır (boşta ekrana döner).
   void stopYouTube(String sessionId) {
+    _notify({'type': 'STOP', 'sessionId': sessionId});
+  }
+
+  /// Cevabı beklenmeyen bir alıcı komutu gönderir.
+  ///
+  /// `requestId` ŞART, cevabı beklemesek bile: televizyon kimliksiz gelen
+  /// alıcı komutlarını sessizce YOK SAYIYOR. Gerçek cihazda görüldü —
+  /// `SET_VOLUME` isteği 200 gibi davranıp ses hiç değişmiyordu, çünkü mesaj
+  /// hiç işlenmemişti.
+  void _notify(Map<String, Object?> body) {
     _send(_receiverId, CastNamespace.receiver, {
-      'type': 'STOP',
-      'sessionId': sessionId,
+      ...body,
+      'requestId': _requestId++,
     });
   }
 

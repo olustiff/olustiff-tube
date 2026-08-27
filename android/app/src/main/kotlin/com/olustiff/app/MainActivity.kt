@@ -166,6 +166,28 @@ class MainActivity : FlutterActivity() {
 
                 "startVoiceSearch" -> startVoiceSearch(result)
 
+                // Televizyonda uygulama kapalıyken gelen yayın isteğinin
+                // uygulamayı açabilmesi bu izne bağlı.
+                "canDrawOverlays" -> result.success(Settings.canDrawOverlays(this))
+
+                "requestDrawOverlays" -> {
+                    runCatching {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")
+                            )
+                        )
+                    }.onFailure {
+                        // Bazı TV kutularında bu ekran yok; genel ayarlara düş
+                        // ki kullanıcı hiç değilse elle bulabilsin.
+                        runCatching {
+                            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                        }
+                    }
+                    result.success(null)
+                }
+
                 "isBatteryOptimizationIgnored" -> {
                     val power = getSystemService(PowerManager::class.java)
                     result.success(

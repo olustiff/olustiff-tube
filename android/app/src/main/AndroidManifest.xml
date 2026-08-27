@@ -27,6 +27,14 @@
          telefondan gönderebilmek için önce televizyona gidip uygulamayı
          kumandayla açması gerekiyordu. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Televizyonda uygulama KAPALIYKEN gelen yayın isteğinin uygulamayı
+         açabilmesi için. Android 10+ arka plandaki uygulamaların ekran
+         açmasını yasaklıyor; "diğer uygulamaların üzerinde göster" izni bu
+         yasağın belgelenmiş tek pratik istisnası (pil optimizasyonu muafiyeti
+         YETMİYOR — ölçüldü, BAL_BLOCK dönüyor).
+         İzin KENDİLİĞİNDEN verilmiyor: kullanıcı ayarlardan bir kez açıyor,
+         açmazsa televizyonda uygulamayı elle açması gerektiği söyleniyor. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
     <!-- İndirilen MP3'ler herkesin eriştiği Music/oLusTifF klasörüne kaydediliyor.
          Android 10+ bunu MediaStore üzerinden izinsiz yapar; yalnızca Android 9

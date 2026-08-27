@@ -155,10 +155,20 @@ SsdpResponse? parseSsdpResponse(String raw) {
 
 /// SSDP arama paketini üretir.
 ///
-/// [host] her zaman çok noktaya yayın adresi yazıyor — paket tek bir cihaza
-/// (unicast) gönderilse bile: SSDP standardı `HOST` alanının bu değeri
-/// taşımasını istiyor ve bazı cihazlar farklı yazıldığında cevap vermiyor.
-String encodeSsdpSearch({int maxWaitSeconds = 2}) => 'M-SEARCH * HTTP/1.1\r\n'
+/// `HOST` her zaman çok noktaya yayın adresi yazıyor — paket tek bir cihaza
+/// (unicast) gönderilse bile: SSDP standardı bu alanın bu değeri taşımasını
+/// istiyor ve bazı cihazlar farklı yazıldığında cevap vermiyor.
+///
+/// [maxWaitSeconds] (`MX`) cihazın cevap vermeden önce bekleyebileceği EN
+/// UZUN süre; cihaz 0 ile bu değer arasında RASTGELE bekliyor (standart,
+/// binlerce cihazın aynı anda cevap vermesini önlemek için böyle istiyor).
+/// Yani bu değer doğrudan keşfin ne kadar sürmesi gerektiğini belirliyor.
+///
+/// 1 saniye seçilmesinin sebebi somut: 2 iken televizyonun cevabı zaman
+/// zaman keşif penceresinin sonuna denk geliyor ve cihaz ARADA BİR hiç
+/// bulunamıyordu. Ev ağında onlarca değil birkaç cihaz var; dağıtmak için
+/// uzun bir pencereye gerek yok.
+String encodeSsdpSearch({int maxWaitSeconds = 1}) => 'M-SEARCH * HTTP/1.1\r\n'
     'HOST: 239.255.255.250:1900\r\n'
     'MAN: "ssdp:discover"\r\n'
     'MX: $maxWaitSeconds\r\n'
@@ -514,6 +524,26 @@ String? parseLoungeToken(String body, {required String screenId}) {
     if (token is String && token.isNotEmpty) return token;
   }
   return null;
+}
+
+/// Cevap "oturum düştü, yeniden bağlan" anlamına mı geliyor.
+///
+/// Bu protokolde oturum kaybı OLAĞAN bir durum: televizyon ekran koruyucuya
+/// geçtiğinde ya da bir süre komut gitmediğinde sunucu oturumu düşürüyor.
+/// Kullanıcıya hata göstermek yerine sessizce yeniden bağlanmak gerekiyor,
+/// bu yüzden bu durumu diğer hatalardan ayırt etmek şart.
+///
+/// Gövdeye de bakılıyor: sunucu `Unknown SID`'i 400 ile döndürüyor ama 400
+/// başka sebeplerle de gelebilir; gövdeyi okumadan her 400'ü oturum kaybı
+/// saymak gerçek hataları sonsuz yeniden bağlanma döngüsüne çevirirdi.
+bool isLoungeSessionLost(int statusCode, String body) {
+  // 410 Gone tek başına kesin: oturum artık yok.
+  if (statusCode == 410) return true;
+  if (statusCode != 400 && statusCode != 401) return false;
+  final lower = body.toLowerCase();
+  return lower.contains('unknown sid') ||
+      lower.contains('expired') ||
+      lower.contains('invalid sid');
 }
 
 /// Lounge komutları.

@@ -68,6 +68,25 @@ class UiChannel {
   Future<void> requestIgnoreBatteryOptimization() =>
       _channel.invokeMethod<void>('requestIgnoreBatteryOptimization');
 
+  /// Televizyonda yayın alıcısı, uygulama kapalıyken de uygulamayı
+  /// açabiliyor mu.
+  ///
+  /// Android 10+ arka plandaki uygulamaların ekran açmasını yasaklıyor.
+  /// "Diğer uygulamaların üzerinde göster" izni bu yasağın istisnası —
+  /// pil muafiyeti YETMİYOR (ölçüldü: sistem BAL_BLOCK diyor).
+  Future<bool> canDrawOverlays() async {
+    try {
+      return await _channel.invokeMethod<bool>('canDrawOverlays') ?? false;
+    } catch (_) {
+      // Eski kurulumda bu yöntem yok; özelliği yokmuş gibi göster.
+      return false;
+    }
+  }
+
+  /// İzin ekranını açar.
+  Future<void> requestDrawOverlays() =>
+      _channel.invokeMethod<void>('requestDrawOverlays');
+
   /// Cihaz televizyon mu.
   ///
   /// Televizyonda kumandayla (D-pad) geziliyor: odaklanan öğe belirgin bir

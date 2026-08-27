@@ -5,6 +5,7 @@ import '../../core/data/settings_store.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/ui/tv_mode.dart';
 import 'bluetooth_setting.dart';
+import 'cast_receiver_setting.dart';
 import 'feedback_tile.dart';
 import 'update_section.dart';
 
@@ -78,6 +79,9 @@ class SettingsScreen extends StatelessWidget {
                   onChanged: settings.setMusicAsAudio,
                 ),
               const BluetoothSetting(),
+              // Yalnızca televizyonda: telefondan gelen yayını karşılayan
+              // taraf orası. Telefonda gösterilecek bir karşılığı yok.
+              if (TvMode.isTv.value) const CastReceiverSetting(),
               SwitchListTile(
                 secondary: const Icon(Icons.playlist_play),
                 title: const Text('Otomatik oynatma'),

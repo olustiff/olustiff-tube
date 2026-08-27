@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/cast/cast_controller.dart';
+import '../../core/cast/youtube_cast_controller.dart';
 import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/extraction/models.dart';
@@ -21,6 +22,7 @@ import 'download_menu.dart';
 import 'quality_menu.dart';
 import 'tv_player.dart';
 import 'video_player_view.dart';
+import 'youtube_cast_panel.dart';
 
 /// Oynatma ekranı.
 ///
@@ -55,6 +57,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _applyKeepScreenOn();
     _coordinator.addListener(_applyKeepScreenOn);
     CastController.instance.addListener(_showCastError);
+    YouTubeCastController.instance.addListener(_showYouTubeCastError);
     if (TvMode.isTv.value) WidgetsBinding.instance.addObserver(this);
   }
 
@@ -62,6 +65,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   void dispose() {
     _coordinator.removeListener(_applyKeepScreenOn);
     CastController.instance.removeListener(_showCastError);
+    YouTubeCastController.instance.removeListener(_showYouTubeCastError);
     // Ekran kısıtı yalnızca video izlerken geçerli olmalı.
     UiChannel.instance.setKeepScreenOn(false);
     if (TvMode.isTv.value) {
@@ -96,6 +100,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     final error = CastController.instance.lastError;
     if (error == null || !mounted) return;
     CastController.instance.clearError();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+  }
+
+  /// Televizyonun kendi YouTube'una gönderirken oluşan hatayı gösterir.
+  ///
+  /// Ayrı bir yöntem çünkü hatanın kaynağı ayrı bir denetleyici; tek bir
+  /// dinleyiciye bağlamak hangi yayının koptuğunu belirsizleştirirdi.
+  void _showYouTubeCastError() {
+    final cast = YouTubeCastController.instance;
+    final error = cast.lastError;
+    if (error == null || !mounted) return;
+    cast.clearError();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 
@@ -320,7 +336,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       builder: (context, pip, _) => AnimatedBuilder(
         // Yayın (cast) açılıp kapandığında ekranın tamamı değişiyor:
         // oynatıcı yerini televizyon kumandasına bırakıyor.
-        animation: Listenable.merge([_coordinator, CastController.instance]),
+        animation: Listenable.merge([
+          _coordinator,
+          CastController.instance,
+          // Televizyonun kendi YouTube'una geçildiğinde de ekran kumandaya
+          // dönmeli; bu denetleyici dinlenmezse değişiklik fark edilmiyor.
+          YouTubeCastController.instance,
+        ]),
         builder: (context, _) {
           // Televizyonda oynatma tam ekran ve tuş haritası [TvPlayer]'a ait.
           // Buradaki kısayollar ve odak düğümü ona KARIŞMAMALI: ikisi de
@@ -445,6 +467,13 @@ class _PlayerScreenState extends State<PlayerScreen>
           videoId: details?.videoId ?? cast.remoteState?.videoId,
         ),
       );
+    }
+
+    // Televizyonun KENDİ YouTube'una gönderiliyorsa ayrı bir kumanda
+    // gösteriliyor: orada konum/süre okunamadığı için sunulan kontroller
+    // farklı (bkz. YouTubeCastPanel).
+    if (YouTubeCastController.instance.isCasting) {
+      return const SingleChildScrollView(child: YouTubeCastPanel());
     }
 
     final error = _coordinator.lastError;

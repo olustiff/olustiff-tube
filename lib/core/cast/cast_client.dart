@@ -98,9 +98,37 @@ class CastClient {
       );
     }
     if (response.statusCode != 200) {
-      throw CastException(
-        'Televizyon isteği kabul etmedi (${response.statusCode}).',
-      );
+      throw CastException(_errorMessage(response));
+    }
+  }
+
+  /// Televizyonun reddettiği isteği kullanıcının anlayacağı bir cümleye
+  /// çevirir.
+  ///
+  /// `app_not_running` AYRI ele alınıyor: televizyonun alıcısı uygulama
+  /// kapalıyken de çalışıyor (açılışta başlayan servis), ama kumanda
+  /// komutlarının bir karşılığı olması için orada oynatmanın sürüyor olması
+  /// gerek. "İstek kabul edilmedi (503)" demek kullanıcıya hiçbir şey
+  /// anlatmıyordu.
+  static String _errorMessage(http.Response response) {
+    if (_errorCode(response) == 'app_not_running') {
+      return 'Televizyonda çalan bir şey yok. Önce bir video gönder.';
+    }
+    return 'Televizyon isteği kabul etmedi (${response.statusCode}).';
+  }
+
+  /// Cevabın gövdesindeki hata kodu; okunamıyorsa null.
+  ///
+  /// Gövde JSON olmayabilir (ağdaki bir vekil sunucu araya girmiş olabilir);
+  /// bu bir hata değil, "kod bilinmiyor" demek.
+  static String? _errorCode(http.Response response) {
+    try {
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is! Map) return null;
+      final error = body['error'];
+      return error is String ? error : null;
+    } catch (_) {
+      return null;
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -26,7 +27,10 @@ class DialDiscovery {
   const DialDiscovery();
 
   /// Çok noktaya yayın cevapsız kalırsa taramaya geçmeden önce beklenen süre.
-  static const _sweepDelay = Duration(milliseconds: 700);
+  ///
+  /// `MX` 1 saniye olduğu için cevaplar en geç bu kadar sonra geliyor; 600 ms
+  /// beklemek "çok noktaya yayın çalıştı mı" sorusunu cevaplamaya yetiyor.
+  static const _sweepDelay = Duration(milliseconds: 600);
 
   /// Cihaz tanıtım belgesi ve port yoklaması için üst sınır.
   static const _probeTimeout = Duration(seconds: 3);
@@ -36,7 +40,10 @@ class DialDiscovery {
   ///
   /// Hata FIRLATMAZ: ağ kapalıysa ya da paketler engelliyse boş liste döner.
   Future<List<YouTubeCastDevice>> discover({
-    Duration timeout = const Duration(milliseconds: 2800),
+    // Tarama en geç 600 ms'de başlıyor ve cihaz `MX` gereği 1 saniyeye kadar
+    // BEKLEYEBİLİYOR; üstüne ağ gecikmesi biniyor. Pencere dar tutulduğunda
+    // televizyon arada bir hiç bulunamıyordu.
+    Duration timeout = const Duration(milliseconds: 3500),
     http.Client? httpClient,
   }) async {
     RawDatagramSocket? socket;
@@ -86,7 +93,8 @@ class DialDiscovery {
       final devices = await Future.wait(
         responses.values.map((r) => _describe(r, client)),
       );
-      return devices.whereType<YouTubeCastDevice>().toList(growable: false);
+
+      return dedupeByHost(devices.whereType<YouTubeCastDevice>());
     } finally {
       if (httpClient == null) client.close();
     }
@@ -114,7 +122,13 @@ class DialDiscovery {
     try {
       final description = await client.get(location).timeout(_probeTimeout);
       if (description.statusCode == 200) {
-        name = parseFriendlyName(description.body);
+        // UTF-8 ELLE çözülüyor: televizyon belgeyi `application/xml` olarak
+        // veriyor ve karakter kümesini SÖYLEMİYOR; `http` paketi bu durumda
+        // latin-1 varsayıyor ve "Oturma Odası TV'si" adı listede
+        // "Oturma OdasÄ± TV'si" olarak çıkıyordu.
+        name = parseFriendlyName(
+          utf8.decode(description.bodyBytes, allowMalformed: true),
+        );
       }
     } catch (e) {
       // Ad okunamadı; cihaz yine de kullanılabilir, adres gösterilir.
@@ -127,6 +141,36 @@ class DialDiscovery {
       host: location.host,
     );
   }
+
+  /// Aynı televizyonun birden çok kaydını teke indirir.
+  ///
+  /// ADRESE göre tekleniyor, UPnP kimliğine göre değil. Gerçek cihazda
+  /// görüldü: aynı televizyon İKİ ayrı DIAL sunucusu çalıştırıyor (biri Cast
+  /// yığınının 8008'i, diğeri üreticinin kendi sunucusu) ve her biri FARKLI
+  /// bir kimlikle cevap veriyor — kimliğe göre teklemek "Oturma Odası TV'si"
+  /// satırını listede iki kez gösteriyordu.
+  ///
+  /// Adres doğru ölçüt çünkü hangi kapıdan girilirse girilsin komutlar aynı
+  /// Cast alıcısına (host:8009) gidiyor.
+  @visibleForTesting
+  static List<YouTubeCastDevice> dedupeByHost(
+    Iterable<YouTubeCastDevice> devices,
+  ) {
+    final unique = <String, YouTubeCastDevice>{};
+    for (final device in devices) {
+      final existing = unique[device.host];
+      // ADI OLAN kayıt kazanıyor. İki DIAL sunucusundan yalnızca biri cihaz
+      // adını veriyor olabiliyor; körlemesine ilkini almak "Oturma Odası
+      // TV'si" yerine listede "192.168.0.108" gösteriyordu.
+      if (existing == null || (_hasName(device) && !_hasName(existing))) {
+        unique[device.host] = device;
+      }
+    }
+    return unique.values.toList(growable: false);
+  }
+
+  /// Cihazın gerçek bir adı okunabilmiş mi (yoksa adres mi gösteriliyor).
+  static bool _hasName(YouTubeCastDevice device) => device.name != device.host;
 
   Future<bool> _castPortOpen(String host) async {
     try {
