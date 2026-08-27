@@ -76,6 +76,10 @@ class _TvPlayerState extends State<TvPlayer> {
   /// Kumandada tuşlar arasında telefondakinden uzun aralıklar oluyor; 3 saniye
   /// kullanıcı daha düğmeye bakarken kontrolleri kapatıyordu.
   static const _autoHide = Duration(seconds: 5);
+
+  /// Kalite menüsü ve "Sırada" listesi için daha uzun süre: kullanıcı orada
+  /// seçenekleri okuyor, beş saniye yetmiyordu.
+  static const _panelAutoHide = Duration(seconds: 15);
   final _focus = FocusNode(debugLabel: 'tvPlayer');
 
   bool _controlsVisible = false;
@@ -133,11 +137,11 @@ class _TvPlayerState extends State<TvPlayer> {
 
   void _touch() {
     _hideTimer?.cancel();
-    // Kalite menüsü ya da sırada listesi açıkken kullanıcı seçim yapıyor;
-    // bunların zaman aşımıyla kaybolması seçimi yarıda kesiyordu. Geri tuşu
-    // ikisini de kapatıyor.
-    if (_qualityOpen || _panelOpen) return;
-    _hideTimer = Timer(_autoHide, () {
+    // Her tuşta sayaç baştan başlıyor: kullanıcı gezinirken pencere
+    // kapanmamalı. Seçim yapılan yerlerde (kalite menüsü, sırada listesi)
+    // süre daha uzun.
+    final delay = (_qualityOpen || _panelOpen) ? _panelAutoHide : _autoHide;
+    _hideTimer = Timer(delay, () {
       if (!mounted) return;
       setState(() {
         _controlsVisible = false;
@@ -328,7 +332,14 @@ class _TvPlayerState extends State<TvPlayer> {
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowDown) {
-        _openPanel();
+        // Kontroller gizliyken de aşağı yönü aynı işliyor: önce kalite/parça
+        // düğmeleri, bir daha basınca sırada listesi. Doğrudan listeye
+        // atlamak, kontroller açıkkenki davranışla çelişiyordu.
+        setState(() {
+          _controlsVisible = true;
+          _row = _Row.buttons;
+        });
+        _touch();
         return KeyEventResult.handled;
       }
       // Yukarı ve OK dahil kalan her tuş kontrolleri geri getirir: kontroller
@@ -658,14 +669,6 @@ class _TvPlayerState extends State<TvPlayer> {
                 label: 'Sonraki',
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          const Center(
-            child: Text(
-              'AŞAĞI: kalite ve parça • bir daha AŞAĞI: sırada olanlar • '
-              'SOL/SAĞ: sarma',
-              style: TextStyle(color: Colors.white38, fontSize: 13),
-            ),
           ),
         ],
       ),

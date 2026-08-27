@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Bir tuşun ne iş yaptığı.
-enum TvKeyKind { character, space, backspace, clear, search, voice }
+enum TvKeyKind { character, space, backspace, clear, search, voice, toggleMode }
 
 /// Ekran klavyesindeki tek bir tuş.
 class TvKey {
@@ -54,37 +54,63 @@ class TvKeyboardLayout {
 
   final List<List<TvKey>> rows;
 
-  /// Harf ızgarası kaç sütun. 6 sütun × 7 satır = 42 karakter; Türkçe
-  /// alfabe (q, w, x dahil) ve rakamlar tam oturuyor, artık kalmıyor.
+  /// Izgara kaç sütun.
+  ///
+  /// 6 sütun: televizyon uzaklığından tuşlar rahat okunuyor ve satırlar
+  /// ekrana sığıyor. Daha fazla sütun tuşları küçültüp okunmaz yapıyordu.
   static const columns = 6;
 
-  /// Türkçe alfabe + yabancı adlar için q/w/x + rakamlar.
+  /// Türkçe alfabe + yabancı adlar için q/w/x.
   ///
   /// Alfabe sırası korunuyor: kullanıcı harfi nerede arayacağını biliyor.
   /// q, w, x Türkçe alfabede yok ama aranan şarkıların çoğu yabancı —
   /// olmadıklarında "wonderwall" yazmak imkânsız oluyordu.
-  static const alphabet = 'abcçdefgğhıijklmnoöpqrsştuüvwxyz0123456789';
+  static const alphabet = 'abcçdefgğhıijklmnoöpqrsştuüvwxyz';
 
-  /// Standart düzen.
+  /// Rakamlar ve sık kullanılan işaretler.
+  ///
+  /// Ayrı sayfada: hepsi harflerle aynı ızgaraya konunca 7 satır oluyor,
+  /// alt sıradaki eylem tuşları ekranın dışında kalıyordu.
+  static const symbolChars = "0123456789.,'&-_!?+@#/:";
+
+  /// Harf sayfası.
+  factory TvKeyboardLayout.turkish({bool withVoice = true}) =>
+      TvKeyboardLayout._page(alphabet, TvKeyKind.toggleMode, '123',
+          withVoice: withVoice);
+
+  /// Rakam ve işaret sayfası.
+  factory TvKeyboardLayout.symbols({bool withVoice = true}) =>
+      TvKeyboardLayout._page(symbolChars, TvKeyKind.toggleMode, 'ABC',
+          withVoice: withVoice);
+
+  /// İki sayfa da aynı iskeleti kullanıyor: karakter ızgarası + eylem satırı.
   ///
   /// [withVoice] false ise mikrofon tuşu HİÇ çizilmez: cihazda ses tanıma
   /// yoksa basınca bir şey olmayan tuş kullanıcıyı yanıltır. Tuş
   /// kaybolunca "Ara" genişleyerek boşluğu kapatır.
-  factory TvKeyboardLayout.turkish({bool withVoice = true}) {
-    final letters = alphabet.runes.map(String.fromCharCode).toList();
+  factory TvKeyboardLayout._page(
+    String characters,
+    TvKeyKind toggleKind,
+    String toggleLabel, {
+    required bool withVoice,
+  }) {
+    final keys = characters.runes.map(String.fromCharCode).toList();
     final rows = <List<TvKey>>[
-      for (var start = 0; start < letters.length; start += columns)
+      for (var start = 0; start < keys.length; start += columns)
         [
-          for (final letter in letters.skip(start).take(columns))
-            TvKey.character(letter),
+          for (final key in keys.skip(start).take(columns))
+            TvKey.character(key),
         ],
-      // Eylem satırı da tam 6 sütun: boşluk 2, kalanlar 1'er.
+      // Eylem satırı da tam 6 sütun.
       [
+        TvKey.action(toggleKind, toggleLabel),
         const TvKey.action(TvKeyKind.space, 'Boşluk', span: 2),
         const TvKey.action(TvKeyKind.backspace, 'Sil'),
-        const TvKey.action(TvKeyKind.clear, 'Temizle'),
-        TvKey.action(TvKeyKind.search, 'Ara', span: withVoice ? 1 : 2),
-        if (withVoice) const TvKey.action(TvKeyKind.voice, 'Mikrofon'),
+        if (withVoice) ...[
+          const TvKey.action(TvKeyKind.search, 'Ara'),
+          const TvKey.action(TvKeyKind.voice, 'Mikrofon'),
+        ] else
+          const TvKey.action(TvKeyKind.search, 'Ara', span: 2),
       ],
     ];
     return TvKeyboardLayout(rows);
@@ -157,6 +183,9 @@ class TvKeyboardLayout {
   /// kuralları tek yerde ve test edilebilir olsun.
   static String apply(String query, TvKey key) {
     switch (key.kind) {
+      // Sayfa değiştirme yalnızca ızgarayı değiştirir, metne dokunmaz.
+      case TvKeyKind.toggleMode:
+        return query;
       case TvKeyKind.character:
         return query + key.value!;
       case TvKeyKind.space:
@@ -207,6 +236,9 @@ class TvKeyboard extends StatelessWidget {
 
   static IconData? iconOf(TvKeyKind kind) {
     switch (kind) {
+      // Sayfa tuşunda simge değil "123" / "ABC" yazısı gösteriliyor.
+      case TvKeyKind.toggleMode:
+        return null;
       case TvKeyKind.space:
         return Icons.space_bar;
       case TvKeyKind.backspace:

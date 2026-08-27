@@ -24,14 +24,17 @@ void main() {
   group('TvKeyboardLayout', () {
     final layout = TvKeyboardLayout.turkish();
 
-    test('harf ızgarası 6 sütun, harfler ve rakamlar tam oturur', () {
+    test('harf sayfası 6 sütun, tüm satırlar dolu', () {
       // Son satır eylem tuşları; öncesi harf/rakam ızgarası.
       final gridRows = layout.rows.sublist(0, layout.rows.length - 1);
 
-      expect(gridRows, hasLength(7));
-      for (final row in gridRows) {
+      expect(gridRows, hasLength(6),
+          reason: 'Türkçe alfabe + q/w/x = 32 harf, 6 sütuna 6 satır');
+      // Son satır alfabenin kalanı kadar; öncekiler tam dolu.
+      for (final row in gridRows.take(gridRows.length - 1)) {
         expect(row, hasLength(TvKeyboardLayout.columns));
       }
+      expect(gridRows.last, isNotEmpty);
 
       final harfler = gridRows
           .expand((row) => row)
@@ -41,7 +44,7 @@ void main() {
           reason: 'ızgarada eksik/artık tuş kalmamalı');
     });
 
-    test('Türkçe harfler ve rakamlar ızgarada var', () {
+    test('Türkçe harfler harf sayfasında, rakamlar işaret sayfasında', () {
       final harfler = layout.rows
           .expand((row) => row)
           .map((key) => key.value)
@@ -51,8 +54,20 @@ void main() {
       for (final harf in ['ç', 'ğ', 'ı', 'ö', 'ş', 'ü']) {
         expect(harfler, contains(harf), reason: 'Türkçe yazılamıyordu');
       }
+      // Rakamlar harf sayfasında DEĞİL: ikisi tek ızgaraya sığmıyordu.
       for (final rakam in ['0', '5', '9']) {
-        expect(harfler, contains(rakam));
+        expect(harfler, isNot(contains(rakam)));
+      }
+
+      final isaretler = TvKeyboardLayout.symbols()
+          .rows
+          .expand((row) => row)
+          .map((key) => key.value)
+          .whereType<String>()
+          .toSet();
+      for (final karakter in ['0', '5', '9', '.', '-']) {
+        expect(isaretler, contains(karakter),
+            reason: 'rakam ve işaretler ikinci sayfada');
       }
       // Yabancı şarkı adları için gerekli.
       for (final harf in ['q', 'w', 'x']) {
@@ -60,13 +75,14 @@ void main() {
       }
     });
 
-    test('eylem satırında boşluk, sil, temizle, ara ve mikrofon bulunur', () {
+    test('eylem satırında sayfa değiştirme, boşluk, sil, ara ve mikrofon var',
+        () {
       final actions = layout.rows.last.map((key) => key.kind).toList();
 
       expect(actions, [
+        TvKeyKind.toggleMode,
         TvKeyKind.space,
         TvKeyKind.backspace,
-        TvKeyKind.clear,
         TvKeyKind.search,
         TvKeyKind.voice,
       ]);
@@ -112,7 +128,7 @@ void main() {
     });
 
     test('eylem satırına inince en yakın tuş seçilir', () {
-      // "Boşluk" iki sütun geniş; son harf satırının ilk iki sütunu ona,
+      // İlk sütunda sayfa değiştirme, ardından iki sütun geniş "Boşluk";
       // sağdaki sütunlar kendi hizalarındaki eylem tuşuna düşmeli.
       final sonHarfSatiri = layout.rows.length - 2;
       final eylemSatiri = layout.rows.length - 1;
@@ -120,11 +136,18 @@ void main() {
       final soldan =
           layout.move(TvKeyPosition(sonHarfSatiri, 0), TraversalDirection.down)!;
       expect(soldan.row, eylemSatiri);
-      expect(layout.keyAt(soldan).kind, TvKeyKind.space);
+      expect(layout.keyAt(soldan).kind, TvKeyKind.toggleMode);
 
-      final sagdan =
-          layout.move(TvKeyPosition(sonHarfSatiri, 5), TraversalDirection.down)!;
-      expect(layout.keyAt(sagdan).kind, TvKeyKind.voice);
+      final ortadan =
+          layout.move(TvKeyPosition(sonHarfSatiri, 2), TraversalDirection.down)!;
+      expect(layout.keyAt(ortadan).kind, TvKeyKind.space,
+          reason: 'geniş boşluk tuşu ikinci ve üçüncü sütunu kaplıyor');
+
+      final sagdan = layout.move(
+        TvKeyPosition(sonHarfSatiri, layout.rows[sonHarfSatiri].length - 1),
+        TraversalDirection.down,
+      )!;
+      expect(sagdan.row, eylemSatiri);
     });
   });
 

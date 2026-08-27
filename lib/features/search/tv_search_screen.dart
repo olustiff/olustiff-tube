@@ -117,8 +117,13 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
 
   // ------------------------------------------------------------------ veri
 
-  TvKeyboardLayout get _layout =>
-      TvKeyboardLayout.turkish(withVoice: _voiceAvailable);
+  /// Rakam/işaret sayfası açık mı. Harfler ve rakamlar tek ızgaraya
+  /// sığmıyordu: eylem satırı ekranın dışında kalıyordu.
+  bool _symbolPage = false;
+
+  TvKeyboardLayout get _layout => _symbolPage
+      ? TvKeyboardLayout.symbols(withVoice: _voiceAvailable)
+      : TvKeyboardLayout.turkish(withVoice: _voiceAvailable);
 
   List<String> get _suggestions => SearchSuggestions.merge(
         query: _query,
@@ -261,6 +266,13 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
         _runSearch(_query);
       case TvKeyKind.voice:
         _startVoice();
+      case TvKeyKind.toggleMode:
+        // Sayfa değişince seçim ızgaranın dışında kalabilir; sınır içine
+        // çekiliyor.
+        setState(() {
+          _symbolPage = !_symbolPage;
+          _selection = _layout.clamp(_selection);
+        });
       default:
         _setQuery(TvKeyboardLayout.apply(_query, key));
     }
