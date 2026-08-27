@@ -66,27 +66,13 @@ class AkisApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      // Televizyonda arayüzün kenarlarından pay BIRAKILMIYOR.
+      //
+      // Bir zamanlar overscan (bazı televizyonların görüntünün kenarlarını
+      // kırpması) için pay bırakılıyordu; ama denenen cihazlarda kırpma yok ve
+      // pay, uygulamayı "ekrana sığmamış" gösteriyordu — çevresinde siyah bir
+      // çerçeve kalıyordu.
       home: const HomeScreen(),
-      // Televizyonların bir kısmı görüntünün kenarlarını kırpıyor (overscan);
-      // arayüzün kenara yapışan parçaları ekran dışında kalabiliyor.
-      builder: (context, child) {
-        if (child == null) return const SizedBox.shrink();
-        return ValueListenableBuilder<bool>(
-          valueListenable: TvMode.isTv,
-          builder: (context, isTv, _) => ValueListenableBuilder<bool>(
-            valueListenable: TvMode.fullBleed,
-            builder: (context, fullBleed, _) => (isTv && !fullBleed)
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    child: child,
-                  )
-                : child,
-          ),
-        );
-      },
     );
   }
 }

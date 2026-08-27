@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
-import '../../core/ui/tv_mode.dart';
 import 'video_surface.dart';
 
 /// Televizyonda oynatma ekranı: video tam ekran, kontroller kumandayla.
@@ -87,9 +86,6 @@ class _TvPlayerState extends State<TvPlayer> {
   @override
   void initState() {
     super.initState();
-    // Video ekranın tamamını doldursun: arayüz için bırakılan kenar payı
-    // burada siyah çerçeve olarak görünüyordu.
-    TvMode.fullBleed.value = true;
     // Üstteki oynatma ekranı da `autofocus` istiyor; odağı ondan geri almak
     // için ilk kareden sonra açıkça talep ediliyor. Odak orada kalırsa tuşlar
     // buraya hiç ulaşmaz.
@@ -100,7 +96,6 @@ class _TvPlayerState extends State<TvPlayer> {
 
   @override
   void dispose() {
-    TvMode.fullBleed.value = false;
     _hideTimer?.cancel();
     _hintTimer?.cancel();
     _seekSettle?.cancel();
@@ -200,8 +195,6 @@ class _TvPlayerState extends State<TvPlayer> {
   }
 
   void _openQuality() {
-    final options = widget.coordinator.availableQualities;
-    if (options.isEmpty) return;
     setState(() {
       _qualityOpen = true;
       _qualityIndex = 0;
@@ -387,9 +380,11 @@ class _TvPlayerState extends State<TvPlayer> {
     }
     if (ok.contains(key)) {
       final options = widget.coordinator.availableQualities;
-      widget.coordinator.setQuality(
-        _qualityIndex == 0 ? null : options[_qualityIndex - 1],
-      );
+      if (options.isNotEmpty) {
+        widget.coordinator.setQuality(
+          _qualityIndex == 0 ? null : options[_qualityIndex - 1],
+        );
+      }
       setState(() => _qualityOpen = false);
       _touch();
       return KeyEventResult.handled;
@@ -1010,7 +1005,11 @@ class _QualityOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labels = ['En yüksek', for (final h in options) '${h}p'];
+    // Seçenek yoksa liste de boş kalmalı: "En yüksek" tek başına seçilebilir
+    // görünüp hiçbir şey yapmıyordu.
+    final labels = options.isEmpty
+        ? const <String>[]
+        : ['En yüksek', for (final h in options) '${h}p'];
 
     return Center(
       child: Container(
@@ -1032,6 +1031,14 @@ class _QualityOverlay extends StatelessWidget {
                 style: const TextStyle(color: Colors.white70, fontSize: 15),
               ),
             ),
+            if (options.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                child: Text(
+                  'Bu video için seçenek yok.',
+                  style: TextStyle(color: Colors.white54, fontSize: 15),
+                ),
+              ),
             for (var i = 0; i < labels.length; i++)
               Container(
                 padding: const EdgeInsets.symmetric(
