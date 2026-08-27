@@ -1076,7 +1076,15 @@ class _QualityOverlay extends StatelessWidget {
     // görünüp hiçbir şey yapmıyordu.
     final labels = options.isEmpty
         ? const <String>[]
-        : ['Otomatik', for (final h in options) '${h}p'];
+        : [
+            // Otomatik seçiliyken hangi çözünürlüğe ayarlandığı yazılıyor:
+            // tek başına "Otomatik" o an ne oynadığını söylemiyor.
+            if (selected == 0 && current != null)
+              'Otomatik • $current'
+            else
+              'Otomatik',
+            for (final h in options) '${h}p',
+          ];
 
     return Center(
       child: Container(

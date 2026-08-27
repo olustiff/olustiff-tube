@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'core/cast/cast_receiver.dart';
@@ -67,12 +69,36 @@ Future<void> main() async {
 /// çalanı değiştirdiğinde açık ekran kendiliğinden yeni videoyu gösterir.
 /// İkinci bir ekran açmak, geri tuşunda üst üste yığılmış oynatıcılar
 /// bırakırdı.
-void _openCastedVideo(String videoId) {
+///
+/// [attempt]: uygulama televizyonda KAPALIYKEN yayın geldiğinde, isteği
+/// karşılayan servis uygulamayı açıyor ve istek gezinme ağacı kurulmadan
+/// önce buraya ulaşabiliyor. Bağlam henüz yoksa istek atılmıyor, birkaç kez
+/// yeniden deneniyor — yoksa "televizyonda uygulama açıldı ama video
+/// açılmadı" gibi görünüyordu.
+void _openCastedVideo(String videoId, {int attempt = 0}) {
   if (isPlayerOpen) return;
   final context = appNavigatorKey.currentContext;
-  if (context == null) return;
-  openPlayer(context, videoId);
+  if (context != null) {
+    openPlayer(context, videoId);
+    return;
+  }
+  // Sonsuza kadar denemiyoruz: gerçekten kurulamayan bir arayüzde bu
+  // bitmeyen bir zamanlayıcı döngüsü olurdu.
+  if (attempt >= _castOpenMaxAttempts) {
+    debugPrint('cast: oynatma ekranı açılamadı, gezinme hazır değil');
+    return;
+  }
+  Timer(
+    _castOpenRetryDelay,
+    () => _openCastedVideo(videoId, attempt: attempt + 1),
+  );
 }
+
+/// Gezinme ağacının kurulmasını beklerken denenecek en fazla tekrar sayısı.
+/// [_castOpenRetryDelay] ile birlikte ~3 saniye eder; soğuk açılışta arayüzün
+/// hazır olması için fazlasıyla yeterli.
+const int _castOpenMaxAttempts = 30;
+const Duration _castOpenRetryDelay = Duration(milliseconds: 100);
 
 /// Yayın isteği bir widget'tan değil, ağdan geliyor: ekranı açmak için
 /// bağlamsız bir gezinme noktası gerekiyor.

@@ -20,7 +20,9 @@ import android.os.Build
 import android.util.Rational
 import android.view.KeyEvent
 import android.view.WindowManager
+import com.olustiff.app.cast.CastHub
 import com.olustiff.app.cast.CastReceiver
+import com.olustiff.app.cast.CastReceiverService
 import com.olustiff.app.download.DownloadController
 import com.olustiff.app.update.UpdateController
 import com.olustiff.app.extractor.ExtractionService
@@ -49,7 +51,8 @@ class MainActivity : FlutterActivity() {
     private var playbackController: PlaybackController? = null
     private var downloadController: DownloadController? = null
     private var updateController: UpdateController? = null
-    private var castReceiver: CastReceiver? = null
+    /** Televizyonda alıcıya takılı Flutter kanalı; telefonda null. */
+    private var castChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -91,15 +94,20 @@ class MainActivity : FlutterActivity() {
 
         // Telefondan gelen videoyu karşılayan yayın (cast) alıcısı.
         //
-        // Yalnızca TELEVİZYONDA kuruluyor: telefon gönderen taraf ve orada
-        // ağ dinlemek boşuna pil/port harcaması olurdu. Alıcı, uygulamayı
-        // öne getirebilmek için aktiviteye ihtiyaç duyuyor.
+        // Yalnızca TELEVİZYONDA: telefon gönderen taraf ve orada ağ dinlemek
+        // boşuna pil/port harcaması olurdu.
+        //
+        // Alıcının KENDİSİ artık aktiviteye ait değil, [CastReceiverService]
+        // adlı ön plan servisine ait ve açılıştan beri çalışıyor. Burada
+        // yapılan iki şey var:
+        // 1. Servisi (öldüyse) yeniden başlatmak.
+        // 2. Flutter kanalını takmak — uygulama açıkken gelen istekler
+        //    doğrudan oynatıcıya gitsin.
         if (isTelevision()) {
-            castReceiver = CastReceiver(
-                context = applicationContext,
-                channel = MethodChannel(messenger, CastReceiver.CHANNEL),
-                bringToFront = ::bringToFront
-            )
+            CastReceiverService.start(this)
+            val castChannel = MethodChannel(messenger, CastReceiver.CHANNEL)
+            this.castChannel = castChannel
+            CastHub.receiver(this).attach(castChannel)
         }
 
         // Ekranı açık tutma ve resim-içinde-resim yalnızca aktivite üzerinden
@@ -271,51 +279,9 @@ class MainActivity : FlutterActivity() {
         return true
     }
 
-    /**
-     * Uygulamayı öne getirir.
-     *
-     * Telefondan video geldiğinde televizyon başka bir uygulamada olabilir.
-     * Not: Android 10+ ARKA PLANDAKİ uygulamaların aktivite açmasını
-     * engelliyor; bu çağrı yalnızca uygulama görünürken (ya da yakın zamanda
-     * görünmüşken) işe yarar. Uygulama tamamen kapalıysa alıcı zaten
-     * çalışmadığı için telefon o televizyonu hiç bulamaz.
-     */
-    private fun bringToFront() {
-        wakeScreen()
-        startActivity(
-            Intent(this, MainActivity::class.java).addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-            )
-        )
-    }
-
-    /**
-     * Ekranı uyandırır ve ekran koruyucuyu düşürür.
-     *
-     * Bu olmadan yayın "yalnızca ses" gibi görünüyordu: televizyon boştayken
-     * ekran koruyucuya (dream) geçiyor, uygulama arka planda kalıyor ve
-     * Android 10+ arka plandaki uygulamanın ekran açmasını engellediği için
-     * video hiç görünmüyordu — ses çalıyor, ekranda ekran koruyucu duruyordu.
-     * Ekranı uyandırmak koruyucuyu kapatıyor ve altta duran aktivitemiz
-     * kendiliğinden öne geliyor.
-     *
-     * Kilit ZAMAN AŞIMIYLA alınıyor: ekranı açık tutmak oynatma ekranının
-     * işi (FLAG_KEEP_SCREEN_ON), buradaki tek amaç uyandırmak.
-     */
-    private fun wakeScreen() {
-        val power = getSystemService(PowerManager::class.java) ?: return
-        runCatching {
-            @Suppress("DEPRECATION")
-            power.newWakeLock(
-                PowerManager.FULL_WAKE_LOCK or
-                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                    PowerManager.ON_AFTER_RELEASE,
-                "olustiff:cast"
-            ).acquire(WAKE_TIMEOUT_MS)
-        }
-    }
+    // Uygulamayı öne getirme ve ekranı uyandırma artık CastHub'da: yayın
+    // isteği aktivite HİÇ YOKKEN de gelebiliyor ve o iş aktiviteye bağlı
+    // kalamazdı.
 
     // ------------------------------------------------------------ sesli arama
 
@@ -474,9 +440,6 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val ACTION_PIP_TOGGLE = "com.olustiff.app.PIP_TOGGLE"
         const val REQUEST_PIP_TOGGLE = 1001
-
-        /** Ekranı uyandırmak için yeterli; sonrası oynatma ekranının işi. */
-        const val WAKE_TIMEOUT_MS = 10_000L
     }
 
     private val REQ_BLUETOOTH = 4711
@@ -497,10 +460,13 @@ class MainActivity : FlutterActivity() {
         downloadController = null
         updateController?.dispose()
         updateController = null
-        // Motor kapanıyor: ağ dinleyicileri de kapanmalı, yoksa artık
-        // ulaşılamayan bir kanala komut göndermeye çalışırlar.
-        castReceiver?.stop()
-        castReceiver = null
+        // Yalnızca KANAL sökülüyor, alıcı KAPATILMIYOR.
+        //
+        // Kanal sökülmezse artık ulaşılamayan bir motora komut gönderilir.
+        // Ama ağ dinleyicisi servise ait ve açık kalmalı: uygulama
+        // kapandıktan sonra da telefon televizyonu bulabilmeli.
+        castChannel?.let { CastHub.receiver(this).detach(it) }
+        castChannel = null
         super.onDestroy()
     }
 }

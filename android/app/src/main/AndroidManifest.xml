@@ -18,6 +18,15 @@
          anı iznine bağlıyor; targetSdk yükseltilirken bu özellik yeniden
          gözden geçirilmeli. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+    <!-- Televizyonda yayın alıcısı, uygulama kapalıyken de ağı dinliyor.
+         Ön plan servisi olmadan Android 8+ servisi birkaç dakikada öldürüyor;
+         "specialUse" türü, hazır türlerin hiçbirine (medya, konum, veri
+         eşitleme) uymayan bu yerel ağ dinleyicisi için doğru olan. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <!-- Televizyon açılır açılmaz alıcı hazır olsun: yoksa kullanıcının
+         telefondan gönderebilmek için önce televizyona gidip uygulamayı
+         kumandayla açması gerekiyordu. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
     <!-- İndirilen MP3'ler herkesin eriştiği Music/oLusTifF klasörüne kaydediliyor.
          Android 10+ bunu MediaStore üzerinden izinsiz yapar; yalnızca Android 9
@@ -114,6 +123,31 @@
                      "bağlandığı" an (ACL_CONNECTED) müzik kanalı henüz
                      hazır olmuyor. -->
                 <action android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Televizyonda telefondan gelen yayını karşılayan alıcı.
+             Aktiviteden BAĞIMSIZ yaşar: uygulama televizyonda hiç açık
+             olmasa bile keşifte görünür ve gelen istek uygulamayı açar.
+             Yalnızca televizyonda başlatılıyor (bkz. CastReceiverService). -->
+        <service
+            android:name=".cast.CastReceiverService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Yerel agdan gelen yayin (cast) isteklerini dinler"/>
+        </service>
+
+        <!-- Televizyon açılışında alıcıyı ayağa kaldırır. -->
+        <receiver
+            android:name=".cast.CastBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
 

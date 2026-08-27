@@ -33,13 +33,17 @@ import kotlin.math.roundToInt
  * paketlerini `MulticastLock` alınmadan uygulamalara vermiyor — o kilit de
  * yalnızca burada alınabilir.
  *
- * Sunucu, uygulamanın SÜRECİ yaşadığı sürece açık. Televizyonda uygulama hiç
- * açılmadıysa (ya da sistem süreci öldürdüyse) cihaz keşifte görünmez;
- * telefon bu durumda kullanıcıya ne yapması gerektiğini söylüyor.
+ * Alıcının ÖMRÜ aktiviteye bağlı DEĞİL: sahibi [CastReceiverService] adlı
+ * ön plan servisi ve servis açılışta (BOOT_COMPLETED) başlıyor. Televizyonda
+ * uygulama hiç açılmamış olsa bile cihaz keşifte görünür ve gelen yayın
+ * isteği uygulamayı KENDİSİ açar.
+ *
+ * Bu yüzden Flutter kanalı zorunlu değil, TAKILABİLİR ([attach]/[detach]):
+ * uygulama kapalıyken kanal yoktur; gelen istek [pendingCast] olarak saklanır,
+ * uygulama açılıp kanalı taktığında iletilir.
  */
 class CastReceiver(
     private val context: Context,
-    private val channel: MethodChannel,
     /** Uygulamayı öne getirir; yayın isteği geldiğinde çağrılır. */
     private val bringToFront: () -> Unit
 ) {
@@ -86,13 +90,58 @@ class CastReceiver(
         context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
 
-    init {
+    /**
+     * Flutter kanalı; uygulama kapalıyken null.
+     *
+     * @Volatile: kanal ana thread'de takılıp sökülüyor, HTTP thread'i okuyor.
+     */
+    @Volatile
+    private var channel: MethodChannel? = null
+
+    /**
+     * Uygulama açılana kadar bekleyen yayın isteği.
+     *
+     * Televizyonda uygulama kapalıyken istek geldiğinde Flutter tarafı henüz
+     * yok. İsteği burada tutup uygulama açıldığında ([attach]) iletiyoruz;
+     * yoksa uygulama açılır ama boş ekranda kalırdı.
+     *
+     * Yalnızca SON istek saklanıyor: kullanıcı arka arkaya iki video
+     * gönderdiyse görmek istediği sonuncusu.
+     */
+    @Volatile
+    private var pendingCast: Map<String, Any?>? = null
+
+    /** Uygulama açıldı: bundan sonra istekler doğrudan Flutter'a gider. */
+    @Synchronized
+    fun attach(channel: MethodChannel) {
+        this.channel = channel
         channel.setMethodCallHandler { call, result -> handleMethod(call, result) }
+    }
+
+    /**
+     * Uygulama kapandı: kanal bırakılıyor ama AĞ DİNLEYİCİSİ AÇIK KALIYOR.
+     *
+     * Eskiden alıcı aktiviteyle birlikte kapanıyordu; televizyonda uygulama
+     * kapalıyken telefon cihazı hiç bulamıyordu (kullanıcının bildirdiği
+     * "aynı ağda ama bulamıyor" sorununun sebebi buydu).
+     */
+    @Synchronized
+    fun detach(channel: MethodChannel) {
+        // Başka bir aktivite bu arada kendi kanalını taktıysa onu sökmüyoruz.
+        if (this.channel !== channel) return
+        channel.setMethodCallHandler(null)
+        this.channel = null
     }
 
     private fun handleMethod(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "startReceiver" -> result.success(start())
+            "startReceiver" -> {
+                val ready = start()
+                result.success(ready)
+                // Uygulama, yayın isteği YÜZÜNDEN açılmış olabilir; kanal yeni
+                // takıldığı için bekleyen isteği şimdi iletiyoruz.
+                if (ready) flushPending()
+            }
 
             "publishState" -> {
                 playbackState = call.arguments as? Map<*, *>
@@ -299,12 +348,17 @@ class CastReceiver(
             "title" to json?.optString("title").orEmpty(),
             "positionMs" to (json?.optLong("positionMs") ?: 0L)
         )
+        // İstek ÖNCE saklanıyor: uygulama kapalıysa açılması saniyeler sürüyor
+        // ve o sırada isteği tutacak başka bir yer yok.
+        pendingCast = payload
         mainHandler.post {
-            // Önce öne getir: televizyon başka bir uygulamadaysa video
-            // arkada açılıp kimse görmezdi.
+            // Önce öne getir: televizyon başka bir uygulamadaysa (ya da uygulama
+            // hiç açık değilse) video arkada açılıp kimse görmezdi.
             runCatching { bringToFront() }
                 .onFailure { Log.w(TAG, "Uygulama öne getirilemedi", it) }
-            channel.invokeMethod("castPlay", payload)
+            // Uygulama zaten açıksa istek burada iletilir; kapalıysa Flutter
+            // açılıp `startReceiver` çağırdığında iletilecek.
+            flushPending()
         }
         // Cevabı Flutter'ı BEKLEMEDEN veriyoruz: video çözümlemesi saniyeler
         // sürebiliyor, telefon o kadar beklerse zaman aşımına düşer.
@@ -333,12 +387,34 @@ class CastReceiver(
             return
         }
 
+        // Uygulama kapalıyken oynatma da yok: "duraklat"/"sonraki" gibi
+        // komutları sessizce yutup "oldu" demek telefona yalan söylemek olurdu.
+        val target = channel
+        if (target == null) {
+            respond(client, 503, """{"ok":false,"error":"app_not_running"}""")
+            return
+        }
+
         val payload = mapOf(
             "action" to action,
             "positionMs" to (json?.optLong("positionMs") ?: 0L)
         )
-        mainHandler.post { channel.invokeMethod("castCommand", payload) }
+        mainHandler.post { target.invokeMethod("castCommand", payload) }
         respond(client, 200, """{"ok":true}""")
+    }
+
+    /**
+     * Bekleyen yayın isteğini Flutter'a iletir.
+     *
+     * Kanal yoksa istek BEKLEMEYE devam eder — uygulama açılıp kanalı
+     * taktığında `startReceiver` üzerinden yeniden denenir.
+     */
+    private fun flushPending() {
+        val target = channel ?: return
+        val payload = pendingCast ?: return
+        pendingCast = null
+        runCatching { target.invokeMethod("castPlay", payload) }
+            .onFailure { Log.w(TAG, "Bekleyen yayın isteği iletilemedi", it) }
     }
 
     /**
