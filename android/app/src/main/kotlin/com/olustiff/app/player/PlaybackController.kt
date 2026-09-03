@@ -328,6 +328,9 @@ class PlaybackController(
                 "speed" to player.playbackParameters.speed,
                 "queueIndex" to PlaybackQueue.index,
                 "queueSize" to PlaybackQueue.size,
+                // Karıştırma açıkken gerçek çalma sırası; arayüz "sırada"
+                // listesini buna göre diziyor.
+                "queueOrder" to PlaybackQueue.playOrder,
                 "autoplay" to PlaybackQueue.autoplay,
                 "repeatMode" to PlaybackQueue.repeatMode.name.lowercase(),
                 "shuffle" to PlaybackQueue.shuffle,

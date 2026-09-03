@@ -23,6 +23,13 @@ class PlaybackState {
   /// bu yüzden arayüz onu buradan okur.
   final int queueIndex;
   final int queueSize;
+
+  /// Gerçek çalma sırası (kuyruk indeksleri).
+  ///
+  /// Karıştırma kapalıyken 0,1,2… ile aynı; açıkken karışık sırayı taşır.
+  /// Arayüz "sırada" listesini bundan diziyor — orijinal listeyi göstermek,
+  /// kullanıcıya çalmayacak bir video göstermek demekti.
+  final List<int> queueOrder;
   final bool autoplay;
   final String repeatMode;
   final bool shuffle;
@@ -48,6 +55,7 @@ class PlaybackState {
     this.speed = 1.0,
     this.queueIndex = -1,
     this.queueSize = 0,
+    this.queueOrder = const [],
     this.autoplay = true,
     this.repeatMode = 'off',
     this.shuffle = false,
@@ -85,6 +93,11 @@ class PlaybackState {
       speed: (map['speed'] as num?)?.toDouble() ?? 1.0,
       queueIndex: (map['queueIndex'] as num?)?.toInt() ?? -1,
       queueSize: (map['queueSize'] as num?)?.toInt() ?? 0,
+      queueOrder: (map['queueOrder'] as List<Object?>?)
+              ?.whereType<num>()
+              .map((e) => e.toInt())
+              .toList(growable: false) ??
+          const [],
       autoplay: map['autoplay'] as bool? ?? true,
       repeatMode: map['repeatMode'] as String? ?? 'off',
       shuffle: map['shuffle'] as bool? ?? false,

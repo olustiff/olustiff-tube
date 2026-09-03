@@ -19,6 +19,7 @@ class LibraryStore extends ChangeNotifier {
   static const _kWatched = 'watch_history';
   static const _kPlaylists = 'playlists';
   static const _kPlayCounts = 'play_counts';
+  static const _kPositions = 'watch_positions';
 
   static const _maxSearches = 40;
   static const _maxWatched = 200;
@@ -30,12 +31,33 @@ class LibraryStore extends ChangeNotifier {
 
   /// videoId → kaç kez oynatıldı. "En çok dinlediklerin" bundan üretilir.
   Map<String, int> _playCounts = {};
+
+  /// videoId → yarım bırakılan konum (ms). "Kaldığın yerden devam" bundan
+  /// üretilir.
+  ///
+  /// [_playCounts]'tan AYRI bir harita, video kaydının içine gömülü bir alan
+  /// değil. İki sebep: eski kayıtlar olduğu gibi okunmaya devam ediyor (göç
+  /// gerekmiyor), ve konum kaydı izleme sayacını hiç kıpırdatmıyor —
+  /// gömülü olsaydı her konum yazımı geçmişi de yeniden yazardı.
+  Map<String, int> _positions = {};
   Map<String, List<VideoSummary>> _playlists = {};
 
   List<String> get searches => List.unmodifiable(_searches);
   List<VideoSummary> get watched => List.unmodifiable(_watched);
 
   int playCountOf(String videoId) => _playCounts[videoId] ?? 0;
+
+  /// Videonun yarım bırakıldığı konum; baştan başlanacaksa 0.
+  int positionOf(String videoId) => _positions[videoId] ?? 0;
+
+  /// Yarım kalmış videolar, en son izlenen başta.
+  ///
+  /// [watched] zaten en-son-önce sıralı olduğu için ayrıca sıralanmıyor.
+  List<VideoSummary> get resumable => List.unmodifiable(
+        _watched.where(
+          (v) => v.videoId != null && positionOf(v.videoId!) > 0,
+        ),
+      );
 
   /// Geçmişte en çok tekrar edilen içerikler (çoktan aza).
   ///
@@ -77,6 +99,12 @@ class LibraryStore extends ChangeNotifier {
     final rawCounts = prefs.getString(_kPlayCounts);
     if (rawCounts != null) {
       _playCounts = (jsonDecode(rawCounts) as Map<String, dynamic>)
+          .map((key, value) => MapEntry(key, (value as num).toInt()));
+    }
+
+    final rawPositions = prefs.getString(_kPositions);
+    if (rawPositions != null) {
+      _positions = (jsonDecode(rawPositions) as Map<String, dynamic>)
           .map((key, value) => MapEntry(key, (value as num).toInt()));
     }
 
@@ -137,11 +165,48 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Videonun kaldığı yeri yazar.
+  ///
+  /// Konum İKİ uçta silinir, kaydedilmez:
+  /// - Başa çok yakınsa: kullanıcı videoyu daha yeni açmış, "devam et" demek
+  ///   ona bir şey kazandırmaz.
+  /// - Sona çok yakınsa: video bitmiş sayılır; bir dahaki açılışında son
+  ///   saniyeye atlayıp hemen bitmesi hata gibi görünürdü.
+  ///
+  /// Süre bilinmiyorsa (canlı yayın, henüz okunmamış) yalnızca alt eşik
+  /// uygulanıyor — bilmediğimiz bir sona göre karar veremeyiz.
+  Future<void> recordPosition(
+    String videoId,
+    int positionMs,
+    int? durationMs,
+  ) async {
+    final tooEarly = positionMs < _minResumeMs;
+    final tooLate =
+        durationMs != null && durationMs > 0 && positionMs > durationMs - _endGraceMs;
+
+    if (tooEarly || tooLate) {
+      if (_positions.remove(videoId) == null) return;
+    } else {
+      if (_positions[videoId] == positionMs) return;
+      _positions[videoId] = positionMs;
+    }
+    await _prefs?.setString(_kPositions, jsonEncode(_positions));
+    notifyListeners();
+  }
+
+  /// Bu süreden önce bırakılan videolar "yarım" sayılmaz.
+  static const _minResumeMs = 15 * 1000;
+
+  /// Sonuna bu kadar kalmışsa video bitmiş sayılır.
+  static const _endGraceMs = 30 * 1000;
+
   Future<void> clearWatched() async {
     _watched = [];
     _playCounts = {};
+    _positions = {};
     await _prefs?.setString(_kWatched, _encodeVideos(_watched));
     await _prefs?.setString(_kPlayCounts, jsonEncode(_playCounts));
+    await _prefs?.setString(_kPositions, jsonEncode(_positions));
     notifyListeners();
   }
 

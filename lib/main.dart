@@ -41,10 +41,15 @@ Future<void> main() async {
 
   // Native taraf kuyrukta kendi başına ilerleyebildiği için (ekran kapalıyken
   // de) arayüzü gerçekte çalanla eşitliyoruz.
+  //
+  // Aynı akış "kaldığın yerden devam" için de kullanılıyor: konumu ayrıca
+  // yakalamaya gerek yok, native zaten düzenli aralıklarla bildiriyor.
   PlaybackClient.shared.stateStream.listen((state) {
     final videoId = state.currentVideoId;
     if (videoId != null) {
       PlaybackCoordinator.instance.syncFromNative(videoId, state.queueIndex);
+      PlaybackCoordinator.instance.updatePlayOrder(state.queueOrder);
+      _rememberPosition(state, videoId);
     } else if (state.queueSize == 0) {
       // Bildirimdeki kapat düğmesi oynatmayı bitirdi: mini oynatıcı da
       // ekranda kalmasın.
@@ -75,6 +80,31 @@ Future<void> main() async {
 /// önce buraya ulaşabiliyor. Bağlam henüz yoksa istek atılmıyor, birkaç kez
 /// yeniden deneniyor — yoksa "televizyonda uygulama açıldı ama video
 /// açılmadı" gibi görünüyordu.
+/// Yarım bırakılan konumu kaydeder — "kaldığın yerden devam" bunu okuyor.
+///
+/// Uygulamanın kapanışını beklemek İŞE YARAMIYOR: süreç sistem tarafından
+/// öldürüldüğünde hiçbir kanca çalışmıyor ve konum kaybolurdu. Bunun yerine
+/// oynatma sürerken düzenli aralıklarla yazılıyor; en kötü ihtimalle birkaç
+/// saniyelik bir sapma oluyor.
+///
+/// Yazım seyreltiliyor: durum akışı saniyede birkaç kez tikliyor ve her tikte
+/// diske yazmanın karşılığı yok.
+void _rememberPosition(PlaybackState state, String videoId) {
+  // Canlı yayında "kalınan yer" diye bir şey yok.
+  if (state.isLive || !state.isPlaying) return;
+  final now = DateTime.now();
+  if (now.difference(_lastPositionSave) < _positionSaveGap) return;
+  _lastPositionSave = now;
+  LibraryStore.instance.recordPosition(
+    videoId,
+    state.position.inMilliseconds,
+    state.duration?.inMilliseconds,
+  );
+}
+
+DateTime _lastPositionSave = DateTime.fromMillisecondsSinceEpoch(0);
+const _positionSaveGap = Duration(seconds: 5);
+
 void _openCastedVideo(String videoId, {int attempt = 0}) {
   if (isPlayerOpen) return;
   final context = appNavigatorKey.currentContext;

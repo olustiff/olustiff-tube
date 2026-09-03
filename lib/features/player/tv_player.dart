@@ -48,15 +48,19 @@ class TvPlayer extends StatefulWidget {
   State<TvPlayer> createState() => _TvPlayerState();
 }
 
-/// Sarma adımı: tuşa kaç kez tekrar geldiyse ona göre 10 / 20 / 30 saniye.
+/// Sarma adımı: tuşa kaç kez tekrar geldiyse ona göre 10 / 30 / 60 saniye.
 ///
-/// Tek basışta 10 saniye doğru ölçü — kullanıcı küçük bir düzeltme yapıyor.
-/// Ama uzun bir videoda dakikalarca ileri gitmek için tuş basılı tutuluyor ve
-/// sabit adımda bu çok yavaş kalıyordu; basılı tutuldukça adım büyür.
+/// Tek basışta 10 saniye doğru ölçü — kullanıcı küçük bir düzeltme yapıyor;
+/// tek basışı büyütmek "az geri al" hareketini imkânsız kılardı.
+///
+/// Ama uzun bir videoda (bir buçuk saatlik bölümler) ilerlemek için tuş basılı
+/// tutuluyor ve üst basamak 30 saniyede kalınca hâlâ yavaştı: bir dakikalık
+/// atlama için tuşu iki kez beklemek gerekiyordu. Üst basamak 1 DAKİKA, ara
+/// basamak da 20 yerine 30 saniye — merdiven daha erken hızlanıyor.
 int tvSeekStepSeconds(int repeat) {
   if (repeat < 6) return 10;
-  if (repeat < 14) return 20;
-  return 30;
+  if (repeat < 12) return 30;
+  return 60;
 }
 
 /// Kontroller açıkken seçimin hangi sırada olduğu.
@@ -184,7 +188,7 @@ class _TvPlayerState extends State<TvPlayer> {
   }
 
   /// Bu tuş olayı için sarma adımı. İlk basış 10 sn; basılı tutuldukça
-  /// 20 ve 30 saniyeye çıkar.
+  /// 30 saniyeye ve 1 dakikaya çıkar.
   Duration _stepFor(KeyEvent event) {
     if (event is KeyDownEvent) {
       _seekRepeat = 0;
@@ -195,20 +199,33 @@ class _TvPlayerState extends State<TvPlayer> {
   }
 
   /// Tekrar olayları çok sık geliyor; aralarında en az bu kadar bekleniyor.
-  bool _seekThrottled(KeyEvent event) {
+  ///
+  /// Bekleme süresi ADIMLA birlikte uzuyor. Sabit bırakılamaz: tekrarlar
+  /// saniyede yedi sekiz kez geliyor ve 1 dakikalık adımla bu, saniyede yedi
+  /// dakika demek — kullanıcı tuşu bıraktığında videonun sonunda oluyordu.
+  /// Uzun adımda daha seyrek sarmak hızı hâlâ artırıyor ama kontrolü
+  /// bırakmıyor.
+  bool _seekThrottled(KeyEvent event, Duration step) {
     if (event is! KeyRepeatEvent) return false;
     final now = DateTime.now();
-    if (now.difference(_lastSeekAt) < const Duration(milliseconds: 130)) {
+    if (now.difference(_lastSeekAt) < _minGapFor(step)) {
       _seekRepeat--;
       return true;
     }
     return false;
   }
 
+  /// [step] büyüklüğündeki sarmalar arasında beklenecek en az süre.
+  static Duration _minGapFor(Duration step) {
+    if (step.inSeconds >= 60) return const Duration(milliseconds: 420);
+    if (step.inSeconds >= 30) return const Duration(milliseconds: 260);
+    return const Duration(milliseconds: 130);
+  }
+
   /// Bir sarma tuşunu karşılar: adımı olaydan hesaplar ve tekrarları seyreltir.
   void _seekKey(KeyEvent event, {required bool forward}) {
     final step = _stepFor(event);
-    if (_seekThrottled(event)) return;
+    if (_seekThrottled(event, step)) return;
     _seekBy(forward ? step : -step);
   }
 

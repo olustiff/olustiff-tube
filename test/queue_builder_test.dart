@@ -194,4 +194,67 @@ void main() {
           reason: 'bölüm dizisi bitince aynı kanalda yığılmamalı');
     });
   });
+
+  group('QueueBuilder.extend', () {
+    // Kuyruk bitince oynatma duruyordu; sona yaklaşınca öneriyle uzuyor.
+    test('kuyrukta olmayan adaylar sona eklenir', () {
+      final added = QueueBuilder.extend(
+        current: v('calan', 'A'),
+        existing: [v('calan', 'A'), v('1', 'B')],
+        candidates: [v('1', 'B'), v('2', 'C'), v('3', 'D')],
+      );
+      expect(added.map((e) => e.videoId), ['2', '3']);
+    });
+
+    test('çalan video yeniden eklenmez', () {
+      final added = QueueBuilder.extend(
+        current: v('calan', 'A'),
+        existing: const [],
+        candidates: [v('calan', 'A'), v('2', 'B')],
+      );
+      expect(added.map((e) => e.videoId), ['2']);
+    });
+
+    test('aday kalmadıysa boş döner ve kuyruk uzamaz', () {
+      final added = QueueBuilder.extend(
+        current: v('calan', 'A'),
+        existing: [v('1', 'B')],
+        candidates: [v('1', 'B')],
+      );
+      expect(added, isEmpty);
+    });
+
+    test('istenen sayıdan fazlası eklenmez', () {
+      final added = QueueBuilder.extend(
+        current: v('calan', 'A'),
+        existing: const [],
+        candidates: [for (var i = 0; i < 30; i++) v('$i', 'K$i')],
+        limit: 4,
+      );
+      expect(added, hasLength(4));
+    });
+
+    // Benzerlik eşiğini geçemeyen (başka yazı sistemi) adaylar kuyruğa
+    // girmemeli — uzatma, kuyruğun tarzını bozmanın yolu olmamalı.
+    test('alakasız aday eklenmez', () {
+      final added = QueueBuilder.extend(
+        current: v('calan', 'A', title: 'Sezen Aksu şarkısı'),
+        existing: const [],
+        candidates: [v('yabanci', 'B', title: '中文歌曲 完整版', duration: 4000)],
+      );
+      expect(added, isEmpty);
+    });
+
+    // Kuyruğun son videosuyla aynı kanaldan üst üste yığılmamalı.
+    test('aynı kanal üst üste yığılmaz', () {
+      final added = QueueBuilder.extend(
+        current: v('calan', 'A'),
+        existing: [v('son', 'A')],
+        candidates: [v('1', 'A'), v('2', 'A'), v('3', 'B')],
+      );
+      // Kuyruğun sonu zaten A; ikinci sırada A gelemez.
+      expect(added.first.uploaderName, 'A');
+      expect(added[1].uploaderName, 'B');
+    });
+  });
 }

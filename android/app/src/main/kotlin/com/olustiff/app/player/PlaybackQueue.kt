@@ -78,6 +78,16 @@ object PlaybackQueue {
         }
     }
 
+    /**
+     * Çalma sırası (öğe indeksleri), arayüzün gösterebilmesi için.
+     *
+     * Gerekli çünkü karıştırma açıkken gerçek sıra YALNIZCA burada duruyordu:
+     * Dart tarafı orijinal listeyi gösteriyor, oynatma başka bir sırada
+     * ilerliyordu. Kullanıcı "sıradaki" diye gördüğü videodan başkasına
+     * geçiyordu.
+     */
+    val playOrder: List<Int> get() = order
+
     /** [index]'in çalma sırasındaki konumu. */
     private fun positionInOrder(): Int = order.indexOf(index)
 

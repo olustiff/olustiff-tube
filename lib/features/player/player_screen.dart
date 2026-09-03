@@ -694,9 +694,8 @@ class _QueueSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final queue = coordinator.queue;
-    final start = coordinator.queueIndex + 1;
-    final upcoming = start < queue.length ? queue.sublist(start) : const [];
+    // Gerçek çalma sırası: karıştırma açıkken kuyruğun kendi sırası DEĞİL.
+    final upcoming = coordinator.upcoming;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,10 +732,10 @@ class _QueueSection extends StatelessWidget {
             child: Text('Sırada başka video yok.'),
           )
         else
-          for (var i = 0; i < upcoming.length; i++)
+          for (final item in upcoming)
             VideoTile(
-              video: upcoming[i],
-              onTap: () => coordinator.playQueueIndex(start + i),
+              video: item.video,
+              onTap: () => coordinator.playQueueIndex(item.index),
             ),
       ],
     );

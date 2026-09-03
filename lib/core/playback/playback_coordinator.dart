@@ -10,6 +10,7 @@ import '../ui/tv_mode.dart';
 import 'content_kind.dart';
 import 'playback_client.dart';
 import 'queue_builder.dart';
+import 'queue_order.dart';
 import 'stream_selection.dart';
 
 /// "Ne çalıyor, sırada ne var" bilgisinin Dart tarafındaki yüzü.
@@ -34,6 +35,27 @@ class PlaybackCoordinator extends ChangeNotifier {
   String? _qualityLabel;
   List<VideoSummary> _queue = const [];
   int _index = -1;
+
+  /// Native'in bildirdiği gerçek çalma sırası (kuyruk indeksleri).
+  ///
+  /// Karıştırma açıkken kuyruğun kendi sırasından FARKLI. Arayüz "sırada"
+  /// listesini bundan diziyor; ham kuyruğu göstermek, çalmayacak bir videoyu
+  /// sıradaki diye göstermek demekti.
+  List<int> _playOrder = const [];
+
+  /// Çalanın ardından gelecekler — gerçekten çalınacak sırayla.
+  ///
+  /// Kuyruktaki indeksle birlikte dönüyor: arayüz bir satıra dokunulduğunda
+  /// hangi indekse atlayacağını bilmek zorunda ve karıştırmada bu, listedeki
+  /// konumla aynı değil.
+  List<({int index, VideoSummary video})> get upcoming => [
+        for (final index in upcomingQueueIndexes(
+          order: _playOrder,
+          current: _index,
+          queueLength: _queue.length,
+        ))
+          (index: index, video: _queue[index]),
+      ];
 
   /// Kuyruğun kurulduğu ham liste (arama sonuçları / akış). Filtre
   /// değiştiğinde kuyruk bundan yeniden üretilir.
@@ -92,10 +114,11 @@ class PlaybackCoordinator extends ChangeNotifier {
   bool isCurrent(String videoId) =>
       _details?.videoId == videoId || _targetVideoId == videoId;
 
-  VideoSummary? get upNext {
-    final next = _index + 1;
-    return next >= 0 && next < _queue.length ? _queue[next] : null;
-  }
+  /// Sıradaki video — GERÇEK çalma sırasına göre.
+  ///
+  /// `_index + 1` demek karıştırma açıkken yanlış cevap veriyordu: ekranda
+  /// "Sırada: X" yazarken Y çalıyordu.
+  VideoSummary? get upNext => upcoming.firstOrNull?.video;
 
   /// Bir videoyu çalar.
   ///
@@ -108,12 +131,18 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// içeriği telefonda bilerek sesli modda açılıyor, ama televizyonda ekran
   /// zaten karşıda — orada sesli mod diye bir senaryo yok ve kullanıcı
   /// "görüntü gelmedi" diye görüyor.
+  ///
+  /// [startAt] verilirse video o konumdan başlar ("kaldığın yerden devam").
+  /// Verilmezse baştan başlar — çağıranın açıkça istemesi gerekiyor, çünkü
+  /// kullanıcı bir videoyu yeniden açtığında her zaman kaldığı yeri istemiyor
+  /// (aramadan yeni açılan bir video baştan başlamalı).
   Future<void> play(
     String videoId, {
     List<VideoSummary> context = const [],
     List<VideoSummary>? exactQueue,
     int? index,
     bool forceVideo = false,
+    Duration? startAt,
   }) async {
     final requestId = ++_requestId;
     _targetVideoId = videoId;
@@ -130,7 +159,15 @@ class PlaybackCoordinator extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _play(videoId, context, exactQueue, index, requestId, forceVideo);
+      await _play(
+        videoId,
+        context,
+        exactQueue,
+        index,
+        requestId,
+        forceVideo,
+        startAt,
+      );
     } catch (e) {
       // Hazırlık başarısız oldu: hedefi bırak ki kullanıcı aynı videoya
       // yeniden dokunduğunda tekrar denensin. Hata fırlatılmıyor — çağıranlar
@@ -160,6 +197,7 @@ class PlaybackCoordinator extends ChangeNotifier {
     int? index,
     int requestId,
     bool forceVideo,
+    Duration? startAt,
   ) async {
     final details = await _extraction.videoDetails(videoId);
     if (_isStale(requestId)) return;
@@ -256,6 +294,23 @@ class PlaybackCoordinator extends ChangeNotifier {
     );
 
     if (_isStale(requestId)) return;
+
+    // "Kaldığın yerden devam": çağıran açıkça bir konum vermediyse yarım
+    // bırakılan yer geçmişten okunuyor.
+    //
+    // Varsayılanın devam etmek olması bilinçli — kullanıcı videoyu nereden
+    // açtığını (arama, geçmiş, ana sayfa) hatırlamak zorunda kalmasın diye.
+    // Baştan başlatmak isteyen çağıran `startAt: Duration.zero` geçiyor.
+    //
+    // Sarma oynatma BAŞLADIKTAN sonra yapılıyor: oynatıcı kaynağı hazırlamadan
+    // önce verilen konum yok sayılıyor.
+    final resumeFrom = startAt ??
+        Duration(milliseconds: _library.positionOf(videoId));
+    if (resumeFrom > Duration.zero && !streams.isLive) {
+      await _playback.seekTo(resumeFrom);
+      if (_isStale(requestId)) return;
+    }
+
     await _playback.setSpeed(_settings.speed);
     await _library.recordWatch(seed);
 
@@ -393,6 +448,7 @@ class PlaybackCoordinator extends ChangeNotifier {
       _qualityLabel = null;
       notifyListeners();
       await _library.recordWatch(_summaryOf(details));
+      await _extendQueueIfEnding(details, requestId);
     } catch (_) {
       // Meta veri alınamadı; oynatma yine de sürüyor. Ekranı boş bırakmamak
       // için kuyruktaki özet (başlık/kapak) yerinde kalır.
@@ -479,6 +535,69 @@ class PlaybackCoordinator extends ChangeNotifier {
       : _playback.pause();
 
   /// Bulunulan yerden [offset] kadar sarar.
+  /// Native'in bildirdiği çalma sırasını alır.
+  ///
+  /// Durum akışından besleniyor; karıştırma açılıp kapandığında ya da kuyruk
+  /// değiştiğinde sıra da değişiyor.
+  void updatePlayOrder(List<int> order) {
+    if (_playOrder.length == order.length) {
+      var same = true;
+      for (var i = 0; i < order.length; i++) {
+        if (_playOrder[i] != order[i]) {
+          same = false;
+          break;
+        }
+      }
+      // Akış saniyede birkaç kez geliyor; değişmemiş sırada arayüzü yeniden
+      // çizmenin karşılığı yok.
+      if (same) return;
+    }
+    _playOrder = List.unmodifiable(order);
+    notifyListeners();
+  }
+
+  /// Kuyruğun sonuna yaklaşıldıysa öneriyle uzatır.
+  ///
+  /// Kuyruk bitince oynatma DURUYORDU; müzik dinlerken bu, birkaç şarkı sonra
+  /// gelen sessizlik demekti. Artık sona yaklaşınca çalan videonun ilgili
+  /// videolarından kuyruk uzuyor ve dinleme kesintisiz sürüyor.
+  ///
+  /// Yalnızca [QueueMode.mixed] kipinde: kullanıcı bir çalma listesi açtıysa
+  /// listenin sonu GERÇEKTEN sondur, arkasına öneri eklemek onun seçimini
+  /// bozardı.
+  ///
+  /// Otomatik oynatma kapalıysa hiç uzatılmıyor — kullanıcı zaten "bittiğinde
+  /// dursun" demiş.
+  Future<void> _extendQueueIfEnding(VideoDetails details, int requestId) async {
+    if (!_settings.autoplay) return;
+    if (_queueMode != QueueMode.mixed) return;
+    if (_queue.length >= QueueBuilder.maxTotalQueueLength) return;
+    if (_index < _queue.length - _extendWhenRemaining) return;
+
+    final addition = QueueBuilder.extend(
+      current: _summaryOf(details),
+      existing: _queue,
+      candidates: details.relatedItems,
+    );
+    if (addition.isEmpty || _isStale(requestId)) return;
+
+    _queue = [..._queue, ...addition];
+    notifyListeners();
+    // Native kuyruğun sahibi; ekran kapalıyken sıradakine o geçiyor, bu yüzden
+    // uzayan listeyi ONA da bildirmek şart. İndeks korunuyor: `setQueue`
+    // çalanı kesmiyor (kip değiştirmede de aynı yol kullanılıyor).
+    await _playback.setQueue(
+      _queue.map(_queueItem).toList(growable: false),
+      _index,
+    );
+  }
+
+  /// Kuyruğun sonuna bu kadar video kaldığında uzatma tetikleniyor.
+  ///
+  /// Sıfır beklemek geç kalırdı: uzatma bir çıkarma isteği gerektiriyor ve o
+  /// sürede video bitip oynatma durabilirdi.
+  static const _extendWhenRemaining = 3;
+
   Future<void> seekBy(Duration offset, Duration current) {
     final target = current + offset;
     final clamped = target < Duration.zero ? Duration.zero : target;

@@ -109,6 +109,84 @@ class QueueBuilder {
     return result;
   }
 
+  /// Kuyruk bitmek üzereyken sonuna eklenecek videoları seçer.
+  ///
+  /// Neden gerekli: kuyruk tek seferde kuruluyor ve sonuna gelindiğinde
+  /// oynatma DURUYORDU. YouTube'da müzik dinlerken böyle bir son yok — kuyruk
+  /// tükendikçe öneriyle uzuyor. Kullanıcı için fark, "bir süre sonra sessizlik"
+  /// ile "dinlemeye devam" arasındaki fark.
+  ///
+  /// [current] o an çalan video (benzerlik bunun üzerinden ölçülüyor, kuyruğun
+  /// ilk videosu üzerinden değil — yoksa kuyruk uzadıkça başlangıç noktasından
+  /// kopardı). [existing] kuyrukta hâlihazırda olanlar; hiçbiri tekrar
+  /// eklenmiyor. [candidates] genellikle çalan videonun ilgili videoları.
+  ///
+  /// Dönen liste kuyruğun SONUNA eklenecek olanlar; boş dönebilir (aday yoksa
+  /// ya da hepsi zaten kuyrukta) ve o durumda kuyruk uzamaz.
+  static List<VideoSummary> extend({
+    required VideoSummary current,
+    required List<VideoSummary> existing,
+    required List<VideoSummary> candidates,
+    int limit = _extendBatch,
+  }) {
+    final seen = <String>{
+      if (current.videoId != null) current.videoId!,
+      for (final video in existing)
+        if (video.videoId != null) video.videoId!,
+    };
+
+    final scored = <({VideoSummary video, int score})>[];
+    for (final candidate in candidates) {
+      final id = candidate.videoId;
+      if (id == null || !seen.add(id)) continue;
+      final score = similarityScore(current, candidate);
+      if (score < _minScore) continue;
+      scored.add((video: candidate, score: score));
+    }
+    scored.sort((a, b) => b.score.compareTo(a.score));
+
+    // Aynı kanal sınırı burada da geçerli, ama kuyruğun MEVCUT sonundan
+    // devam ederek: eklenen ilk video kuyruktaki son videoyla aynı kanaldansa
+    // bu üst üste sayılır.
+    final pool = scored.map((e) => e.video).toList();
+    final added = <VideoSummary>[];
+    var lastChannel = existing.isEmpty ? null : existing.last.uploaderName;
+    var streak = 1;
+
+    while (pool.isNotEmpty && added.length < limit) {
+      var pickIndex = 0;
+      if (streak >= _maxConsecutiveSameChannel) {
+        final alternative =
+            pool.indexWhere((v) => v.uploaderName != lastChannel);
+        if (alternative != -1) pickIndex = alternative;
+      }
+      final picked = pool.removeAt(pickIndex);
+      if (picked.uploaderName == lastChannel) {
+        streak++;
+      } else {
+        lastChannel = picked.uploaderName;
+        streak = 1;
+      }
+      added.add(picked);
+    }
+
+    return added;
+  }
+
+  /// Kuyruğun sonuna bir seferde eklenen video sayısı.
+  ///
+  /// Küçük tutuluyor: her uzatma bir sonraki videonun ilgili listesinden
+  /// besleniyor, yani kuyruk kullanıcı ilerledikçe kendi kendini tazeliyor.
+  /// Büyük paketler eski bir videonun önerilerini kuyruğun çok ilerisine
+  /// taşırdı.
+  static const _extendBatch = 10;
+
+  /// Kuyruğun mutlak üst sınırı.
+  ///
+  /// Sonsuz uzama bellek ve native tarafa gönderilen liste boyutu demek;
+  /// bu sınıra gelince en baştaki (çoktan çalınmış) videolar düşürülüyor.
+  static const maxTotalQueueLength = 200;
+
   /// İzleme geçmişindeki video kimlikleri.
   ///
   /// Yalnızca bellekteki listeyi okur (disk erişimi yok), bu yüzden kuyruk
