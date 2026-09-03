@@ -246,6 +246,13 @@ class PlaybackController(
             // Kalite tercihi native tarafta da saklanmalı: kuyrukta sıradakine
             // geçiş burada yapılıyor ve o an Dart uykuda olabilir.
             // Değer yoksa (null) kalite "Otomatik" demektir.
+            "setLoudnessBoost" -> {
+                PlayerHolder.setLoudnessGain(
+                    call.argument<Int>("millibels") ?: LoudnessBoost.DEFAULT_GAIN
+                )
+                result.success(null)
+            }
+
             "setMaxHeight" -> {
                 PlayerHolder.preferredMaxHeight = call.argument<Int>("maxHeight")
                 result.success(null)

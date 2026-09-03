@@ -196,6 +196,10 @@ class PlaybackClient {
   ///
   /// Kuyrukta sıradakine geçiş native tarafta yapıldığı için (ekran kapalıyken
   /// de ilerlemeli) tercih orada da bilinmek zorunda.
+  /// Ses yükseltme kazancını ayarlar (milibel; 0 = kapalı).
+  Future<void> setLoudnessBoost(int millibels) =>
+      _method.invokeMethod<void>('setLoudnessBoost', {'millibels': millibels});
+
   Future<void> setMaxHeight(int? maxHeight) =>
       _method.invokeMethod<void>('setMaxHeight', {'maxHeight': maxHeight});
 

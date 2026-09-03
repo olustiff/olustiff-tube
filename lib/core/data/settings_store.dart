@@ -15,11 +15,22 @@ class SettingsStore extends ChangeNotifier {
   static const _kAutoplay = 'autoplay';
   static const _kMusicAsAudio = 'music_as_audio';
   static const _kBluetoothAutoPlay = 'bluetooth_autoplay';
+  static const _kLoudnessBoost = 'loudness_boost';
 
   /// Seçilebilir kalite tavanları. `null` = "Otomatik": çözünürlüğü ağ hızına
   /// göre oynatıcı seçer.
   static const qualityOptions = <int?>[null, 2160, 1440, 1080, 720, 480, 360];
   static const speedOptions = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+
+  /// Ses yükseltme kademeleri (milibel; 100 mB = 1 dB).
+  ///
+  /// Üst kademeler bilerek "önerilmeyen" bölgede: Android'in efekti taşan
+  /// sinyali sıkıştırdığı için yüksek kazançta ses nefes alıp vermeye başlıyor
+  /// (bkz. LoudnessBoost). Seçenek yine de duruyor — kısık sesten şikâyet eden
+  /// kullanıcı bozulmayı göze alabilir.
+  static const loudnessOptions = <int>[0, 200, 400, 700, 900];
+
+  static const _defaultLoudness = 400;
 
   SharedPreferences? _prefs;
 
@@ -28,6 +39,7 @@ class SettingsStore extends ChangeNotifier {
   int? _maxHeight;
   double _speed = 1.0;
   bool _autoplay = true;
+  int _loudnessBoost = _defaultLoudness;
 
   /// Müzik olarak tespit edilen içerikler sesli modda mı açılsın.
   /// Kapatılırsa her şey video modunda başlar.
@@ -42,6 +54,18 @@ class SettingsStore extends ChangeNotifier {
   bool get musicAsAudio => _musicAsAudio;
   bool get bluetoothAutoPlay => _bluetoothAutoPlay;
 
+  /// Ses yükseltme kazancı (milibel). 0 = kapalı.
+  int get loudnessBoost => _loudnessBoost;
+
+  /// Ayar ekranında gösterilen etiket.
+  String get loudnessLabel => switch (_loudnessBoost) {
+        0 => 'Kapalı',
+        <= 200 => 'Az (+2 dB)',
+        <= 400 => 'Orta (+4 dB)',
+        <= 700 => 'Yüksek (+7 dB)',
+        _ => 'En yüksek (+9 dB)',
+      };
+
   String get qualityLabel => _maxHeight == null ? 'Otomatik' : '${_maxHeight}p';
 
   Future<void> load() async {
@@ -54,6 +78,8 @@ class SettingsStore extends ChangeNotifier {
     _autoplay = prefs.getBool(_kAutoplay) ?? true;
     _musicAsAudio = prefs.getBool(_kMusicAsAudio) ?? true;
     _bluetoothAutoPlay = prefs.getBool(_kBluetoothAutoPlay) ?? false;
+    _loudnessBoost = prefs.getInt(_kLoudnessBoost) ?? _defaultLoudness;
+    await _syncLoudnessToNative();
     notifyListeners();
   }
 
@@ -73,6 +99,25 @@ class SettingsStore extends ChangeNotifier {
   Future<void> _syncQualityToNative() async {
     try {
       await PlaybackClient.shared.setMaxHeight(_maxHeight);
+    } on MissingPluginException {
+      // Yoksay.
+    } on PlatformException {
+      // Yoksay.
+    }
+  }
+
+  Future<void> setLoudnessBoost(int millibels) async {
+    _loudnessBoost = millibels;
+    await _prefs?.setInt(_kLoudnessBoost, millibels);
+    await _syncLoudnessToNative();
+    notifyListeners();
+  }
+
+  /// Ses efekti native tarafta yaşıyor; ayar oraya bildirilmezse hiçbir şey
+  /// değişmez. Kanal yoksa (birim testleri) sessizce geçilir.
+  Future<void> _syncLoudnessToNative() async {
+    try {
+      await PlaybackClient.shared.setLoudnessBoost(_loudnessBoost);
     } on MissingPluginException {
       // Yoksay.
     } on PlatformException {

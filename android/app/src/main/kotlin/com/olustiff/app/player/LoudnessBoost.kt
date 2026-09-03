@@ -12,9 +12,25 @@ import android.util.Log
  * alınan ses bu uygulamada ancak 50 kademede alınıyordu.
  *
  * NewPipeExtractor bu bilgiyi hiç sunmuyor (ne AudioStream'de ne itag
- * verisinde), bu yüzden telafi sabit bir kazançla yapılıyor. Android'in kendi
- * efekti kullanılıyor: örnekleri elle çarpmak tepe noktalarda sesi kırpardı,
- * bu efekt ise sıkıştırmayı kendi yönetiyor.
+ * verisinde; v0.26.5 jar'ında "loudness" diye bir alan yok), bu yüzden telafi
+ * sabit bir kazançla yapılıyor.
+ *
+ * ## Kazancın neden ölçülü tutulduğu
+ *
+ * Android'in [LoudnessEnhancer]'ı sabit bir yükseltici DEĞİL: belgesinde
+ * yazdığı gibi "platformun örnek aralığının dışına taşan sinyaller
+ * SIKIŞTIRILIR". Yani efekt, kazancı taşıran her yerde devreye giren bir
+ * kompresör gibi davranıyor.
+ *
+ * Müzik zaten yüksek seviyede masterlanıyor ve tepe noktaları tam ölçeğe çok
+ * yakın. +9 dB ile sinyalin büyük kısmı taşıyor, kompresör sürekli çalışıyor
+ * ve ses DUYULUR şekilde "bir sıkılıp bir açılıyor" (pumping) — gerçek
+ * cihazda yaşandı. Varsayılan bu yüzden +4 dB'ye çekildi: kısıklığı belirgin
+ * biçimde telafi ediyor ama efekti sürekli sıkıştırma bölgesine sokmuyor.
+ *
+ * Kullanıcı yine de kapatabiliyor ya da yükseltebiliyor (Ayarlar → Ses
+ * yükseltme); bozulmayı duyan kişi ile kısıklıktan şikâyet eden kişi aynı
+ * kişi olmayabilir.
  */
 class LoudnessBoost {
 
@@ -64,8 +80,15 @@ class LoudnessBoost {
     companion object {
         private const val TAG = "OlustiffLoudness"
 
-        /** Varsayılan +9 dB: ölçülen fark bu civarda. */
-        const val DEFAULT_GAIN = 900
+        /**
+         * Varsayılan +4 dB.
+         *
+         * Ölçülen kısıklık farkı +9 dB civarındaydı ve başta o seçilmişti; ama
+         * o değerde efektin kendi sıkıştırması duyuluyordu (bkz. sınıf
+         * belgesi). Sesin biraz kısık kalması, sesin nefes alıp vermesinden
+         * iyi.
+         */
+        const val DEFAULT_GAIN = 400
 
         /** Üstü kırpma ve bozulma riski taşıyor. */
         const val MAX_GAIN = 1500

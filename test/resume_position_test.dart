@@ -46,6 +46,27 @@ void main() {
       expect(store.positionOf('abc'), 0);
     });
 
+    // Gerçek cihazda yakalandı: sabit 30 saniyelik payla 2 dakikalık bir
+    // şarkının son çeyreği "bitmiş" sayılıyor, kullanıcı baştan başlıyordu.
+    test('kısa videoda pay orantılı kalır', () async {
+      // 2:03'lük şarkı, 1:43'te bırakıldı — bitmiş sayılmamalı.
+      await store.recordPosition('sarki', 103000, 123000);
+      expect(store.positionOf('sarki'), 103000);
+    });
+
+    test('kısa videonun gerçek sonu yine bitmiş sayılır', () async {
+      await store.recordPosition('sarki', 121000, 123000);
+      expect(store.positionOf('sarki'), 0);
+    });
+
+    // Uzun bölümde pay üst sınıra takılıyor: son beş dakika "bitmiş"
+    // sayılmamalı.
+    test('uzun videoda pay üst sınırla kısıtlanır', () async {
+      // 1:40:00'lık bölüm, 1:36:00'da bırakıldı.
+      await store.recordPosition('bolum', 5760000, 6000000);
+      expect(store.positionOf('bolum'), 5760000);
+    });
+
     test('sonuna gelince daha önceki kayıt silinir', () async {
       await store.recordPosition('abc', 600000, 3600000);
       await store.recordPosition('abc', 3595000, 3600000);

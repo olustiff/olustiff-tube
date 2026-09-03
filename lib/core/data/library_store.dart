@@ -181,8 +181,9 @@ class LibraryStore extends ChangeNotifier {
     int? durationMs,
   ) async {
     final tooEarly = positionMs < _minResumeMs;
-    final tooLate =
-        durationMs != null && durationMs > 0 && positionMs > durationMs - _endGraceMs;
+    final tooLate = durationMs != null &&
+        durationMs > 0 &&
+        positionMs > durationMs - _endGrace(durationMs);
 
     if (tooEarly || tooLate) {
       if (_positions.remove(videoId) == null) return;
@@ -197,8 +198,18 @@ class LibraryStore extends ChangeNotifier {
   /// Bu süreden önce bırakılan videolar "yarım" sayılmaz.
   static const _minResumeMs = 15 * 1000;
 
-  /// Sonuna bu kadar kalmışsa video bitmiş sayılır.
-  static const _endGraceMs = 30 * 1000;
+  /// Videonun bitmiş sayılması için sona ne kadar kalmış olması gerektiği.
+  ///
+  /// Sabit bir süre İŞE YARAMIYOR ve gerçek cihazda yakalandı: 30 saniyelik
+  /// sabit payla, 2 dakikalık bir şarkının son çeyreği "bitmiş" sayılıyordu —
+  /// şarkının 1:43'ünde bırakıp geri dönen kullanıcı baştan başlıyordu.
+  ///
+  /// Bunun yerine sürenin %5'i alınıyor; kısa şarkıda birkaç saniye, uzun
+  /// bölümde daha çok. Alt sınır çok kısa videoların hiç bitmemesini,
+  /// üst sınır da bir buçuk saatlik bir bölümün son beş dakikasının
+  /// "bitmiş" sayılmasını engelliyor.
+  static int _endGrace(int durationMs) =>
+      (durationMs * 0.05).round().clamp(5 * 1000, 60 * 1000);
 
   Future<void> clearWatched() async {
     _watched = [];

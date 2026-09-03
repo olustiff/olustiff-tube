@@ -65,6 +65,30 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
               ),
+              ListTile(
+                leading: const Icon(Icons.volume_up_outlined),
+                title: const Text('Ses yükseltme'),
+                subtitle: Text(
+                  settings.loudnessBoost == 0
+                      ? 'Kapalı — ses ham hâliyle, en temiz sonuç'
+                      : '${settings.loudnessLabel} — yüksek kademelerde ses '
+                          'bir sıkılıp bir açılabilir',
+                ),
+                trailing: DropdownButton<int>(
+                  value: settings.loudnessBoost,
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    await settings.setLoudnessBoost(value);
+                  },
+                  items: [
+                    for (final option in SettingsStore.loudnessOptions)
+                      DropdownMenuItem(
+                        value: option,
+                        child: Text(option == 0 ? 'Kapalı' : '+${option ~/ 100} dB'),
+                      ),
+                  ],
+                ),
+              ),
               // Televizyonda sesli mod hiç kullanılmıyor (ekran zaten
               // karşıda); orada bu ayarı göstermek kafa karıştırıyor.
               if (!TvMode.isTv.value)

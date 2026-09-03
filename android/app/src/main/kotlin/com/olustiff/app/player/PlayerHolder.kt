@@ -240,6 +240,11 @@ object PlayerHolder {
         playQueueItem(context, item)
     }
 
+    /** Ses yükseltme kazancını değiştirir (milibel; 0 = kapalı). */
+    fun setLoudnessGain(millibels: Int) {
+        loudness.setGain(millibels)
+    }
+
     @Synchronized
     private fun getDataSourceFactory(): DataSource.Factory {
         return dataSourceFactory ?: OkHttpDataSource.Factory(OkHttpClient.Builder().build())
