@@ -18,6 +18,9 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem
 /**
  * Bluetooth ses aygıtı bağlanınca çalmaya devam eder.
  *
+ * Görüşme sürerken BAŞLATMAZ: telefonla konuşurken kulaklık bağlandığında
+ * müzik çalmaya başlıyordu (bkz. [startSavedTrack]).
+ *
  * Uygulamanın ekranını AÇMAZ: Android 10'dan beri arka plandan aktivite
  * başlatmak engelli. Bunun yerine son çalınan parçayı arka planda başlatır.
  *
@@ -78,6 +81,20 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
          * Başarılıysa null, değilse sorunu anlatan bir metin döner.
          */
         suspend fun startSavedTrack(context: Context): String? {
+            // Konuşurken kulaklık bağlayan kişi müzik istemiyor.
+            //
+            // Gerçek kullanımda yaşandı: telefonla konuşurken kulaklık
+            // bağlanınca müzik çalmaya başlıyordu. Bluetooth yayını aramadan
+            // haberdar değil; ses kipine bakmak bunu izinsiz ve VoIP
+            // aramalarını da kapsayacak şekilde çözüyor.
+            //
+            // Telefon ÇALARKEN de başlatmıyoruz (bkz. [CallState.isFreeForMusic]):
+            // o anda kulaklık bağlayan kişi zil sesi duymak istiyor.
+            if (!CallState.isFreeForMusic(context)) {
+                Log.d(TAG, "Görüşme sürüyor, otomatik çalma başlatılmadı")
+                return "Şu an bir görüşme sürüyor; müzik başlatılmadı."
+            }
+
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val videoId = prefs.getString(KEY_LAST_VIDEO, null)
             if (videoId.isNullOrBlank()) {

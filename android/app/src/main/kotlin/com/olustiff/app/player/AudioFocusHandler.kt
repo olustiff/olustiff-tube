@@ -5,6 +5,8 @@ import android.media.AudioAttributes as PlatformAudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.media3.exoplayer.ExoPlayer
 
@@ -13,14 +15,60 @@ import androidx.media3.exoplayer.ExoPlayer
  *
  * Media3'ün otomatik yönetimi (`handleAudioFocus = true`) telefon/VoIP
  * aramalarında çoğu cihazda oynatmayı DURAKLATMIYOR, yalnızca sesi kısıyor
- * (ducking). Kullanıcı arama boyunca müziğin durmasını, arama bitince kaldığı
- * yerden devam etmesini bekliyor; bu yüzden odak olaylarını burada karşılayıp
- * her kayıp türünde duraklatıyoruz.
+ * (ducking). Kullanıcı arama boyunca müziğin durmasını bekliyor; bu yüzden
+ * odak olaylarını burada karşılıyoruz.
+ *
+ * ## Kısmak mı durdurmak mı
+ *
+ * Bir zamanlar HER kayıp türünde duraklatılıyordu. Bu, aramayı doğru çözüyor
+ * ama kısa bir bildirim için de müziği kesip geri başlatıyordu — kullanıcı
+ * için "bir şey bozuldu" hissi veren, gereksiz sert bir davranış.
+ *
+ * Artık ayrım şöyle:
+ * - **Kısa, kısılabilir kayıp** (bildirim, navigasyon anonsu): ses
+ *   [DUCK_VOLUME] seviyesine iner, oynatma SÜRER, olay bitince geri açılır.
+ * - **Geçici ama kısılamaz kayıp** (arama): duraklatılır, sonra kaldığı
+ *   yerden devam eder.
+ * - **Kalıcı kayıp** (başka uygulama müzik açtı): duraklatılır, geri dönülmez.
+ *
+ * Tek başına odak türüne bakmak YETMİYOR: şikâyetin kaynağı olan cihazlarda
+ * arama da "kısılabilir" olarak bildiriliyor. Bu yüzden kısmadan önce
+ * [CallState] ile gerçekten konuşulup konuşulmadığı soruluyor; ayrıca kısık
+ * çalarken [durationWatch] bu soruyu tekrarlıyor, çünkü telefon çalarken
+ * gelen kısma isteği ile aramanın yanıtlanması arasında saniyeler var ve o
+ * anda ikinci bir odak olayı gelmiyor.
  */
 class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
 
+    private val appContext = context.applicationContext
+
     private val audioManager =
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    /** Şu an sesi kısılmış hâlde mi çalıyoruz. */
+    private var ducked = false
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * Kısıkken "arama başladı mı" diye tekrar tekrar bakan iş.
+     *
+     * Gerekli çünkü telefon ÇALARKEN gelen kısma isteğinden sonra kullanıcı
+     * aramayı yanıtladığında sistem yeni bir odak olayı göndermiyor; yalnızca
+     * ses kipi değişiyor. Bakılmazsa müzik arama boyunca kısık çalmaya devam
+     * ederdi.
+     */
+    private val durationWatch = object : Runnable {
+        override fun run() {
+            if (!ducked) return
+            if (CallState.isInCall(appContext)) {
+                Log.d(TAG, "Kısıkken arama başladı, duraklatıldı")
+                pauseFromDuck()
+                return
+            }
+            handler.postDelayed(this, CALL_CHECK_INTERVAL_MS)
+        }
+    }
 
     /**
      * Odak GEÇİCİ kaybedildiğinde çalıyor muyduk? Arama bitince yalnızca
@@ -34,17 +82,36 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
         when (change) {
             // Kalıcı kayıp (başka uygulama müzik açtı): duraklat, geri dönme.
             AudioManager.AUDIOFOCUS_LOSS -> {
+                stopDuckWatch()
+                player.volume = 1f
                 resumeOnFocusGain = false
                 hasFocus = false
                 player.playWhenReady = false
                 Log.d(TAG, "Odak kalıcı kaybedildi, duraklatıldı")
             }
 
-            // Arama geldi ya da kısa bir bildirim: duraklat, sonra devam et.
-            // "CAN_DUCK" da duraklatılıyor: kullanıcı arama sırasında müziğin
-            // kısılmasını değil susmasını istiyor.
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            // Kısılabilir kayıp: bildirim sesi, navigasyon anonsu gibi kısa
+            // araya girmeler. Müziği kesmek yerine sesi indiriyoruz.
+            //
+            // Ama önce gerçekten konuşuluyor mu diye bakılıyor: şikâyetin
+            // kaynağı olan cihazlarda arama da bu türle bildiriliyor ve
+            // kısarak sürdürmek yanlış olurdu.
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                if (CallState.isInCall(appContext)) {
+                    resumeOnFocusGain = player.playWhenReady
+                    player.playWhenReady = false
+                    Log.d(TAG, "Arama sürüyor, kısmak yerine duraklatıldı")
+                } else if (player.playWhenReady) {
+                    ducked = true
+                    player.volume = DUCK_VOLUME
+                    handler.postDelayed(durationWatch, CALL_CHECK_INTERVAL_MS)
+                    Log.d(TAG, "Kısa kesinti, ses kısıldı")
+                }
+            }
+
+            // Arama geldi: duraklat, sonra kaldığı yerden devam et.
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                stopDuckWatch()
                 resumeOnFocusGain = player.playWhenReady
                 player.playWhenReady = false
                 Log.d(TAG, "Odak geçici kaybedildi, duraklatıldı")
@@ -52,6 +119,13 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
 
             AudioManager.AUDIOFOCUS_GAIN -> {
                 hasFocus = true
+                // Kısılmış hâlde çalıyorduysak sesi geri açmak yeterli;
+                // oynatma hiç kesilmedi, tazelenecek bir ses yolu yok.
+                if (ducked) {
+                    stopDuckWatch()
+                    player.volume = 1f
+                    Log.d(TAG, "Kesinti bitti, ses geri açıldı")
+                }
                 if (resumeOnFocusGain) {
                     resumeOnFocusGain = false
 
@@ -84,8 +158,12 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
                         .setContentType(PlatformAudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
-                // Sesi kısarak sürdürmeyi kabul etmiyoruz; duraklatmak
-                // istediğimiz için olayı kendimiz karşılıyoruz.
+                // Kısmayı sisteme BIRAKMIYORUZ. `false` verilseydi sistem
+                // sesi kendi kısardı ve bize haber bile vermezdi; o zaman
+                // araması "kısılabilir" diye bildirilen cihazlarda müziği
+                // duraklatma şansımız hiç olmazdı. `true` ile olay bize
+                // geliyor ve kısmakla durdurmak arasındaki kararı biz
+                // veriyoruz (bkz. sınıf belgesi).
                 .setWillPauseWhenDucked(true)
                 // Odak meşgulken (süren arama) istek reddedilmek yerine
                 // BEKLETİLİR: kullanıcı arama sırasında oynat'a bastığında
@@ -129,8 +207,22 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
         return hasFocus
     }
 
+    /** Kısık çalmayı duraklatmaya çevirir (arama başladığında). */
+    private fun pauseFromDuck() {
+        stopDuckWatch()
+        player.volume = 1f
+        resumeOnFocusGain = player.playWhenReady
+        player.playWhenReady = false
+    }
+
+    private fun stopDuckWatch() {
+        ducked = false
+        handler.removeCallbacks(durationWatch)
+    }
+
     /** Oynatma tamamen bittiğinde odağı bırakır. */
     fun abandon() {
+        stopDuckWatch()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             request?.let { audioManager.abandonAudioFocusRequest(it) }
         } else {
@@ -143,5 +235,17 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
 
     private companion object {
         const val TAG = "OlustiffAudioFocus"
+
+        /**
+         * Kısma sırasındaki ses seviyesi.
+         *
+         * Android'in kendi kısması yaklaşık -14 dB; 0.2 onunla aynı hizada.
+         * Daha yüksek bırakmak bildirimi bastırıyor, daha düşük bırakmak
+         * müziği tamamen susmuş gibi gösteriyor.
+         */
+        const val DUCK_VOLUME = 0.2f
+
+        /** Kısıkken aramanın başlayıp başlamadığına bakma aralığı. */
+        const val CALL_CHECK_INTERVAL_MS = 700L
     }
 }
