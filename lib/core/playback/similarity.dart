@@ -52,6 +52,48 @@ const _stopWords = {
   'new', 'yeni', 'klip',
 };
 
+/// Bir parçanın "sürüm" işaretleri: aynı şarkının farklı çekimlerini
+/// adlandıran kelimeler.
+///
+/// [trackCore] bunları atıyor ki "La Câlin" ile "La Câlin (Slowed + Reverb)"
+/// aynı parça sayılabilsin.
+const _versionWords = {
+  'slowed', 'reverb', 'sped', 'speed', 'nightcore', 'cover', 'karaoke',
+  'acoustic', 'akustik', 'live', 'canli', 'version', 'versiyon', 'edit',
+  'instrumental', 'enstrumantal', 'bass', 'boosted', 'extended', 'radio',
+  'hizlandirilmis', 'yavaslatilmis', 'tiktok', 'visualizer', 'clip',
+};
+
+/// Başlığın "hangi parça" çekirdeği: sürüm ve süs kelimeleri atılmış hâli.
+///
+/// Sayılar KORUNUYOR — kelime uzunluğu eşiğine takılmıyorlar. Bu şart:
+/// "57. Bölüm" ile "58. Bölüm" çekirdekleri yalnızca sayıda ayrışıyor, sayı
+/// atılsaydı bütün bölümler aynı parça sayılır ve dizi kuyruğu tek bölüme
+/// inerdi.
+Set<String> trackCore(String title) => title
+    .toLowerCase()
+    .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+    .where((w) => w.isNotEmpty)
+    .where((w) => w.length > 2 || int.tryParse(w) != null)
+    .where((w) => !_stopWords.contains(w) && !_versionWords.contains(w))
+    .toSet();
+
+/// İki kayıt AYNI parçanın farklı sürümü mü.
+///
+/// Neden gerekiyor: kuyruk benzerliğe göre kuruluyor ve bir şarkının remiksi
+/// o şarkıya EN ÇOK benzeyen şey. Gerçek kullanımda kuyruk baştan sona aynı
+/// şarkının remiks/hızlandırılmış/kapak sürümleriyle doluyordu — kullanıcının
+/// istediği şey bu değil.
+///
+/// Ölçüt eşitlik, kapsama DEĞİL: "Поле" ile "Поле мечты" farklı şarkılar ve
+/// kapsama ölçütü ikincisini yanlışlıkla eler.
+bool isSameTrack(String a, String b) {
+  final left = trackCore(a);
+  final right = trackCore(b);
+  if (left.isEmpty || right.isEmpty) return false;
+  return left.length == right.length && left.containsAll(right);
+}
+
 Set<String> _keywords(String text) {
   return text
       .toLowerCase()

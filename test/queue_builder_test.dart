@@ -257,4 +257,75 @@ void main() {
       expect(added[1].uploaderName, 'B');
     });
   });
+
+  group('aynı parçanın sürümleri', () {
+    // Gerçek şikâyet buydu: bir şarkı arandığında kuyruk baştan sona o
+    // şarkının remiks/hızlandırılmış/kapak sürümleriyle doluyordu. Sebebi
+    // benzerlik puanının ters çalışması: remiks, şarkıya en çok benzeyen şey.
+    test('remiks ve benzeri sürümler kuyruğa girmez', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'Serhat Durmus', title: 'Serhat Durmus - La Câlin'),
+        candidates: [
+          v('1', 'Serhat Durmus', title: 'Serhat Durmus - La Câlin (Remix)'),
+          v('2', 'Baska Kanal', title: 'La Câlin - Serhat Durmus (Slowed + Reverb)'),
+          v('3', 'Serhat Durmus', title: 'Serhat Durmus - Elsewhere'),
+        ],
+      );
+      expect(queue.map((e) => e.videoId), ['seed', '3']);
+    });
+
+    test('aynı sanatçının başka şarkısı kuyrukta kalır', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'RAIKAHO', title: 'RAIKAHO - Поле'),
+        candidates: [v('1', 'RAIKAHO', title: 'RAIKAHO - Дверцы')],
+      );
+      expect(queue.map((e) => e.videoId), ['seed', '1']);
+    });
+
+    // Kapsama ölçütü kullanılsaydı "Поле мечты" yanlışlıkla elenirdi.
+    test('başlığı uzatılmış FARKLI şarkı elenmez', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'RAIKAHO', title: 'RAIKAHO - Поле'),
+        candidates: [v('1', 'RAIKAHO', title: 'RAIKAHO - Поле мечты')],
+      );
+      expect(queue.map((e) => e.videoId), ['seed', '1']);
+    });
+
+    test('iki farklı remiks de tek tek elenir', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'A', title: 'Sanatci - Sarki'),
+        candidates: [
+          v('1', 'A', title: 'Sanatci - Sarki (Remix)'),
+          v('2', 'B', title: 'Sanatci - Sarki (Nightcore)'),
+        ],
+      );
+      expect(queue.map((e) => e.videoId), ['seed']);
+    });
+
+    // ÇOK ÖNEMLİ: bölüm numaraları çekirdekte korunuyor. Korunmasaydı tüm
+    // bölümler "aynı parça" sayılır ve dizi kuyruğu tek bölüme inerdi.
+    test('dizi bölümleri birbirini elemez', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'Dizi', title: 'Arka Sıradakiler 57. Bölüm'),
+        candidates: [
+          v('1', 'Dizi', title: 'Arka Sıradakiler 58. Bölüm'),
+          v('2', 'Dizi', title: 'Arka Sıradakiler 59. Bölüm'),
+        ],
+        watchedIds: const {},
+      );
+      expect(queue.map((e) => e.videoId), containsAll(['1', '2']));
+    });
+
+    test('uzatmada da aynı sürümler sızmaz', () {
+      final added = QueueBuilder.extend(
+        current: v('calan', 'A', title: 'Sanatci - Sarki'),
+        existing: [v('calan', 'A', title: 'Sanatci - Sarki')],
+        candidates: [
+          v('1', 'A', title: 'Sanatci - Sarki (Official Audio)'),
+          v('2', 'A', title: 'Sanatci - Baska Sarki'),
+        ],
+      );
+      expect(added.map((e) => e.videoId), ['2']);
+    });
+  });
 }

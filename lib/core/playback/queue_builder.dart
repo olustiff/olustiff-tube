@@ -68,12 +68,23 @@ class QueueBuilder {
     seen.addAll(run.excludedIds);
 
     // Adayları benzerliğe göre puanla ve eşiği geçemeyenleri ele.
+    //
+    // AYNI PARÇANIN başka sürümleri baştan eleniyor. Yalnızca puana bakmak
+    // ters sonuç veriyordu: bir şarkının remiksi o şarkıya en çok benzeyen
+    // şey olduğu için kuyruğun başına geçiyor ve kuyruk baştan sona aynı
+    // şarkının remiks/hızlandırılmış/kapak sürümleriyle doluyordu.
+    //
+    // Aynı çekirdeğe sahip ADAYLAR da birbirini eliyor: iki farklı remiks
+    // ayrı ayrı kuyruğa girerse sonuç yine aynı.
+    final cores = <Set<String>>[trackCore(seed.title)];
     final scored = <({VideoSummary video, int score})>[];
     for (final candidate in candidates) {
       final id = candidate.videoId;
       if (id == null || !seen.add(id)) continue;
+      if (_isDuplicateTrack(cores, candidate.title)) continue;
       final score = similarityScore(seed, candidate);
       if (score < _minScore) continue;
+      cores.add(trackCore(candidate.title));
       scored.add((video: candidate, score: score));
     }
     scored.sort((a, b) => b.score.compareTo(a.score));
@@ -135,12 +146,20 @@ class QueueBuilder {
         if (video.videoId != null) video.videoId!,
     };
 
+    // Uzatmada da aynı kural: kuyruk uzarken aynı şarkının başka sürümleri
+    // sızmamalı. Karşılaştırma kuyruktakilerin HEPSİNE karşı yapılıyor.
+    final cores = <Set<String>>[
+      trackCore(current.title),
+      for (final video in existing) trackCore(video.title),
+    ];
     final scored = <({VideoSummary video, int score})>[];
     for (final candidate in candidates) {
       final id = candidate.videoId;
       if (id == null || !seen.add(id)) continue;
+      if (_isDuplicateTrack(cores, candidate.title)) continue;
       final score = similarityScore(current, candidate);
       if (score < _minScore) continue;
+      cores.add(trackCore(candidate.title));
       scored.add((video: candidate, score: score));
     }
     scored.sort((a, b) => b.score.compareTo(a.score));
@@ -186,6 +205,16 @@ class QueueBuilder {
   /// Sonsuz uzama bellek ve native tarafa gönderilen liste boyutu demek;
   /// bu sınıra gelince en baştaki (çoktan çalınmış) videolar düşürülüyor.
   static const maxTotalQueueLength = 200;
+
+  /// [title], [cores] içindeki parçalardan birinin başka bir sürümü mü.
+  static bool _isDuplicateTrack(List<Set<String>> cores, String title) {
+    final core = trackCore(title);
+    if (core.isEmpty) return false;
+    for (final other in cores) {
+      if (other.length == core.length && other.containsAll(core)) return true;
+    }
+    return false;
+  }
 
   /// İzleme geçmişindeki video kimlikleri.
   ///
