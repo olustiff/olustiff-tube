@@ -33,6 +33,22 @@ const int defaultMaxHeight = 1080;
 /// Kalite menüsünde ve oynatma ekranında gösterilen "Otomatik" etiketi.
 const String autoQualityLabel = 'Otomatik';
 
+/// Kalite rozetinde gösterilecek metni belirler; bilinmiyorsa null.
+///
+/// Tek kural: sesli modda kalite diye bir şey YOKTUR. Kuyruk native tarafça
+/// ilerletildiğinde [label] sıfırlanıyor ve arayüz ayardaki değere
+/// ("Otomatik") düşüyordu — ekranda kulaklık simgesi ve "Dinleniyor" yazarken
+/// rozet "Otomatik" diyordu.
+String? resolveQualityLabel({required bool audioOnly, String? label}) =>
+    audioOnly ? audioOnlyQualityLabel : label;
+
+/// Sesli modda kalite yerine gösterilen etiket.
+///
+/// Sabit, çünkü iki yerden üretiliyor: kaynak seçimi sırasında ve oynatma
+/// kuyruk tarafından ilerletildiğinde. İkisinin ayrı metinler kullanması
+/// ekranda çelişkiye yol açmıştı.
+const String audioOnlyQualityLabel = 'Sadece ses';
+
 /// Uyarlanabilir manifestin taşındığı adres öneki.
 ///
 /// Oynatma isteği native tarafa yalnızca "video adresi + ses adresi" olarak
@@ -209,7 +225,7 @@ SelectedStreams? selectStreams(
     return SelectedStreams(
       videoUrl: null,
       audioUrl: audio.url,
-      qualityLabel: 'Sadece ses',
+      qualityLabel: audioOnlyQualityLabel,
     );
   }
 
@@ -263,7 +279,7 @@ SelectedStreams? selectStreams(
     return SelectedStreams(
       videoUrl: null,
       audioUrl: audio.url,
-      qualityLabel: 'Sadece ses',
+      qualityLabel: audioOnlyQualityLabel,
     );
   }
 

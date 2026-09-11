@@ -105,7 +105,15 @@ class PlaybackCoordinator extends ChangeNotifier {
 
   VideoDetails? get details => _details;
   bool get audioOnly => _audioOnly;
-  String? get qualityLabel => _qualityLabel;
+  /// Kalite rozetinde gösterilecek metin; bilinmiyorsa null.
+  ///
+  /// Sesli modda HER ZAMAN "Sadece ses" döner. Gerekli, çünkü kuyruk native
+  /// tarafça ilerletildiğinde etiket sıfırlanıyor ve arayüz ayardaki değere
+  /// ("Otomatik") düşüyordu: ekranda kulaklık simgesi ve "Dinleniyor" yazarken
+  /// rozet "Otomatik" diyordu. Gerçek cihazda görüldü ve kullanıcıyı haklı
+  /// olarak şaşırttı.
+  String? get qualityLabel =>
+      resolveQualityLabel(audioOnly: _audioOnly, label: _qualityLabel);
   bool get hasMedia => _details != null;
   List<VideoSummary> get queue => List.unmodifiable(_queue);
   int get queueIndex => _index;
@@ -535,6 +543,21 @@ class PlaybackCoordinator extends ChangeNotifier {
       : _playback.pause();
 
   /// Bulunulan yerden [offset] kadar sarar.
+  /// Native'in bildirdiği ses/video modunu alır.
+  ///
+  /// Oynatmanın sahibi native taraf: kuyrukta sıradakine o geçiyor ve modu o
+  /// taşıyor. Dart'ın kendi bayrağı bu yüzden onunla eşitleniyor; eşitlenmezse
+  /// arayüz oynatmanın gerçekte hangi modda olduğunu bilmiyor.
+  ///
+  /// Hazırlık sürerken DİNLENMİYOR: yeni video için mod zaten burada
+  /// belirlendi, native hâlâ öncekini bildiriyor olabilir ve o gecikmiş bilgi
+  /// yeni kararın üstüne yazardı.
+  void updateAudioOnly(bool value) {
+    if (_loading || _audioOnly == value) return;
+    _audioOnly = value;
+    notifyListeners();
+  }
+
   /// Native'in bildirdiği çalma sırasını alır.
   ///
   /// Durum akışından besleniyor; karıştırma açılıp kapandığında ya da kuyruk

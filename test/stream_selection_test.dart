@@ -269,6 +269,35 @@ void main() {
     });
   });
 
+  group('kalite etiketi', () {
+    // Gerçek cihazda görüldü: kuyruk native tarafça ilerleyince etiket
+    // sıfırlanıyor, arayüz ayardaki "Otomatik"e düşüyor ve ekranda kulaklık
+    // simgesi varken rozet "Otomatik" diyordu.
+    test('sesli modda her zaman "Sadece ses"', () {
+      expect(
+        resolveQualityLabel(audioOnly: true, label: null),
+        audioOnlyQualityLabel,
+      );
+      expect(
+        resolveQualityLabel(audioOnly: true, label: '1080p'),
+        audioOnlyQualityLabel,
+      );
+    });
+
+    test('video modunda seçilen etiket korunur', () {
+      expect(resolveQualityLabel(audioOnly: false, label: '720p'), '720p');
+      expect(
+        resolveQualityLabel(audioOnly: false, label: autoQualityLabel),
+        autoQualityLabel,
+      );
+    });
+
+    // null "henüz bilinmiyor" demek; çağıran taraf ayardaki değere düşüyor.
+    test('video modunda bilinmiyorsa null kalır', () {
+      expect(resolveQualityLabel(audioOnly: false, label: null), isNull);
+    });
+  });
+
   group('detectContentKind', () {
     test('Music kategorisi sesli mod olarak tespit edilir', () {
       final details = buildDetails(category: 'Music');

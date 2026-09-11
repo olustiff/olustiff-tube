@@ -49,6 +49,7 @@ Future<void> main() async {
     if (videoId != null) {
       PlaybackCoordinator.instance.syncFromNative(videoId, state.queueIndex);
       PlaybackCoordinator.instance.updatePlayOrder(state.queueOrder);
+      PlaybackCoordinator.instance.updateAudioOnly(state.audioOnly);
       _rememberPosition(state, videoId);
     } else if (state.queueSize == 0) {
       // Bildirimdeki kapat düğmesi oynatmayı bitirdi: mini oynatıcı da
