@@ -36,6 +36,9 @@ class ExtractionClient {
   static const kindSearch = 'search';
   static const kindTrending = 'trending';
   static const kindPlaylist = 'playlist';
+  static const kindChannel = 'channel';
+  static const kindSearchPlaylists = 'search_playlists';
+  static const kindSearchChannels = 'search_channels';
 
   Future<PagedVideos> search(String query) async {
     final raw = await _invoke<Map<Object?, Object?>>('search', {'query': query});
@@ -63,6 +66,25 @@ class ExtractionClient {
     final raw =
         await _invoke<Map<Object?, Object?>>('loadMore', {'kind': kind});
     return PagedVideos.fromMap(raw);
+  }
+
+  /// Yalnızca çalma listelerini ([kindSearchPlaylists]) ya da yalnızca
+  /// kanalları ([kindSearchChannels]) arar.
+  ///
+  /// Genel arama kanal döndürmüyor ve listelerden de yalnızca bir ikisini
+  /// veriyor; filtreli arama o türe ayrılmış sonuç sayfasını getiriyor.
+  Future<PagedVideos> searchFiltered(String query, String kind) async {
+    final raw = await _invoke<Map<Object?, Object?>>(
+      'searchFiltered',
+      {'query': query, 'kind': kind},
+    );
+    return PagedVideos.fromMap(raw);
+  }
+
+  /// Bir kanalın videoları (ilk sayfa); devamı [loadMore] ile.
+  Future<ChannelDetails> channel(String url) async {
+    final raw = await _invoke<Map<Object?, Object?>>('channel', {'url': url});
+    return ChannelDetails.fromMap(raw);
   }
 
   Future<PlaylistDetails> playlist(String url) async {

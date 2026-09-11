@@ -11,6 +11,7 @@ import '../player/mini_player.dart';
 import '../player/player_route.dart';
 import 'search_suggestions.dart';
 import 'tv_search_screen.dart';
+import 'channel_screen.dart';
 import 'playlist_screen.dart';
 import 'video_list.dart';
 
@@ -75,7 +76,19 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
   bool _voiceRunning = false;
 
   List<VideoSummary> _results = const [];
+  /// Listeler ve kanallar sekmeleri KENDİ aramalarını yapıyor.
+  ///
+  /// Genel arama kanal döndürmüyor, listelerden de bir ikisini veriyor
+  /// (bkz. `ExtractionService.searchFiltered`). Her arama için üç istek atmak
+  /// yerine, istek sekmeye ilk dokunulduğunda yapılıyor — sekmelerin çoğu hiç
+  /// açılmıyor.
   List<PlaylistSummary> _playlists = const [];
+  bool _playlistsLoading = false;
+  bool _playlistsLoaded = false;
+
+  List<ChannelSummary> _channels = const [];
+  bool _channelsLoading = false;
+  bool _channelsLoaded = false;
   bool _hasMore = false;
   bool _loading = false;
   Object? _error;
@@ -90,7 +103,8 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this)
+      ..addListener(_onTabChanged);
     _controller.addListener(_onQueryChanged);
     _checkVoice();
     final initial = widget.initialQuery;
@@ -109,6 +123,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
     _controller.dispose();
     _focusNode.dispose();
     _loader.dispose();
+    _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
     super.dispose();
   }
@@ -152,6 +167,9 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
       _searched = true;
       _results = const [];
       _playlists = const [];
+      _playlistsLoaded = false;
+      _channels = const [];
+      _channelsLoaded = false;
       _searchedQuery = query.trim();
     });
     try {
@@ -161,10 +179,11 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
       if (!mounted) return;
       setState(() {
         _results = page.items;
-        _playlists = page.playlists;
         _hasMore = page.hasMore;
         _loading = false;
       });
+      // Kullanıcı arama sırasında başka bir sekmede duruyorsa onu da doldur.
+      _loadTabIfNeeded(_tabs.index);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -182,7 +201,6 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
       if (!mounted) return;
       setState(() {
         _results = [..._results, ...page.items];
-        _playlists = [..._playlists, ...page.playlists];
         _hasMore = page.hasMore;
         _loading = false;
       });
@@ -211,6 +229,75 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
     );
   }
 
+  void _onTabChanged() {
+    // Kaydırma sırasında iki kez tetikleniyor; yalnızca yerleşen sekme
+    // için istek atıyoruz.
+    if (_tabs.indexIsChanging) return;
+    _loadTabIfNeeded(_tabs.index);
+  }
+
+  void _loadTabIfNeeded(int index) {
+    final query = _searchedQuery;
+    if (query == null) return;
+    if (index == 1 && !_playlistsLoaded && !_playlistsLoading) {
+      _loadPlaylists(query);
+    } else if (index == 2 && !_channelsLoaded && !_channelsLoading) {
+      _loadChannels(query);
+    }
+  }
+
+  Future<void> _loadPlaylists(String query) async {
+    setState(() => _playlistsLoading = true);
+    try {
+      final page = await _client.searchFiltered(
+        query,
+        ExtractionClient.kindSearchPlaylists,
+      );
+      if (!mounted || _searchedQuery != query) return;
+      setState(() {
+        _playlists = page.playlists;
+        _playlistsLoaded = true;
+        _playlistsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Boş liste gösteriliyor: ayrı bir hata ekranı kurmak yerine
+      // "bulunamadı" mesajı yeterli, kullanıcı aramayı tekrarlayabilir.
+      setState(() {
+        _playlistsLoaded = true;
+        _playlistsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadChannels(String query) async {
+    setState(() => _channelsLoading = true);
+    try {
+      final page = await _client.searchFiltered(
+        query,
+        ExtractionClient.kindSearchChannels,
+      );
+      if (!mounted || _searchedQuery != query) return;
+      setState(() {
+        _channels = page.channels;
+        _channelsLoaded = true;
+        _channelsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _channelsLoaded = true;
+        _channelsLoading = false;
+      });
+    }
+  }
+
+  void _openChannel(ChannelSummary channel) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => ChannelScreen(channel: channel)),
+    );
+  }
+
   void _pick(String query) {
     _controller.text = query;
     _search(query);
@@ -234,6 +321,11 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
                   ? 'Listeler'
                   : 'Listeler (${_playlists.length})',
             ),
+            Tab(
+              text: _channels.isEmpty
+                  ? 'Kanallar'
+                  : 'Kanallar (${_channels.length})',
+            ),
           ],
         ),
         Expanded(
@@ -252,8 +344,13 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
               ),
               _PlaylistResults(
                 playlists: _playlists,
-                loading: _loading,
+                loading: _playlistsLoading,
                 onTap: _openPlaylist,
+              ),
+              _ChannelResults(
+                channels: _channels,
+                loading: _channelsLoading,
+                onTap: _openChannel,
               ),
             ],
           ),
@@ -415,6 +512,45 @@ class _PlaylistResults extends StatelessWidget {
       itemBuilder: (context, index) => PlaylistTile(
         playlist: playlists[index],
         onTap: () => onTap(playlists[index]),
+      ),
+    );
+  }
+}
+
+/// "Kanallar" sekmesinin içeriği.
+class _ChannelResults extends StatelessWidget {
+  const _ChannelResults({
+    required this.channels,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final List<ChannelSummary> channels;
+  final bool loading;
+  final void Function(ChannelSummary) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (channels.isEmpty) {
+      if (loading) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Bu aramada kanal bulunamadı.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: channels.length,
+      itemBuilder: (context, index) => ChannelTile(
+        channel: channels[index],
+        onTap: () => onTap(channels[index]),
       ),
     );
   }

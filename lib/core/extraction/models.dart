@@ -48,6 +48,12 @@ class VideoSummary {
 class PagedVideos {
   final List<VideoSummary> items;
 
+  /// Aynı sayfadan çıkan kanallar.
+  ///
+  /// [playlists] ile aynı gerekçe: arama sonucu üç türü karışık veriyor,
+  /// arayüzde üçü ayrı sekmede.
+  final List<ChannelSummary> channels;
+
   /// Aynı sayfadan çıkan çalma listeleri.
   ///
   /// Videolardan AYRI duruyor: YouTube arama sonucunda ikisini karışık
@@ -62,6 +68,7 @@ class PagedVideos {
     required this.items,
     required this.hasMore,
     this.playlists = const [],
+    this.channels = const [],
   });
 
   static const empty = PagedVideos(items: [], hasMore: false);
@@ -69,6 +76,7 @@ class PagedVideos {
   factory PagedVideos.fromMap(Map<Object?, Object?> map) {
     final raw = map['items'] as List<Object?>? ?? const [];
     final rawPlaylists = map['playlists'] as List<Object?>? ?? const [];
+    final rawChannels = map['channels'] as List<Object?>? ?? const [];
     return PagedVideos(
       items: raw
           .map((e) => VideoSummary.fromMap(e as Map<Object?, Object?>))
@@ -76,10 +84,75 @@ class PagedVideos {
       playlists: rawPlaylists
           .map((e) => PlaylistSummary.fromMap(e as Map<Object?, Object?>))
           .toList(growable: false),
+      channels: rawChannels
+          .map((e) => ChannelSummary.fromMap(e as Map<Object?, Object?>))
+          .toList(growable: false),
       hasMore: map['hasMore'] as bool? ?? false,
     );
   }
 }
+
+/// Arama sonucunda çıkan bir YouTube kanalı.
+class ChannelSummary {
+  final String name;
+  final String url;
+
+  /// Abone sayısı; YouTube bildirmediyse null.
+  final int? subscriberCount;
+
+  /// Kanalın video sayısı; bildirilmediyse null.
+  final int? streamCount;
+
+  final bool verified;
+  final String? thumbnailUrl;
+
+  const ChannelSummary({
+    required this.name,
+    required this.url,
+    required this.subscriberCount,
+    required this.streamCount,
+    required this.verified,
+    required this.thumbnailUrl,
+  });
+
+  factory ChannelSummary.fromMap(Map<Object?, Object?> map) => ChannelSummary(
+        name: _asString(map['name']) ?? '',
+        url: _asString(map['url']) ?? '',
+        // NewPipe bilinmeyen sayıyı -1 ile bildiriyor.
+        subscriberCount: _positiveOrNull(map['subscriberCount']),
+        streamCount: _positiveOrNull(map['streamCount']),
+        verified: map['verified'] == true,
+        thumbnailUrl: _asString(map['thumbnailUrl']),
+      );
+}
+
+/// Bir kanal ve (ilk sayfa) videoları.
+class ChannelDetails {
+  final String name;
+  final int? subscriberCount;
+  final String? avatarUrl;
+  final PagedVideos page;
+
+  const ChannelDetails({
+    required this.name,
+    required this.subscriberCount,
+    required this.avatarUrl,
+    required this.page,
+  });
+
+  factory ChannelDetails.fromMap(Map<Object?, Object?> map) => ChannelDetails(
+        name: _asString(map['name']) ?? '',
+        subscriberCount: _positiveOrNull(map['subscriberCount']),
+        avatarUrl: _asString(map['avatarUrl']),
+        page: PagedVideos.fromMap(map),
+      );
+}
+
+/// NewPipe'ın "bilinmiyor" için kullandığı -1'i null'a çevirir.
+///
+/// 0 döndürmek "abonesi yok" demek olurdu; rozeti hiç göstermemek doğru.
+int? _positiveOrNull(Object? value) =>
+    value is num && value >= 0 ? value.toInt() : null;
 
 /// Arama sonucunda çıkan bir YouTube çalma listesi.
 ///
@@ -106,14 +179,11 @@ class PlaylistSummary {
   });
 
   factory PlaylistSummary.fromMap(Map<Object?, Object?> map) {
-    final count = map['streamCount'];
     return PlaylistSummary(
       title: _asString(map['title']) ?? '',
       url: _asString(map['url']) ?? '',
       uploaderName: _asString(map['uploaderName']),
-      // NewPipe bilinmeyen sayıyı -1 ile bildiriyor; 0 göstermek listeyi boş
-      // sanmaya yol açardı.
-      streamCount: count is num && count >= 0 ? count.toInt() : null,
+      streamCount: _positiveOrNull(map['streamCount']),
       thumbnailUrl: _asString(map['thumbnailUrl']),
     );
   }

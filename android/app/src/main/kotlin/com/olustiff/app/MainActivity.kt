@@ -276,6 +276,17 @@ class MainActivity : FlutterActivity() {
                                 val url = call.argument<String>("url").orEmpty()
                                 result.success(ExtractionService.playlist(url))
                             }
+                            "channel" -> {
+                                val url = call.argument<String>("url").orEmpty()
+                                result.success(ExtractionService.channel(url))
+                            }
+                            "searchFiltered" -> {
+                                val query = call.argument<String>("query").orEmpty()
+                                val kind = call.argument<String>("kind").orEmpty()
+                                result.success(
+                                    ExtractionService.searchFiltered(query, kind)
+                                )
+                            }
                             else -> result.notImplemented()
                         }
                     } catch (e: Exception) {

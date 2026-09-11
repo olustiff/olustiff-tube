@@ -6,6 +6,10 @@ import org.schabi.newpipe.extractor.ListExtractor
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.Page
+import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
+import org.schabi.newpipe.extractor.channel.ChannelInfo
+import org.schabi.newpipe.extractor.channel.ChannelInfoItem
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabs
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
@@ -59,6 +63,7 @@ object ExtractionService {
         return mapOf(
             "items" to items.filterIsInstance<StreamInfoItem>().map { it.toMap() },
             "playlists" to items.filterIsInstance<PlaylistInfoItem>().map { it.toMap() },
+            "channels" to items.filterIsInstance<ChannelInfoItem>().map { it.toMap() },
             "hasMore" to hasNextPage()
         )
     }
@@ -71,6 +76,37 @@ object ExtractionService {
         sessions[KIND_SEARCH] = session
         extractor.initialPage.toResult(session)
     }
+
+    /**
+     * Yalnızca çalma listelerini ya da yalnızca kanalları arar.
+     *
+     * Neden ayrı bir istek: YouTube'un "tümü" araması pratikte kanal
+     * DÖNDÜRMÜYOR (gerçek cihazda "raikaho" araması tek bir kanal bile
+     * vermedi) ve çalma listelerinden de yalnızca bir ikisini araya
+     * serpiştiriyor. Filtreli arama aynı sorguyu YouTube'un o türe ayrılmış
+     * sonuç sayfasına soruyor ve dolu bir liste dönüyor.
+     *
+     * İstek, kullanıcı o sekmeye DOKUNDUĞUNDA yapılıyor: her aramada üç
+     * istek birden atmak, sekmelerin çoğunun hiç açılmadığı düşünülürse
+     * gereksiz.
+     */
+    suspend fun searchFiltered(query: String, kind: String): Map<String, Any?> =
+        withContext(Dispatchers.IO) {
+            ensureInitialized()
+            val filter = when (kind) {
+                KIND_SEARCH_CHANNELS -> YoutubeSearchQueryHandlerFactory.CHANNELS
+                else -> YoutubeSearchQueryHandlerFactory.PLAYLISTS
+            }
+            val extractor = ServiceList.YouTube.getSearchExtractor(
+                query,
+                listOf(filter),
+                ""
+            )
+            extractor.fetchPage()
+            val session = PagedSession(extractor)
+            sessions[kind] = session
+            extractor.initialPage.toResult(session)
+        }
 
     /**
      * Arama kutusuna yazarken YouTube'un önerdiği tamamlamalar.
@@ -139,6 +175,60 @@ object ExtractionService {
         }
 
     /**
+     * Bir kanalın videoları.
+     *
+     * Kanal videoları doğrudan kanal çıkarıcısından GELMİYOR: NewPipe bunları
+     * "sekme"lere ayırdı (Videolar, Shorts, Oynatma listeleri…). Bize gereken
+     * sekme seçilip onun çıkarıcısı kullanılıyor.
+     *
+     * Sekme tercihi sırayla: önce normal videolar, yoksa parçalar (müzik
+     * kanallarında videolar sekmesi olmuyor, "Tracks" oluyor), o da yoksa
+     * elde ne varsa ilki. Boş liste döndürmektense yanlış sekmeyi
+     * göstermemek için sırayı bu şekilde tutuyoruz.
+     *
+     * Devamı [loadMore] ile ([KIND_CHANNEL]) alınıyor.
+     */
+    suspend fun channel(channelUrl: String): Map<String, Any?> =
+        withContext(Dispatchers.IO) {
+            ensureInitialized()
+            val service = ServiceList.YouTube
+            val info = ChannelInfo.getInfo(service, channelUrl)
+
+            val tab = info.tabs.firstOrNull {
+                it.contentFilters.contains(ChannelTabs.VIDEOS)
+            } ?: info.tabs.firstOrNull {
+                it.contentFilters.contains(ChannelTabs.TRACKS)
+            } ?: info.tabs.firstOrNull()
+
+            if (tab == null) {
+                // Kanalın gösterilebilir sekmesi yok; künyeyi yine de
+                // döndürüyoruz ki ekran boş bir hata yerine kanalı gösterebilsin.
+                return@withContext mapOf(
+                    "name" to info.name,
+                    "subscriberCount" to info.subscriberCount,
+                    "avatarUrl" to info.avatars.bestThumbnailUrl(),
+                    "items" to emptyList<Map<String, Any?>>(),
+                    "hasMore" to false
+                )
+            }
+
+            val extractor = service.getChannelTabExtractor(tab)
+            extractor.fetchPage()
+            val session = PagedSession(extractor)
+            sessions[KIND_CHANNEL] = session
+            val page = extractor.initialPage
+            session.nextPage = page.nextPage
+            mapOf(
+                "name" to info.name,
+                "subscriberCount" to info.subscriberCount,
+                "avatarUrl" to info.avatars.bestThumbnailUrl(),
+                "items" to page.items.filterIsInstance<StreamInfoItem>()
+                    .map { it.toMap() },
+                "hasMore" to page.hasNextPage()
+            )
+        }
+
+    /**
      * Ham [StreamInfo]. Oynatıcı, kuyrukta sıradakine geçerken kaynakları
      * kendisi seçebilmek için buna ihtiyaç duyar (bkz. [StreamSelector]).
      */
@@ -190,6 +280,21 @@ object ExtractionService {
      * yok" diye okuyor ve rozet göstermiyor — 0 göstermek listeyi boş
      * sanmaya yol açardı.
      */
+    /**
+     * Kanal sonucu.
+     *
+     * Abone ve video sayısını NewPipe bilinmiyorsa -1 veriyor; Dart tarafı
+     * bunu "sayı yok" diye okuyup rozeti hiç göstermiyor.
+     */
+    private fun ChannelInfoItem.toMap(): Map<String, Any?> = mapOf(
+        "name" to name,
+        "url" to url,
+        "subscriberCount" to subscriberCount,
+        "streamCount" to streamCount,
+        "verified" to isVerified,
+        "thumbnailUrl" to thumbnails.bestThumbnailUrl()
+    )
+
     private fun PlaylistInfoItem.toMap(): Map<String, Any?> = mapOf(
         "title" to name,
         "url" to url,
@@ -250,4 +355,7 @@ object ExtractionService {
     const val KIND_SEARCH = "search"
     const val KIND_TRENDING = "trending"
     const val KIND_PLAYLIST = "playlist"
+    const val KIND_CHANNEL = "channel"
+    const val KIND_SEARCH_PLAYLISTS = "search_playlists"
+    const val KIND_SEARCH_CHANNELS = "search_channels"
 }
