@@ -702,30 +702,6 @@ class _QueueSection extends StatelessWidget {
       children: [
         Text('Sırada', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
-        // Dar ekranlarda tek satıra sığmadığı için başlığın altına alındı;
-        // Row içinde kalsaydı segmentler kırpılıyordu.
-        SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<QueueMode>(
-            style: const ButtonStyle(visualDensity: VisualDensity.compact),
-            segments: const [
-              ButtonSegment(
-                value: QueueMode.listOrder,
-                icon: Icon(Icons.format_list_numbered),
-                label: Text('Aramaya göre'),
-              ),
-              ButtonSegment(
-                value: QueueMode.mixed,
-                icon: Icon(Icons.shuffle),
-                label: Text('Karışık'),
-              ),
-            ],
-            selected: {coordinator.queueMode},
-            onSelectionChanged: (selection) =>
-                coordinator.setQueueMode(selection.first),
-          ),
-        ),
-        const SizedBox(height: 8),
         if (upcoming.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),

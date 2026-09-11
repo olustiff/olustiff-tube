@@ -6,6 +6,7 @@ import org.schabi.newpipe.extractor.ListExtractor
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.Page
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
@@ -45,10 +46,19 @@ object ExtractionService {
     // oturumlar birikip bellek sızdırmaz.
     private val sessions = mutableMapOf<String, PagedSession>()
 
+    /**
+     * Bir sayfayı Flutter'a geçilecek biçime çevirir.
+     *
+     * Videolar ve çalma listeleri AYRI iki liste olarak dönüyor. YouTube arama
+     * sonucunda ikisini karışık veriyor; tek listede birleştirmek arayüzde
+     * "video mu liste mi" ayrımını her satırda yapmayı gerektirirdi. Kanal
+     * sonuçları hâlâ atılıyor — onlar için bir ekran yok.
+     */
     private fun InfoItemsPage<*>.toResult(session: PagedSession): Map<String, Any?> {
         session.nextPage = nextPage
         return mapOf(
             "items" to items.filterIsInstance<StreamInfoItem>().map { it.toMap() },
+            "playlists" to items.filterIsInstance<PlaylistInfoItem>().map { it.toMap() },
             "hasMore" to hasNextPage()
         )
     }
@@ -172,6 +182,21 @@ object ExtractionService {
                 .map { it.toMap() }
         )
     }
+
+    /**
+     * Çalma listesi sonucu.
+     *
+     * `streamCount` bilinmiyorsa NewPipe -1 veriyor; Dart tarafı bunu "sayı
+     * yok" diye okuyor ve rozet göstermiyor — 0 göstermek listeyi boş
+     * sanmaya yol açardı.
+     */
+    private fun PlaylistInfoItem.toMap(): Map<String, Any?> = mapOf(
+        "title" to name,
+        "url" to url,
+        "uploaderName" to uploaderName,
+        "streamCount" to streamCount,
+        "thumbnailUrl" to thumbnails.bestThumbnailUrl()
+    )
 
     private fun StreamInfoItem.toMap(): Map<String, Any?> = mapOf(
         "videoId" to extractVideoId(url),

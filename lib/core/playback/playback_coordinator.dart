@@ -347,43 +347,29 @@ class PlaybackCoordinator extends ChangeNotifier {
       _queue = exactQueue;
       _index = index ?? exactQueue.indexWhere((v) => v.videoId == videoId);
     } else {
+      // Kip BURADA sıfırlanıyor. Eskiden dokunulmuyordu ve bir çalma listesi
+      // çalındıktan sonra aramadan açılan video da "liste sırası" kipinde
+      // kalıyordu: kuyruk sessizce ilgili videoları içermiyor, arama
+      // sonuçlarının sırasıyla gidiyordu.
+      _queueMode = QueueMode.mixed;
       _queue = _buildQueue(seed, details);
       _index = 0;
     }
   }
 
-  List<VideoSummary> _buildQueue(VideoSummary seed, VideoDetails details) {
-    if (_queueMode == QueueMode.listOrder) {
-      // "Aramaya göre": kaynak listenin sırası korunur, çalan video başa alınır.
-      final rest = _sourceList
-          .where((v) => v.videoId != null && v.videoId != seed.videoId)
-          .toList();
-      return [seed, ...rest];
-    }
-    return QueueBuilder.build(
-      seed: seed,
-      candidates: [..._sourceList, ...details.relatedItems],
-    );
-  }
-
-  /// Kuyruk filtresini değiştirir: kaynak listenin sırası mı, karışık mı.
-  /// Çalan parça kesilmez, yalnızca sırası yeniden kurulur.
-  Future<void> setQueueMode(QueueMode mode) async {
-    if (_queueMode == mode) return;
-    _queueMode = mode;
-    final details = _details;
-    if (details == null) {
-      notifyListeners();
-      return;
-    }
-    _queue = _buildQueue(_summaryOf(details), details);
-    _index = 0;
-    notifyListeners();
-    await _playback.setQueue(
-      _queue.map(_queueItem).toList(growable: false),
-      _index,
-    );
-  }
+  /// Kuyruğu kurar: çalan video başta, ardından benzer ama tekdüze olmayan
+  /// içerik.
+  ///
+  /// Bir zamanlar ikinci bir seçenek daha vardı ("Aramaya göre"): kuyruk arama
+  /// sonuçlarının sırasıyla kurulurdu. KALDIRILDI, çünkü asıl kullanımda
+  /// istenmeyen sonucu veriyordu: bir şarkı arandığında sonuçlar da o şarkının
+  /// varyasyonları (remiks, hızlandırılmış, kapak) oluyor ve kuyruk baştan
+  /// sona aynı şarkıyı çalıyordu.
+  List<VideoSummary> _buildQueue(VideoSummary seed, VideoDetails details) =>
+      QueueBuilder.build(
+        seed: seed,
+        candidates: [..._sourceList, ...details.relatedItems],
+      );
 
   /// Çalan videonun gerçekten sunduğu çözünürlükler. Kalite menüsü bunu
   /// kullanır; sabit liste videoda olmayan seçenekler gösterirdi.

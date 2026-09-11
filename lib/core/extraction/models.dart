@@ -47,19 +47,74 @@ class VideoSummary {
 /// `loadMore` ile alınabilir.
 class PagedVideos {
   final List<VideoSummary> items;
+
+  /// Aynı sayfadan çıkan çalma listeleri.
+  ///
+  /// Videolardan AYRI duruyor: YouTube arama sonucunda ikisini karışık
+  /// veriyor ama arayüzde ayrı sekmeler var, tek listede birleştirmek her
+  /// satırda tür ayrımı yapmayı gerektirirdi. Arama dışındaki listelerde
+  /// (trend, çalma listesi içeriği) boş kalıyor.
+  final List<PlaylistSummary> playlists;
+
   final bool hasMore;
 
-  const PagedVideos({required this.items, required this.hasMore});
+  const PagedVideos({
+    required this.items,
+    required this.hasMore,
+    this.playlists = const [],
+  });
 
   static const empty = PagedVideos(items: [], hasMore: false);
 
   factory PagedVideos.fromMap(Map<Object?, Object?> map) {
     final raw = map['items'] as List<Object?>? ?? const [];
+    final rawPlaylists = map['playlists'] as List<Object?>? ?? const [];
     return PagedVideos(
       items: raw
           .map((e) => VideoSummary.fromMap(e as Map<Object?, Object?>))
           .toList(growable: false),
+      playlists: rawPlaylists
+          .map((e) => PlaylistSummary.fromMap(e as Map<Object?, Object?>))
+          .toList(growable: false),
       hasMore: map['hasMore'] as bool? ?? false,
+    );
+  }
+}
+
+/// Arama sonucunda çıkan bir YouTube çalma listesi.
+///
+/// [PlaylistDetails]'ten ayrı: o listenin İÇERİĞİ, bu yalnızca listeye ait
+/// künye. Arama sonucu yüzlerce liste döndürebiliyor ve her birinin içeriğini
+/// çekmek hem yavaş hem gereksiz olurdu; içerik ancak kullanıcı dokununca
+/// alınıyor.
+class PlaylistSummary {
+  final String title;
+  final String url;
+  final String? uploaderName;
+
+  /// Listedeki video sayısı; YouTube bildirmediyse null.
+  final int? streamCount;
+
+  final String? thumbnailUrl;
+
+  const PlaylistSummary({
+    required this.title,
+    required this.url,
+    required this.uploaderName,
+    required this.streamCount,
+    required this.thumbnailUrl,
+  });
+
+  factory PlaylistSummary.fromMap(Map<Object?, Object?> map) {
+    final count = map['streamCount'];
+    return PlaylistSummary(
+      title: _asString(map['title']) ?? '',
+      url: _asString(map['url']) ?? '',
+      uploaderName: _asString(map['uploaderName']),
+      // NewPipe bilinmeyen sayıyı -1 ile bildiriyor; 0 göstermek listeyi boş
+      // sanmaya yol açardı.
+      streamCount: count is num && count >= 0 ? count.toInt() : null,
+      thumbnailUrl: _asString(map['thumbnailUrl']),
     );
   }
 }

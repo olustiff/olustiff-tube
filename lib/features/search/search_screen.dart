@@ -11,6 +11,7 @@ import '../player/mini_player.dart';
 import '../player/player_route.dart';
 import 'search_suggestions.dart';
 import 'tv_search_screen.dart';
+import 'playlist_screen.dart';
 import 'video_list.dart';
 
 /// Arama ekranı.
@@ -46,7 +47,17 @@ class PhoneSearchScreen extends StatefulWidget {
   State<PhoneSearchScreen> createState() => _PhoneSearchScreenState();
 }
 
-class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
+class _PhoneSearchScreenState extends State<PhoneSearchScreen>
+    with SingleTickerProviderStateMixin {
+  /// Sekme denetleyicisi durumda tutuluyor: her `setState`'te yeniden
+  /// kurulsaydı (ör. `DefaultTabController`) sonuç geldikçe seçili sekme
+  /// "Videolar"a geri sıçrardı.
+  ///
+  /// `late final ... = ...` DEĞİL: hiç arama yapılmayan bir ekranda alan hiç
+  /// okunmuyor ve ilk okuma `dispose` içinde oluyordu — widget ağacı
+  /// kapanırken denetleyici kurulmaya çalışılınca test ortamı hata veriyordu.
+  late final TabController _tabs;
+
   final _client = ExtractionClient();
   late final TextEditingController _controller =
       TextEditingController(text: widget.initialQuery);
@@ -64,6 +75,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
   bool _voiceRunning = false;
 
   List<VideoSummary> _results = const [];
+  List<PlaylistSummary> _playlists = const [];
   bool _hasMore = false;
   bool _loading = false;
   Object? _error;
@@ -78,6 +90,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 2, vsync: this);
     _controller.addListener(_onQueryChanged);
     _checkVoice();
     final initial = widget.initialQuery;
@@ -96,6 +109,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
     _controller.dispose();
     _focusNode.dispose();
     _loader.dispose();
+    _tabs.dispose();
     super.dispose();
   }
 
@@ -137,6 +151,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
       _error = null;
       _searched = true;
       _results = const [];
+      _playlists = const [];
       _searchedQuery = query.trim();
     });
     try {
@@ -146,6 +161,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
       if (!mounted) return;
       setState(() {
         _results = page.items;
+        _playlists = page.playlists;
         _hasMore = page.hasMore;
         _loading = false;
       });
@@ -166,6 +182,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
       if (!mounted) return;
       setState(() {
         _results = [..._results, ...page.items];
+        _playlists = [..._playlists, ...page.playlists];
         _hasMore = page.hasMore;
         _loading = false;
       });
@@ -186,9 +203,63 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
     openPlayer(context, _results[index].videoId!);
   }
 
+  void _openPlaylist(PlaylistSummary playlist) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlaylistScreen(playlist: playlist),
+      ),
+    );
+  }
+
   void _pick(String query) {
     _controller.text = query;
     _search(query);
+  }
+
+  /// Arama sonuçları: videolar ve çalma listeleri ayrı sekmelerde.
+  ///
+  /// YouTube ikisini tek listede karışık veriyor; ayırmak, "şarkı mı liste mi
+  /// arıyorum" sorusunu kullanıcının her satırda yeniden sormasını önlüyor.
+  Widget _buildResults() {
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabs,
+          tabs: [
+            const Tab(text: 'Videolar'),
+            Tab(
+              // Sayı sekmenin üstünde: kullanıcı dokunmadan önce orada bir
+              // şey olup olmadığını görüyor.
+              text: _playlists.isEmpty
+                  ? 'Listeler'
+                  : 'Listeler (${_playlists.length})',
+            ),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              VideoList(
+                videos: _results,
+                loading: _loading,
+                hasMore: _hasMore,
+                error: _error,
+                emptyMessage: 'Sonuç bulunamadı.',
+                onRetry: () => _search(_controller.text),
+                onLoadMore: _loadMore,
+                onTap: _open,
+              ),
+              _PlaylistResults(
+                playlists: _playlists,
+                loading: _loading,
+                onTap: _openPlaylist,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -229,18 +300,16 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen> {
                     remote: _remote,
                     onPick: _pick,
                   )
-                : VideoList(
-                    videos: _results,
-                    loading: _loading,
-                    hasMore: _hasMore,
-                    error: _error,
-                    emptyMessage: _searched
-                        ? 'Sonuç bulunamadı.'
-                        : 'Aramak için yazmaya başla.',
-                    onRetry: () => _search(_controller.text),
-                    onLoadMore: _loadMore,
-                    onTap: _open,
-                  ),
+                : _searched
+                    ? _buildResults()
+                    : VideoList(
+                        videos: const [],
+                        loading: false,
+                        hasMore: false,
+                        emptyMessage: 'Aramak için yazmaya başla.',
+                        onLoadMore: () {},
+                        onTap: (_) {},
+                      ),
           ),
           const DownloadProgressBar(),
           const MiniPlayer(),
@@ -306,6 +375,47 @@ class _SuggestionList extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// "Listeler" sekmesinin içeriği.
+class _PlaylistResults extends StatelessWidget {
+  const _PlaylistResults({
+    required this.playlists,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final List<PlaylistSummary> playlists;
+  final bool loading;
+  final void Function(PlaylistSummary) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (playlists.isEmpty) {
+      // Yükleme sürerken "liste yok" demek yanlış olurdu; sonuçlar iki
+      // listeye aynı anda geliyor.
+      if (loading) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Bu aramada çalma listesi bulunamadı.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: playlists.length,
+      itemBuilder: (context, index) => PlaylistTile(
+        playlist: playlists[index],
+        onTap: () => onTap(playlists[index]),
+      ),
     );
   }
 }
