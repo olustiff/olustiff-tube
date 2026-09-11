@@ -316,6 +316,34 @@ void main() {
       expect(queue.map((e) => e.videoId), containsAll(['1', '2']));
     });
 
+    // Aşağıdakiler cihazdan BİREBİR alınmış başlıklar. "la calin" araması
+    // kuyruğu bunlarla dolduruyordu; hepsi ilk ayraçtan sonra ayrışıyor.
+    test('gerçek cihazdaki sürümler elenir', () {
+      final queue = QueueBuilder.build(
+        seed: v('seed', 'Serhat Durmus Music',
+            title: 'Serhat Durmus - La Câlin (Obiymy)'),
+        candidates: [
+          v('1', 'Audio Lynk',
+              title: 'Serhat Durmus - La Câlin // Escaping the Ripper'),
+          v('2', 'TARVYN Music',
+              title: 'Serhat Durmus - La Câlin (Obiymy) | TARVYN Remix'),
+          v('3', 'Dope Bass HD',
+              title: 'Serhat Durmus - La Câlin (Dabro Remix) (BASS BOOSTED)'),
+          // Aksanlı/aksansız iki yazım da aynı parça sayılmalı.
+          v('4', 'Black Shamkir', title: 'Serhat Durmus - La Calin'),
+          // Aynı sanatçının BAŞKA şarkıları; kalmalılar.
+          v('5', 'Trap Nation', title: 'Serhat Durmus - Hislerim (feat. Zerrin)'),
+          v('6', 'Serhat Durmus Music', title: 'Serhat Durmus - Gesi Bağları'),
+        ],
+      );
+      final ids = queue.map((e) => e.videoId).toList();
+      // Sıra benzerlik puanına göre değişebilir; önemli olan kimin girdiği.
+      expect(ids, hasLength(3));
+      expect(ids.first, 'seed');
+      expect(ids, containsAll(['5', '6']));
+      expect(ids, isNot(anyElement(isIn(['1', '2', '3', '4']))));
+    });
+
     test('uzatmada da aynı sürümler sızmaz', () {
       final added = QueueBuilder.extend(
         current: v('calan', 'A', title: 'Sanatci - Sarki'),

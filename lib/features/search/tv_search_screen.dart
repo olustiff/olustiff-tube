@@ -222,7 +222,9 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
     final video = _results[index];
     final videoId = video.videoId;
     if (videoId == null) return;
-    PlaybackCoordinator.instance.play(videoId, context: _results);
+    // Arama sonuçları kuyruğa kaynak olarak verilmiyor; gerekçesi telefon
+    // arama ekranındaki `_open` belgesinde.
+    PlaybackCoordinator.instance.play(videoId);
     openPlayer(context, videoId);
   }
 

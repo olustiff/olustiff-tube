@@ -216,8 +216,18 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
   }
 
   void _open(int index) {
-    PlaybackCoordinator.instance
-        .play(_results[index].videoId!, context: _results);
+    // Arama sonuçları kuyruğa KAYNAK OLARAK VERİLMİYOR.
+    //
+    // Bir şarkı arandığında sonuçların tamamı o şarkının başka sürümleri
+    // oluyor (remiks, hızlandırılmış, kapak, "(Joker)", "(Obiymy)"…); bu
+    // havuzdan kurulan kuyruk baştan sona aynı şarkıyı çalıyordu. Gerçek
+    // cihazda "la calin" araması on sonucun onunu da aynı parçayla döndürdü.
+    //
+    // Kuyruk bunun yerine videonun KENDİ ilgili videolarından kuruluyor —
+    // YouTube'un otomatik oynatmasının da beslendiği kaynak. Ana sayfa ve
+    // kitaplık listeleri bağlamı vermeye devam ediyor; oralarda liste
+    // gerçekten çeşitli ve kuyruğa katkısı oluyor.
+    PlaybackCoordinator.instance.play(_results[index].videoId!);
     openPlayer(context, _results[index].videoId!);
   }
 

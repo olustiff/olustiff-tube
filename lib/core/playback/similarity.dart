@@ -64,19 +64,57 @@ const _versionWords = {
   'hizlandirilmis', 'yavaslatilmis', 'tiktok', 'visualizer', 'clip',
 };
 
-/// Başlığın "hangi parça" çekirdeği: sürüm ve süs kelimeleri atılmış hâli.
+/// Başlığın "hangi parça" çekirdeği.
 ///
-/// Sayılar KORUNUYOR — kelime uzunluğu eşiğine takılmıyorlar. Bu şart:
-/// "57. Bölüm" ile "58. Bölüm" çekirdekleri yalnızca sayıda ayrışıyor, sayı
-/// atılsaydı bütün bölümler aynı parça sayılır ve dizi kuyruğu tek bölüme
-/// inerdi.
-Set<String> trackCore(String title) => title
-    .toLowerCase()
+/// İki aşama var ve ilki belirleyici:
+///
+/// 1. **Başlık ilk AYRAÇTA kesiliyor.** Gerçek cihazda görüldü: aynı şarkının
+///    sürümleri tam da orada ayrışıyor — "La Câlin **(Obiymy)**",
+///    "La Câlin **| TARVYN Remix**", "La Câlin **// Escaping the Ripper**".
+///    Ayraç öncesi kısım hepsinde aynı. Buna karşılık gerçekten farklı bir
+///    şarkı olan "Поле мечты" ayraç taşımıyor ve "Поле"den ayrışmaya devam
+///    ediyor. Kelime kesişimine bakan ölçütler bu ikisini ayıramıyordu.
+/// 2. Kalan kısımdan sürüm ve süs kelimeleri atılıyor — ayraçsız yazılmış
+///    "Sarki Remix" gibi başlıklar için.
+///
+/// Sayılar KORUNUYOR; kelime uzunluğu eşiğine takılmıyorlar. Bu şart:
+/// "57. Bölüm" ile "58. Bölüm" yalnızca sayıda ayrışıyor, sayı atılsaydı
+/// bütün bölümler aynı parça sayılır ve dizi kuyruğu tek bölüme inerdi.
+Set<String> trackCore(String title) => _foldAccents(_beforeSeparator(title))
     .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
     .where((w) => w.isNotEmpty)
     .where((w) => w.length > 2 || int.tryParse(w) != null)
     .where((w) => !_stopWords.contains(w) && !_versionWords.contains(w))
     .toSet();
+
+/// Küçük harfe çevirir ve aksanları düşürür.
+///
+/// Aynı şarkı iki yazımla birden dolaşıyor: cihazda hem "La Câlin" hem
+/// "La Calin" aynı arama sonucunda çıktı. Aksan düşürülmezse bunlar farklı
+/// parça sayılıyor ve ikisi de kuyruğa giriyordu.
+String _foldAccents(String text) {
+  const from = 'âàäáãçğıíìïîñöóòôõşüúùûýÿéèëê';
+  const to = 'aaaaacgiiiiinooooosuuuuyyeeee';
+  final buffer = StringBuffer();
+  for (final rune in text.toLowerCase().runes) {
+    final char = String.fromCharCode(rune);
+    final index = from.indexOf(char);
+    buffer.write(index == -1 ? char : to[index]);
+  }
+  return buffer.toString();
+}
+
+/// Başlığın ilk ayraçtan önceki kısmı.
+///
+/// Ayraç hiç yoksa başlık olduğu gibi dönüyor. Kesilen kısım başlığın
+/// TAMAMINI götürüyorsa (ör. "(Official Video)" ile başlayan başlıklar)
+/// kesme uygulanmıyor — boş bir çekirdek hiçbir şeyle karşılaştırılamaz.
+String _beforeSeparator(String title) {
+  final cut = title.indexOf(RegExp(r'[(\[{|/«]'));
+  if (cut <= 0) return title;
+  final head = title.substring(0, cut).trim();
+  return head.isEmpty ? title : head;
+}
 
 /// İki kayıt AYNI parçanın farklı sürümü mü.
 ///
