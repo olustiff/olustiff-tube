@@ -9,6 +9,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.dash.manifest.DashManifestParser
@@ -16,6 +17,7 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.olustiff.app.extractor.ExtractionService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -104,6 +106,38 @@ object PlayerHolder {
         exoPlayer?.let { return it }
         val appContext = context.applicationContext
         return ExoPlayer.Builder(appContext)
+            // Bant genişliği tahmini DÜŞÜKTEN başlıyor.
+            //
+            // Ölçümde görülen şey: akış yavaş fazda ~277 kbps'te sabitlenip
+            // sonra birkaç Mbps'e fırlıyor. Oynatıcı iyimser bir başlangıç
+            // tahminiyle yüksek çözünürlüğü seçince yavaş faz tamponu
+            // boşaltıyor, video birkaç saniye oynayıp donuyordu — ilk
+            // ölçümler aktarımın gerçek zamanın %7'sinde kaldığını gösterdi.
+            //
+            // Düşük tahminle ilk parça küçük bir çözünürlükten geliyor, tampon
+            // hızla doluyor ve hız elverdiğinde oynatıcı kendiliğinden
+            // yukarı tırmanıyor. YouTube'un kendi uygulaması da böyle
+            // davranıyor: yüksekten başlayıp donmak yerine düşükten başlayıp
+            // açılıyor.
+            .setBandwidthMeter(
+                DefaultBandwidthMeter.Builder(appContext)
+                    .setInitialBitrateEstimate(INITIAL_BITRATE_ESTIMATE)
+                    .build()
+            )
+            // Tampon hedefi büyütüldü: hızlı fazlar yavaş fazları
+            // karşılayabilsin diye elde edilen her saniye saklanıyor.
+            // Oynatmaya başlama eşiği de 2,5 saniyeden 6 saniyeye çıktı —
+            // açılış biraz geç ama ilk yavaş fazda hemen donmuyor.
+            .setLoadControl(
+                DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        /* minBufferMs= */ 60_000,
+                        /* maxBufferMs= */ 180_000,
+                        /* bufferForPlaybackMs= */ 6_000,
+                        /* bufferForPlaybackAfterRebufferMs= */ 12_000
+                    )
+                    .build()
+            )
             // Ses türü bildiriliyor (doğru ses yönlendirmesi için), ama odak
             // yönetimi Media3'e BIRAKILMIYOR: otomatik yönetim telefon
             // aramalarında çoğu cihazda duraklatmak yerine sesi kısıyordu.
@@ -239,6 +273,15 @@ object PlayerHolder {
         val item = PlaybackQueue.jumpTo(index) ?: return
         playQueueItem(context, item)
     }
+
+    /**
+     * Oynatıcının başlangıç bant genişliği tahmini (bit/sn).
+     *
+     * Media3'ün varsayılanı ülkeye göre birkaç Mbps; bu akışlarda o tahmin
+     * gerçekleşmiyor ve ilk seçim fazla yüksek kalıyor. 700 kbps, 360p'yi
+     * rahatça taşıyan ama yanılma payı bırakan bir başlangıç.
+     */
+    private const val INITIAL_BITRATE_ESTIMATE = 700_000L
 
     /** Ses yükseltme kazancını değiştirir (milibel; 0 = kapalı). */
     fun setLoudnessGain(millibels: Int) {

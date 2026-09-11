@@ -291,5 +291,52 @@ void main() {
         ContentKind.video,
       );
     });
+
+    // Gerçek kullanımda yakalandı: hayran derlemeleri "Entertainment" ya da
+    // "People & Blogs" kategorisiyle yükleniyor ve kategoriye takılıp
+    // başlığa bakmamak müzik dinleyene video indirtiyordu.
+    test('güçlü ipucu, müzik dışı kategoriyi ezer', () {
+      expect(
+        detectContentKind(
+          buildDetails(category: 'Entertainment', title: 'Sezen Aksu - Ey Aşk [Official Audio]'),
+        ),
+        ContentKind.music,
+      );
+      expect(
+        detectContentKind(
+          buildDetails(category: 'People & Blogs', title: 'RAIKAHO - ВСЕ ТРЕКИ'),
+        ),
+        ContentKind.music,
+      );
+      expect(
+        detectContentKind(
+          buildDetails(category: 'Entertainment', title: 'Janaga - лучшие песни'),
+        ),
+        ContentKind.music,
+      );
+    });
+
+    // Zayıf ipuçları kategoriyi EZMEMELİ: "mix" bir oyun videosunun
+    // başlığında da geçiyor.
+    test('zayıf ipucu, açık kategoriyi ezmez', () {
+      expect(
+        detectContentKind(buildDetails(category: 'Gaming', title: 'my best mix')),
+        ContentKind.video,
+      );
+      expect(
+        detectContentKind(buildDetails(title: 'lofi mix')),
+        ContentKind.music,
+        reason: 'kategori yokken zayıf ipucu yine geçerli',
+      );
+    });
+
+    test('etiketlerdeki ipucu da sayılır', () {
+      expect(
+        detectContentKind(
+          buildDetails(category: 'Entertainment', tags: ['музыка', 'клип']),
+        ),
+        ContentKind.music,
+      );
+    });
   });
 }
