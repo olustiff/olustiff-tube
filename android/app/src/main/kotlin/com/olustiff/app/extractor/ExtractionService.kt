@@ -232,18 +232,68 @@ object ExtractionService {
      * Ham [StreamInfo]. Oynatıcı, kuyrukta sıradakine geçerken kaynakları
      * kendisi seçebilmek için buna ihtiyaç duyar (bkz. [StreamSelector]).
      */
+    /**
+     * Bir videonun çözümlenmiş bilgisi — kısa ömürlü ÖNBELLEKLİ.
+     *
+     * Önbellek bir hız iyileştirmesi değil, bir DOĞRULUK düzeltmesi.
+     *
+     * Aynı video kuyruk ilerlerken iki kez çözülüyordu: native taraf çalmak
+     * için ([PlayerHolder.playQueueItem]), Dart tarafı da ekranı doldurmak
+     * için ([videoDetails]). İki çözümleme farklı YouTube istemcilerine
+     * düşebiliyor ve ürettikleri akış adresleri birbirinin yerine
+     * KULLANILAMIYOR — oynatıcının gönderdiği kimlikle uyuşmayan adres
+     * reddediliyor.
+     *
+     * Bu, gerçek cihazda şöyle patladı: kullanıcı sesli moda geçiyor, Dart
+     * kendi çözümlemesinden gelen adresi veriyor, sunucu
+     * `ERROR_CODE_IO_BAD_HTTP_STATUS` dönüyor ve oynatıcı hata durumunda
+     * kalıyor. Tek bir çözümlemeyi paylaşmak bu uyuşmazlığı kökten kaldırıyor;
+     * yan fayda olarak her parça geçişindeki ağ yükü de yarıya iniyor.
+     *
+     * Ömür kısa tutuluyor: YouTube adresleri zamanla geçersizleşiyor,
+     * bayat bir kaydı paylaşmak sorunu çözmek yerine yayardı.
+     */
+    private class CachedStream(val info: StreamInfo, val fetchedAt: Long)
+
+    private val streamCache = LinkedHashMap<String, CachedStream>()
+
+    @Synchronized
+    private fun cached(videoId: String): StreamInfo? {
+        val entry = streamCache[videoId] ?: return null
+        if (System.currentTimeMillis() - entry.fetchedAt > STREAM_CACHE_TTL_MS) {
+            streamCache.remove(videoId)
+            return null
+        }
+        return entry.info
+    }
+
+    @Synchronized
+    private fun remember(videoId: String, info: StreamInfo) {
+        streamCache[videoId] = CachedStream(info, System.currentTimeMillis())
+        // Yalnızca son birkaç video tutuluyor; bu bir indirme önbelleği değil,
+        // "aynı anda iki kez sorulmasın" önlemi.
+        while (streamCache.size > STREAM_CACHE_SIZE) {
+            streamCache.remove(streamCache.keys.first())
+        }
+    }
+
     fun streamInfo(videoId: String): StreamInfo {
         ensureInitialized()
-        return StreamInfo.getInfo(
+        cached(videoId)?.let { return it }
+        val info = StreamInfo.getInfo(
             ServiceList.YouTube,
             "https://www.youtube.com/watch?v=$videoId"
         )
+        remember(videoId, info)
+        return info
     }
 
     suspend fun videoDetails(videoId: String): Map<String, Any?> = withContext(Dispatchers.IO) {
         ensureInitialized()
-        val url = "https://www.youtube.com/watch?v=$videoId"
-        val info = StreamInfo.getInfo(ServiceList.YouTube, url)
+        val info = cached(videoId) ?: StreamInfo.getInfo(
+            ServiceList.YouTube,
+            "https://www.youtube.com/watch?v=$videoId"
+        ).also { remember(videoId, it) }
 
         mapOf(
             "videoId" to videoId,
@@ -358,4 +408,10 @@ object ExtractionService {
     const val KIND_CHANNEL = "channel"
     const val KIND_SEARCH_PLAYLISTS = "search_playlists"
     const val KIND_SEARCH_CHANNELS = "search_channels"
+
+    /** Çözümleme önbelleğinin ömrü. */
+    private const val STREAM_CACHE_TTL_MS = 2 * 60 * 1000L
+
+    /** Önbellekte tutulan video sayısı. */
+    private const val STREAM_CACHE_SIZE = 4
 }
