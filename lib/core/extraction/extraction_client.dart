@@ -40,8 +40,13 @@ class ExtractionClient {
   static const kindSearchPlaylists = 'search_playlists';
   static const kindSearchChannels = 'search_channels';
 
-  Future<PagedVideos> search(String query) async {
-    final raw = await _invoke<Map<Object?, Object?>>('search', {'query': query});
+  /// [keepSession] false ise sonuç [loadMore] için saklanmaz; arka plan
+  /// aramaları (ana sayfa akışı) arama ekranının devamını bozmasın diye.
+  Future<PagedVideos> search(String query, {bool keepSession = true}) async {
+    final raw = await _invoke<Map<Object?, Object?>>(
+      'search',
+      {'query': query, 'keepSession': keepSession},
+    );
     return PagedVideos.fromMap(raw);
   }
 

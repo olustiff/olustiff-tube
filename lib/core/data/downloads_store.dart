@@ -138,12 +138,15 @@ class DownloadsStore extends ChangeNotifier {
     // Müzik klasöründe artık bulunmayan kayıtları ele: kullanıcı dosyayı
     // telefonunun dosya yöneticisinden silmiş olabilir.
     final onDisk = await _listFiles();
+    // Klasör okunamadıysa (izin, eski Android) hiçbir şey silinmiyor: boş
+    // liste "hepsi silinmiş" sanılır ve bütün indirme kayıtları kaybolurdu.
+    if (onDisk == null) return;
     _items = _items.where((i) => onDisk.contains(i.path)).toList();
     await _save();
   }
 
-  /// Music/oLusTifF klasöründeki MP3'lerin content URI'ları.
-  Future<Set<String>> _listFiles() async {
+  /// Music/oLusTifF klasöründeki MP3'lerin content URI'ları; okunamazsa null.
+  Future<Set<String>?> _listFiles() async {
     try {
       final raw = await _channel.invokeMethod<List<Object?>>('list') ?? [];
       return raw
@@ -151,7 +154,7 @@ class DownloadsStore extends ChangeNotifier {
           .whereType<String>()
           .toSet();
     } on PlatformException {
-      return {};
+      return null;
     }
   }
 

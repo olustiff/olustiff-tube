@@ -61,7 +61,7 @@ class HomeFeed {
     final pages = await Future.wait(
       seedList.map((seed) async {
         try {
-          return (await _client.search(seed)).items;
+          return (await _client.search(seed, keepSession: false)).items;
         } catch (_) {
           // Tek bir tohum başarısız olursa akışın tamamı çökmesin.
           return const <VideoSummary>[];

@@ -66,8 +66,14 @@ class DownloadController(
             // bekletiyordu. Aynı dosyadaki `downloadMp3` zaten bu kalıbı
             // kullanıyor; tutarsızlık buradaydı.
             "list" -> scope.launch {
-                val items = withContext(Dispatchers.IO) { listDownloads() }
-                result.success(items)
+                // Yakalanmayan istisna bu kapsamda uygulamayı düşürüyor;
+                // klasör okunamazsa (izin, eski Android) Dart'a hata dönülür.
+                try {
+                    val items = withContext(Dispatchers.IO) { listDownloads() }
+                    result.success(items)
+                } catch (e: Exception) {
+                    result.error("LIST_FAILED", e.message, null)
+                }
             }
 
             "delete" -> {

@@ -310,6 +310,11 @@ class YouTubeCastController extends ChangeNotifier {
     _statusSubscription = channel.mediaStatuses.listen(
       _applyStatus,
       onError: (Object _) {},
+      // Bağlantı koptu (televizyon kapandı, ağ değişti). Kapatılmazsa ekran
+      // "yansıtılıyor" demeye devam ediyor ve düğmeler boşa basılıyordu.
+      onDone: () {
+        if (identical(channel, _channel)) unawaited(disconnect());
+      },
     );
     _statusTimer?.cancel();
     _statusTimer = Timer.periodic(

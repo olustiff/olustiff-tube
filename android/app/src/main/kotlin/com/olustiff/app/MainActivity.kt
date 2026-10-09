@@ -18,6 +18,7 @@ import android.speech.RecognizerIntent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import androidx.annotation.RequiresApi
 import android.util.Rational
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -255,7 +256,9 @@ class MainActivity : FlutterActivity() {
                         when (call.method) {
                             "search" -> {
                                 val query = call.argument<String>("query").orEmpty()
-                                result.success(ExtractionService.search(query))
+                                val keepSession =
+                                    call.argument<Boolean>("keepSession") ?: true
+                                result.success(ExtractionService.search(query, keepSession))
                             }
                             "suggestions" -> {
                                 val query = call.argument<String>("query").orEmpty()
@@ -426,6 +429,7 @@ class MainActivity : FlutterActivity() {
      * uygulamanın kendi kontrolleri küçük pencerede okunaksız kalıyor ve
      * pencerede yalnızca görüntü olması gerekiyor.
      */
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun pipParams(): PictureInPictureParams {
         val ratio = PlayerHolder.videoAspectRatio
         // Android, en/boy oranını 1:2.39 ile 2.39:1 arasında ister.
@@ -436,6 +440,7 @@ class MainActivity : FlutterActivity() {
             .build()
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun playPauseAction(): RemoteAction {
         val playing = PlayerHolder.isPlaying()
         val icon = Icon.createWithResource(

@@ -143,10 +143,13 @@ object PlaybackQueue {
     /**
      * Sıradakine ilerler ve onu döner; kuyruk bittiyse null.
      *
-     * Tek parça tekrarında aynı öğe döner — çağıran taraf onu yeniden çalar.
+     * Tek parça tekrarında, parça KENDİLİĞİNDEN bittiyse aynı öğe döner —
+     * çağıran taraf onu yeniden çalar. Kullanıcı "sonraki"ye bastıysa
+     * ([manual]) tekrar modu onu tutmuyor: aksi halde düğme hiçbir şey
+     * yapmıyor gibi görünüyordu.
      */
-    fun advance(): Item? {
-        if (repeatMode == RepeatMode.ONE) return current()
+    fun advance(manual: Boolean = true): Item? {
+        if (repeatMode == RepeatMode.ONE && !manual) return current()
         val next = nextIndex() ?: return null
         index = next
         return items[next]

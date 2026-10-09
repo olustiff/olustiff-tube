@@ -44,7 +44,12 @@ class PlaybackController(
     }
 
     private val playerListener = object : Player.Listener {
-        override fun onPlaybackStateChanged(playbackState: Int) = emitState()
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // Kurtarılan parça gerçekten çalmaya başladıysa bir sonraki
+            // hatada yeniden denemeye hakkı var.
+            if (playbackState == Player.STATE_READY) recoveredVideoId = null
+            emitState()
+        }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = emitState()
         override fun onIsPlayingChanged(isPlaying: Boolean) = emitState()
 
@@ -61,22 +66,25 @@ class PlaybackController(
             val recoverable = error.errorCode in
                 PlaybackException.ERROR_CODE_IO_UNSPECIFIED..
                 PlaybackException.ERROR_CODE_IO_NO_PERMISSION
-            if (!recoverable || recovering) return
-            recovering = true
+            if (!recoverable) return
+            val videoId = PlaybackQueue.current()?.videoId ?: return
+            // Parça başına tek deneme: kurtarılan adres de hata verirse
+            // (video gerçekten açılamıyorsa) yeniden denemek sonsuz döngü.
+            // Hak, parça READY olunca ya da başka parçaya geçilince yenilenir.
+            if (recoveredVideoId == videoId) return
+            recoveredVideoId = videoId
             scope.launch {
                 try {
                     PlayerHolder.recoverCurrent(context)
                 } catch (e: Exception) {
                     Log.w(TAG, "Oynatma kurtarılamadı", e)
-                } finally {
-                    recovering = false
                 }
             }
         }
     }
 
-    /** Kurtarma sürüyor mu; aynı hatada döngüye girmeyi engelliyor. */
-    private var recovering = false
+    /** Son kurtarma denenen parça; aynı hatada döngüye girmeyi engelliyor. */
+    private var recoveredVideoId: String? = null
 
     init {
         methodChannel.setMethodCallHandler { call, result -> handleMethod(call, result) }

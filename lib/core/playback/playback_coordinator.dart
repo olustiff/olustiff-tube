@@ -1,9 +1,8 @@
-import 'dart:async' show unawaited;
-
 import 'package:flutter/foundation.dart';
 
 import '../cast/cast_controller.dart';
 import '../cast/cast_protocol.dart';
+import '../cast/youtube_cast_controller.dart';
 import '../data/library_store.dart';
 import '../data/settings_store.dart';
 import '../extraction/extraction_client.dart';
@@ -206,7 +205,8 @@ class PlaybackCoordinator extends ChangeNotifier {
     bool forceVideo,
     Duration? startAt,
   ) async {
-    final details = await _extraction.videoDetails(videoId);
+    final details =
+        await _extraction.videoDetails(videoId).timeout(_playTimeout);
     if (_isStale(requestId)) return;
 
     final seed = _summaryOf(details);
@@ -242,6 +242,32 @@ class PlaybackCoordinator extends ChangeNotifier {
       _details = details;
       // Kalite ve ses/video seçimi televizyonun işi; telefon çözümleme bile
       // yapmıyor.
+      _audioOnly = false;
+      _qualityLabel = null;
+      notifyListeners();
+
+      await _library.recordWatch(seed);
+      return;
+    }
+
+    // Televizyonun KENDİ YouTube'una gönderiliyorsa da aynı kural: seçilen
+    // video oraya gider. Bu dal yokken video telefonda açılıyor, televizyon
+    // eskisini çalmaya devam ediyordu — iki ses birden.
+    final youtubeCast = YouTubeCastController.instance;
+    if (youtubeCast.isCasting) {
+      final sent = await youtubeCast.sendCurrent(
+        videoId: videoId,
+        title: details.title,
+        thumbnailUrl: details.thumbnailUrl,
+      );
+      if (_isStale(requestId)) return;
+      if (!sent) {
+        throw CastException(
+          youtubeCast.lastError ?? 'Video televizyona gönderilemedi.',
+        );
+      }
+      _prepareQueue(seed, details, exactQueue, index, videoId);
+      _details = details;
       _audioOnly = false;
       _qualityLabel = null;
       notifyListeners();
@@ -553,7 +579,11 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// Hazırlık sürerken DİNLENMİYOR: yeni video için mod zaten burada
   /// belirlendi, native hâlâ öncekini bildiriyor olabilir ve o gecikmiş bilgi
   /// yeni kararın üstüne yazardı.
+  ///
+  /// Yansıtma sırasında da dinlenmiyor: o an çalan şey TV'de, yerel
+  /// oynatıcının durumu arayüzü yanıltırdı ([syncFromNative] ile aynı kural).
   void updateAudioOnly(bool value) {
+    if (CastController.instance.isCasting) return;
     if (_loading || _audioOnly == value) return;
     _audioOnly = value;
     notifyListeners();
@@ -564,6 +594,7 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// Durum akışından besleniyor; karıştırma açılıp kapandığında ya da kuyruk
   /// değiştiğinde sıra da değişiyor.
   void updatePlayOrder(List<int> order) {
+    if (CastController.instance.isCasting) return;
     if (_playOrder.length == order.length) {
       var same = true;
       for (var i = 0; i < order.length; i++) {
@@ -622,6 +653,13 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// özetten gösteriliyor. Süresiz beklemek arayüzü kilitliyordu.
   static const _syncTimeout = Duration(seconds: 15);
 
+  /// Kullanıcının açtığı videonun hazırlanması için en uzun bekleme.
+  ///
+  /// Ağ asılı kalırsa (arabada hücre değişimi) yükleniyor göstergesi sonsuza
+  /// dek dönüyordu; süre dolunca hata gösteriliyor ve yeniden denenebiliyor.
+  /// İlk çözümleme yavaş olabildiği için [_syncTimeout]'tan cömert.
+  static const _playTimeout = Duration(seconds: 30);
+
   /// Kuyruğun sonuna bu kadar video kaldığında uzatma tetikleniyor.
   ///
   /// Sıfır beklemek geç kalırdı: uzatma bir çıkarma isteği gerektiriyor ve o
@@ -663,6 +701,11 @@ class PlaybackCoordinator extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    // Hazırlığı süren bir istek varsa geçersiz kılınıyor: yoksa durdurduktan
+    // sonra tamamlanıp oynatmayı kendiliğinden yeniden başlatırdı.
+    _requestId++;
+    _loading = false;
+    _pending = null;
     await _playback.stop();
     _targetVideoId = null;
     _details = null;

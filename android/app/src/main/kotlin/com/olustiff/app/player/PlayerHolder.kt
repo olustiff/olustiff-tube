@@ -205,7 +205,7 @@ object PlayerHolder {
                     advancing = true
                     scope.launch {
                         try {
-                            playNext(appContext)
+                            playNext(appContext, manual = false)
                         } catch (e: Exception) {
                             // Buradaki `catch` HAYATİ: bu kapsam
                             // `SupervisorJob` kullanıyor ve yakalanmayan bir
@@ -309,8 +309,8 @@ object PlayerHolder {
      * [MAX_ADVANCE_ATTEMPTS] ile sınırlı, çünkü ağ tamamen yoksa kuyruğun
      * tamamını tek tek denemek yalnızca pili yakar.
      */
-    suspend fun playNext(context: Context) {
-        advanceWithRecovery(context) { PlaybackQueue.advance() }
+    suspend fun playNext(context: Context, manual: Boolean = true) {
+        advanceWithRecovery(context) { PlaybackQueue.advance(manual) }
     }
 
     suspend fun playPrevious(context: Context) {
@@ -358,12 +358,16 @@ object PlayerHolder {
     private const val INITIAL_BITRATE_ESTIMATE = 700_000L
 
     /**
-     * Oynatıcıda yüklü bir medya var mı (çalıyor ya da duraklatılmış).
+     * Oynatıcıda sürdürülebilir bir medya var mı (çalıyor ya da duraklatılmış;
+     * bitmiş ya da hatada kalmış parça sayılmaz).
      *
      * Bluetooth otomatik çalma bunu soruyor: elde zaten bir şey varsa onu
      * kaldığı yerden sürdürmek gerekiyor, kayıtlı parçayı baştan açmak değil.
      */
-    val hasMedia: Boolean get() = currentRequest != null
+    val hasMedia: Boolean
+        get() = currentRequest != null && exoPlayer?.playbackState.let {
+            it == Player.STATE_READY || it == Player.STATE_BUFFERING
+        }
 
     /**
      * Çalan parçayı TAZE adreslerle yeniden açar ve kaldığı yerden sürdürür.
@@ -380,7 +384,11 @@ object PlayerHolder {
     suspend fun recoverCurrent(context: Context) {
         val item = PlaybackQueue.current() ?: return
         val position = exoPlayer?.currentPosition ?: 0L
+        val wasPlaying = exoPlayer?.playWhenReady ?: true
         val info = withContext(Dispatchers.IO) {
+            // Önbellekteki kayıt tam da reddedilen adresleri taşıyor;
+            // silinmezse "yenileme" aynı adresi yeniden açardı.
+            ExtractionService.forget(item.videoId)
             ExtractionService.streamInfo(item.videoId)
         }
         val selection =
@@ -399,6 +407,8 @@ object PlayerHolder {
             audioOnlyMode
         )
         if (position > 0 && !selection.isLive) exoPlayer?.seekTo(position)
+        // Kullanıcı duraklatmışken gelen hata, oynatmayı kendiliğinden başlatmasın.
+        exoPlayer?.playWhenReady = wasPlaying
     }
 
     /** Duraklatılmış oynatmayı sürdürür; yüklü medya yoksa hiçbir şey yapmaz. */

@@ -168,15 +168,20 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
       _results = const [];
       _playlists = const [];
       _playlistsLoaded = false;
+      // Önceki aramanın yüklemesi hâlâ sürüyorsa sonucu atılacak; bayrak
+      // burada sıfırlanmazsa yeni aramanın sekmesi sonsuza dek "yükleniyor".
+      _playlistsLoading = false;
       _channels = const [];
       _channelsLoaded = false;
+      _channelsLoading = false;
       _searchedQuery = query.trim();
     });
     try {
       final trimmed = query.trim();
       await LibraryStore.instance.recordSearch(trimmed);
       final page = await _client.search(trimmed);
-      if (!mounted) return;
+      // Arka arkaya iki arama: geç dönen eski sonuç yenisinin üzerine yazmasın.
+      if (!mounted || _searchedQuery != trimmed) return;
       setState(() {
         _results = page.items;
         _hasMore = page.hasMore;
@@ -270,7 +275,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
         _playlistsLoading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || _searchedQuery != query) return;
       // Boş liste gösteriliyor: ayrı bir hata ekranı kurmak yerine
       // "bulunamadı" mesajı yeterli, kullanıcı aramayı tekrarlayabilir.
       setState(() {
@@ -294,7 +299,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
         _channelsLoading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || _searchedQuery != query) return;
       setState(() {
         _channelsLoaded = true;
         _channelsLoading = false;

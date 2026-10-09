@@ -80,7 +80,30 @@ const _versionWords = {
 /// Sayılar KORUNUYOR; kelime uzunluğu eşiğine takılmıyorlar. Bu şart:
 /// "57. Bölüm" ile "58. Bölüm" yalnızca sayıda ayrışıyor, sayı atılsaydı
 /// bütün bölümler aynı parça sayılır ve dizi kuyruğu tek bölüme inerdi.
-Set<String> trackCore(String title) => _foldAccents(_beforeSeparator(title))
+///
+/// Kesme İKİ durumda uygulanmıyor, ikisi de gerçek başlıklardan:
+/// - Ayraç sonrası sayı taşıyorsa: "Kuruluş Osman | 57. Bölüm" ile
+///   "| 60. Bölüm" kesilince ikisi de {kurulus, osman} oluyor ve bütün
+///   bölümler aynı parça sayılıyordu.
+/// - Ayraç öncesi tek kelimeye iniyorsa: "BTS (방탄소년단) 'Dynamite'" ve
+///   "BTS (방탄소년단) 'Butter'" ikisi de {bts} oluyordu — tek kelime bir
+///   parçayı değil, sanatçıyı adlandırıyor.
+Set<String> trackCore(String title) {
+  final head = _beforeSeparator(title);
+  if (head == title) return _coreWords(title);
+  final tail = title.substring(head.length);
+  // Kelime sayısı süzmeden ÖNCE sayılıyor: "La Câlin"in "la"sı çekirdeğe
+  // girmiyor ama başlığın tek kelimelik bir sanatçı adı olmadığını gösteriyor.
+  final headWords = head
+      .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+      .where((w) => w.isNotEmpty);
+  if (tail.contains(RegExp(r'\d')) || headWords.length < 2) {
+    return _coreWords(title);
+  }
+  return _coreWords(head);
+}
+
+Set<String> _coreWords(String text) => _foldAccents(text)
     .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
     .where((w) => w.isNotEmpty)
     .where((w) => w.length > 2 || int.tryParse(w) != null)

@@ -68,12 +68,20 @@ object ExtractionService {
         )
     }
 
-    suspend fun search(query: String): Map<String, Any?> = withContext(Dispatchers.IO) {
+    /**
+     * [keepSession] false: sonuç "devamını yükle" için saklanmaz. Ana sayfa
+     * akışı arka planda arama yapıyor; saklasaydı arama ekranındaki listenin
+     * devamı ana sayfanın sorgusundan gelirdi.
+     */
+    suspend fun search(
+        query: String,
+        keepSession: Boolean = true
+    ): Map<String, Any?> = withContext(Dispatchers.IO) {
         ensureInitialized()
         val extractor = ServiceList.YouTube.getSearchExtractor(query)
         extractor.fetchPage()
         val session = PagedSession(extractor)
-        sessions[KIND_SEARCH] = session
+        if (keepSession) sessions[KIND_SEARCH] = session
         extractor.initialPage.toResult(session)
     }
 
@@ -265,6 +273,12 @@ object ExtractionService {
             return null
         }
         return entry.info
+    }
+
+    /** Önbellekteki kaydı siler; reddedilen adresleri yeniden kullanmamak için. */
+    @Synchronized
+    fun forget(videoId: String) {
+        streamCache.remove(videoId)
     }
 
     @Synchronized
