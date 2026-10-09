@@ -58,8 +58,25 @@ object StreamSelector {
         val audio = info.audioStreams.maxByOrNull { it.averageBitrate }
 
         if (audioOnly) {
-            val url = audio?.contentUrl() ?: return null
-            return Selection(null, url, "Sadece ses", false)
+            val url = audio?.contentUrl()
+            if (url != null) return Selection(null, url, "Sadece ses", false)
+
+            // Ayrık ses akışı yoksa SESSİZCE PES ETME.
+            //
+            // Eskiden burada `null` dönülüyordu; çağıran taraf
+            // (`PlayerHolder.playQueueItem`) onu sessizce atlıyor ve kuyruk
+            // olduğu yerde duruyordu — kullanıcı için "müzik bir sonraki
+            // parçada durdu" demek, üstelik sebebi hiçbir yerde görünmüyor.
+            //
+            // Birleşik akış sesi de taşıyor; video parçası
+            // `applyAudioOnlyTrackSelection` ile kapatılıyor, yani sesli mod
+            // bozulmuyor ve oynatma devam ediyor.
+            val combined = pickVideo(info.videoStreams, DEFAULT_MAX_HEIGHT)
+            val combinedUrl = combined?.contentUrl()
+            if (combinedUrl != null) {
+                return Selection(null, combinedUrl, "Sadece ses", false)
+            }
+            return null
         }
 
         // YouTube yüksek çözünürlükleri yalnızca "video-only" olarak sunar;

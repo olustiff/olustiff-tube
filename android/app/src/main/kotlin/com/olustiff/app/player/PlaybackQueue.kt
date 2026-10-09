@@ -51,10 +51,30 @@ object PlaybackQueue {
 
     fun current(): Item? = items.getOrNull(index)
 
+    /**
+     * Kuyruğu değiştirir.
+     *
+     * Çalma sırası yalnızca GEREKİYORSA yeniden kuruluyor. Kuyruk sona
+     * yaklaşınca öneriyle uzuyor ve her uzatmada `set` çağrılıyor; koşulsuz
+     * yeniden kurmak karıştırma açıkken kalan sırayı her seferinde yeniden
+     * rastgeleleştiriyordu — kullanıcının gördüğü "sırada" listesi birkaç
+     * saniyede bir değişiyor demek.
+     *
+     * Mevcut sıra, yeni listenin başını aynen kapsıyorsa (uzatma tam olarak
+     * budur) korunuyor ve yalnızca eklenen öğeler sona iliştiriliyor.
+     */
     fun set(newItems: List<Item>, startIndex: Int) {
+        val extendedOnly = shuffle &&
+            newItems.size > items.size &&
+            newItems.subList(0, items.size) == items
+
         items = newItems
         index = startIndex
-        rebuildOrder()
+        if (extendedOnly) {
+            order = order + (newItems.indices.drop(order.size))
+        } else {
+            rebuildOrder()
+        }
     }
 
     fun setRepeatMode(mode: RepeatMode) {

@@ -47,9 +47,17 @@ Future<void> main() async {
   PlaybackClient.shared.stateStream.listen((state) {
     final videoId = state.currentVideoId;
     if (videoId != null) {
+      // Mod EN BAŞTA uygulanıyor, sırası önemli.
+      //
+      // `syncFromNative` ilk iş olarak `_loading = true` yapıyor ve
+      // `updateAudioOnly` hazırlık sürerken gelen değeri yok sayıyor. Sıra
+      // tersken, kuyruk kendi başına sıradaki parçaya geçtiğinde native'in
+      // bildirdiği doğru mod hiç uygulanmıyordu: sesli dinlenirken sıradaki
+      // parça VİDEO modunda açılıyor, ekran uyanık tutuluyor ve boşuna video
+      // indiriliyordu.
+      PlaybackCoordinator.instance.updateAudioOnly(state.audioOnly);
       PlaybackCoordinator.instance.syncFromNative(videoId, state.queueIndex);
       PlaybackCoordinator.instance.updatePlayOrder(state.queueOrder);
-      PlaybackCoordinator.instance.updateAudioOnly(state.audioOnly);
       _rememberPosition(state, videoId);
     } else if (state.queueSize == 0) {
       // Bildirimdeki kapat düğmesi oynatmayı bitirdi: mini oynatıcı da

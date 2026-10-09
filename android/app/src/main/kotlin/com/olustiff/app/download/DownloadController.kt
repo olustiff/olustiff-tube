@@ -57,7 +57,18 @@ class DownloadController(
         when (call.method) {
             "downloadMp3" -> downloadMp3(call, result)
 
-            "list" -> result.success(listDownloads())
+            // MediaStore sorgusu IO'ya alınıyor.
+            //
+            // Eskiden doğrudan burada, yani ANA THREAD'de koşuyordu ve bu
+            // liste uygulama açılışında isteniyor: MediaStore sağlayıcısının
+            // soğuk açılışta ayağa kalkması + `LIKE` sorgusu + imleç döngüsü,
+            // Flutter'ın ilk kareyi çizmek için ihtiyaç duyduğu thread'i
+            // bekletiyordu. Aynı dosyadaki `downloadMp3` zaten bu kalıbı
+            // kullanıyor; tutarsızlık buradaydı.
+            "list" -> scope.launch {
+                val items = withContext(Dispatchers.IO) { listDownloads() }
+                result.success(items)
+            }
 
             "delete" -> {
                 // Gelen değer artık dosya yolu değil, MediaStore kaydının

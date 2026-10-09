@@ -49,15 +49,34 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
             return
         }
 
-        // onReceive dönünce süreç öldürülebilir; asenkron iş bitene kadar
-        // sistemin bizi canlı tutması için goAsync() gerekiyor.
+        // Yayın, oynatmanın BAŞLAMASINI beklemeden kapatılıyor.
+        //
+        // Eskiden `goAsync()` bütün işi kapsıyordu ve iş ağ gerektiriyor:
+        // arabada sinyal zayıfken çıkarma on saniyeyi aşıyor, sistem de
+        // yayın alıcısına o kadar süre tanımıyor. Sonuç gerçek cihazda
+        // yakalandı — `BluetoothAutoPlayReceiver` için ANR kaydı,
+        // üstelik A2DP yayını bağlantı sırasında arka arkaya onlarca kez
+        // geliyor ve her biri ana thread'i meşgul ediyor.
+        //
+        // Süreci canlı tutan şey artık yayın değil, başlatılan ön plan
+        // servisi; alıcının uzun işi omzunda taşımasına gerek yok.
+        val app = context.applicationContext
         val pending = goAsync()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         scope.launch {
             try {
-                startSavedTrack(context.applicationContext)
+                // Servis ayağa kalkar kalkmaz yayını serbest bırakıyoruz.
+                app.startService(Intent(app, PlaybackService::class.java))
+            } catch (e: Exception) {
+                Log.w(TAG, "Oynatma servisi başlatılamadı", e)
             } finally {
                 pending.finish()
+            }
+
+            try {
+                startSavedTrack(app)
+            } catch (e: Exception) {
+                Log.w(TAG, "Otomatik çalma başarısız", e)
             }
         }
     }

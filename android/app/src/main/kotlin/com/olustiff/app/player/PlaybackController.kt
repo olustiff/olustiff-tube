@@ -1,11 +1,13 @@
 package com.olustiff.app.player
 
 import android.content.Context
+import android.util.Log
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -75,6 +77,28 @@ class PlaybackController(
     }
 
     private fun player() = PlayerHolder.getPlayer(context)
+
+    /**
+     * Bir oynatma adımını çalıştırır ve sonucu HER ZAMAN yanıtlar.
+     *
+     * Yanıtsız bırakmak Dart tarafını süresiz bekletiyor; istisnayı yutmak
+     * ise sorunu görünmez kılıyor. İkisi de olmuyor: hata günlüğe yazılıyor
+     * ve kanala bildiriliyor.
+     */
+    private suspend fun runStep(
+        result: MethodChannel.Result,
+        step: suspend () -> Unit
+    ) {
+        try {
+            step()
+            result.success(null)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Oynatma adımı başarısız", e)
+            result.error("PLAYBACK_ERROR", e.message ?: e.javaClass.simpleName, null)
+        }
+    }
 
     private fun handleMethod(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
@@ -209,26 +233,19 @@ class PlaybackController(
                 result.success(null)
             }
 
-            "next" -> {
-                scope.launch {
-                    PlayerHolder.playNext(context)
-                    result.success(null)
-                }
-            }
+            // Üçünde de `catch` ŞART. Çözümleme ağ işi ve başarısız
+            // olabiliyor; yakalanmayan istisna bu kapsamdan kaçıp süreci
+            // ÖLDÜRÜYORDU. Ayrıca hata hâlinde `result` yanıtlanmazsa Dart
+            // tarafındaki `Future` hiç tamamlanmıyor ve arayüz
+            // "hazırlanıyor"da kilitli kalıyor.
+            "next" -> scope.launch { runStep(result) { PlayerHolder.playNext(context) } }
 
-            "previous" -> {
-                scope.launch {
-                    PlayerHolder.playPrevious(context)
-                    result.success(null)
-                }
-            }
+            "previous" ->
+                scope.launch { runStep(result) { PlayerHolder.playPrevious(context) } }
 
             "playQueueIndex" -> {
                 val index = (call.argument<Number>("index") ?: 0).toInt()
-                scope.launch {
-                    PlayerHolder.playAt(context, index)
-                    result.success(null)
-                }
+                scope.launch { runStep(result) { PlayerHolder.playAt(context, index) } }
             }
 
             // Kullanıcının elle mod değiştirmesi — konumu koruyarak.
@@ -359,6 +376,8 @@ class PlaybackController(
     }
 
     companion object {
+        private const val TAG = "OlustiffPlayback"
+
         const val METHOD_CHANNEL = "olustiff/player"
         const val EVENT_CHANNEL = "olustiff/player_events"
         private const val POSITION_UPDATE_INTERVAL_MS = 500L

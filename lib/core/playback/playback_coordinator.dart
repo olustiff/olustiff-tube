@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart';
 
 import '../cast/cast_controller.dart';
@@ -435,14 +437,23 @@ class PlaybackCoordinator extends ChangeNotifier {
 
     var failed = false;
     try {
-      final details = await _extraction.videoDetails(videoId);
+      // Zaman aşımı ŞART: bu çağrının altında ağ var ve cevap gelmediğinde
+      // `_loading` dakikalarca açık kalıyordu. O süre boyunca ekran
+      // "Hazırlanıyor"da kilitli duruyor, üstelik native'den gelen bütün
+      // durum bildirimleri (mod, kuyruk sırası, durdurma) yok sayılıyor —
+      // kullanıcı bunu "uygulama dondu" olarak görüyor.
+      final details = await _extraction
+          .videoDetails(videoId)
+          .timeout(_syncTimeout);
       if (_isStale(requestId)) return;
       _details = details;
       _syncFailedFor = null;
       _qualityLabel = null;
       notifyListeners();
       await _library.recordWatch(_summaryOf(details));
-      await _extendQueueIfEnding(details, requestId);
+      // Kuyruk uzatma BEKLENMİYOR: arka planda çalışsın, arayüzün hazırlık
+      // durumunu rehin almasın.
+      unawaited(_extendQueueIfEnding(details, requestId));
     } catch (_) {
       // Meta veri alınamadı; oynatma yine de sürüyor. Ekranı boş bırakmamak
       // için kuyruktaki özet (başlık/kapak) yerinde kalır.
@@ -600,6 +611,12 @@ class PlaybackCoordinator extends ChangeNotifier {
       _index,
     );
   }
+
+  /// Sıradaki parçanın meta verisi için beklenecek en uzun süre.
+  ///
+  /// Aşılırsa oynatma sürmeye devam ediyor; yalnızca başlık/kapak kuyruktaki
+  /// özetten gösteriliyor. Süresiz beklemek arayüzü kilitliyordu.
+  static const _syncTimeout = Duration(seconds: 15);
 
   /// Kuyruğun sonuna bu kadar video kaldığında uzatma tetikleniyor.
   ///

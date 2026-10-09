@@ -51,15 +51,24 @@ class HomeFeed {
     final seedList = seeds();
     if (seedList.isEmpty) return const [];
 
-    final results = <List<VideoSummary>>[];
-    for (final seed in seedList) {
-      try {
-        final page = await _client.search(seed);
-        if (page.items.isNotEmpty) results.add(page.items);
-      } catch (_) {
-        // Tek bir tohum başarısız olursa akışın tamamı çökmesin.
-      }
-    }
+    // Tohumlar AYNI ANDA aranıyor, sırayla değil.
+    //
+    // Seri döngü açılışın en pahalı kısmıydı: dört YouTube araması art arda
+    // yapılıyor ve ana sayfada içerik görünene kadar hepsinin bitmesi
+    // bekleniyordu. Paralelde süre en yavaş isteğinkine iniyor.
+    //
+    // `Future.wait` sırayı koruyor; serpiştirme buna dayandığı için şart.
+    final pages = await Future.wait(
+      seedList.map((seed) async {
+        try {
+          return (await _client.search(seed)).items;
+        } catch (_) {
+          // Tek bir tohum başarısız olursa akışın tamamı çökmesin.
+          return const <VideoSummary>[];
+        }
+      }),
+    );
+    final results = pages.where((page) => page.isNotEmpty).toList();
     if (results.isEmpty) return const [];
 
     final watchedIds = _library.watched

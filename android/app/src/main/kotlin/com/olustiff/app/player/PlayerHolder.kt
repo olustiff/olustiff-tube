@@ -2,6 +2,7 @@ package com.olustiff.app.player
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -19,6 +20,8 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.olustiff.app.extractor.ExtractionService
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -124,17 +127,25 @@ object PlayerHolder {
                     .setInitialBitrateEstimate(INITIAL_BITRATE_ESTIMATE)
                     .build()
             )
-            // Tampon hedefi büyütüldü: hızlı fazlar yavaş fazları
-            // karşılayabilsin diye elde edilen her saniye saklanıyor.
-            // Oynatmaya başlama eşiği de 2,5 saniyeden 6 saniyeye çıktı —
-            // açılış biraz geç ama ilk yavaş fazda hemen donmuyor.
+            // Tampon hedefi büyük tutuluyor ki hızlı fazlar yavaş fazları
+            // karşılayabilsin; ama OYNATMAYA BAŞLAMA eşiği küçük.
+            //
+            // Eşik bir ara 6 saniyeye çıkarılmıştı ve yanlıştı: her parça
+            // geçişine 6 saniye sessizlik ekliyordu, bir takılmadan sonra 12.
+            // Çıkarma süresiyle toplanınca arabada "müzik durdu" demek
+            // oluyordu. Düşük başlangıç tahmini (bkz. yukarısı) zaten küçük
+            // bir parçadan başlatıyor, uzun beklemeye gerek yok.
+            //
+            // Üst sınır da 180 saniyeden indirildi: video modunda 1080p'de
+            // o kadar tampon onlarca MB demek ve düşük bellekli cihazda
+            // çöp toplayıcıyı zorluyor.
             .setLoadControl(
                 DefaultLoadControl.Builder()
                     .setBufferDurationsMs(
-                        /* minBufferMs= */ 60_000,
-                        /* maxBufferMs= */ 180_000,
-                        /* bufferForPlaybackMs= */ 6_000,
-                        /* bufferForPlaybackAfterRebufferMs= */ 12_000
+                        /* minBufferMs= */ 50_000,
+                        /* maxBufferMs= */ 90_000,
+                        /* bufferForPlaybackMs= */ 2_000,
+                        /* bufferForPlaybackAfterRebufferMs= */ 5_000
                     )
                     .build()
             )
@@ -195,6 +206,13 @@ object PlayerHolder {
                     scope.launch {
                         try {
                             playNext(appContext)
+                        } catch (e: Exception) {
+                            // Buradaki `catch` HAYATİ: bu kapsam
+                            // `SupervisorJob` kullanıyor ve yakalanmayan bir
+                            // istisna doğrudan sistemin "uygulamayı öldür"
+                            // işleyicisine gidiyor. Gerçek cihazda tam olarak
+                            // bu oldu (bkz. [playNext] belgesi).
+                            Log.w(TAG, "Sıradakine geçilemedi", e)
                         } finally {
                             advancing = false
                         }
@@ -204,7 +222,26 @@ object PlayerHolder {
         }
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    /**
+     * Oynatma işlerinin kapsamı.
+     *
+     * [CoroutineExceptionHandler] son savunma hattı: tek tek `catch`'ler
+     * atlandığında bile yakalanmayan bir istisnanın uygulamayı öldürmesini
+     * engelliyor. Oynatma arka planda, kullanıcı başka bir uygulamadayken de
+     * sürüyor; orada çökmek en kötü sonuç.
+     */
+    private val scope = CoroutineScope(
+        SupervisorJob() +
+            Dispatchers.Main +
+            CoroutineExceptionHandler { _, e ->
+                Log.w(TAG, "Oynatma işi başarısız", e)
+            }
+    )
+
+    /** Kuyrukta art arda kaç parça denenecek. */
+    private const val MAX_ADVANCE_ATTEMPTS = 3
+
+    private const val TAG = "OlustiffPlayer"
 
     /**
      * Kuyruktaki bir videoyu id'sinden çözüp çalar.
@@ -259,19 +296,56 @@ object PlayerHolder {
         if (surface == null) player.clearVideoSurface() else player.setVideoSurface(surface)
     }
 
+    /**
+     * Kuyrukta sıradakine geçer.
+     *
+     * Çözümleme AĞ işi ve başarısız olabiliyor. Gerçek cihazdan alınan çökme
+     * kaydı bunu gösterdi: arabada hücre değişimi sırasında
+     * `UnknownHostException` fırlıyor, hiçbir yerde yakalanmıyor ve sistem
+     * uygulamayı ÖLDÜRÜYOR — kullanıcı için "bir sonraki şarkıda uygulama
+     * donup kalıyor" demek.
+     *
+     * Artık başarısız parça kuyruğu bitirmiyor: bir sonraki denenıyor.
+     * [MAX_ADVANCE_ATTEMPTS] ile sınırlı, çünkü ağ tamamen yoksa kuyruğun
+     * tamamını tek tek denemek yalnızca pili yakar.
+     */
     suspend fun playNext(context: Context) {
-        val item = PlaybackQueue.advance() ?: return
-        playQueueItem(context, item)
+        advanceWithRecovery(context) { PlaybackQueue.advance() }
     }
 
     suspend fun playPrevious(context: Context) {
-        val item = PlaybackQueue.back() ?: return
-        playQueueItem(context, item)
+        advanceWithRecovery(context) { PlaybackQueue.back() }
     }
 
     suspend fun playAt(context: Context, index: Int) {
         val item = PlaybackQueue.jumpTo(index) ?: return
-        playQueueItem(context, item)
+        runCatching { playQueueItem(context, item) }
+            .onFailure { Log.w(TAG, "Seçilen parça açılamadı: ${item.videoId}", it) }
+    }
+
+    /**
+     * [nextItem] ile ilerleyip çalar; başarısız olursa bir sonrakine geçer.
+     *
+     * Hata YUTULMUYOR, günlüğe yazılıyor: sessizce duran bir oynatıcı ile
+     * ağın kopuk olduğunu anlamak arasındaki fark bu.
+     */
+    private suspend fun advanceWithRecovery(
+        context: Context,
+        nextItem: () -> PlaybackQueue.Item?
+    ) {
+        repeat(MAX_ADVANCE_ATTEMPTS) {
+            val item = nextItem() ?: return
+            try {
+                playQueueItem(context, item)
+                return
+            } catch (e: CancellationException) {
+                // İptal bir hata değil: yeni bir oynatma isteği geldi.
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Parça açılamadı, sıradakine geçiliyor: ${item.videoId}", e)
+            }
+        }
+        Log.w(TAG, "Kuyrukta açılabilen parça bulunamadı")
     }
 
     /**
@@ -331,9 +405,16 @@ object PlayerHolder {
         request: PlayRequest,
         audioOnly: Boolean
     ) {
+        // Sesli modda video parçası HER ZAMAN kapatılıyor, yalnızca canlı
+        // yayında değil.
+        //
+        // Gerekçesi [StreamSelector]: ayrık ses akışı bulunmayan videolarda
+        // sesli mod artık birleşik akışa düşüyor ve o akış video parçası da
+        // taşıyor. Kapatılmazsa ekranı kapalı müzik dinlerken video boşuna
+        // çözülür — pil ve veri harcar.
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, request.isLive && audioOnly)
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, audioOnly)
             .build()
     }
 

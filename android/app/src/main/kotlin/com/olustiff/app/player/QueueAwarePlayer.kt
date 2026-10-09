@@ -1,8 +1,10 @@
 package com.olustiff.app.player
 
 import android.content.Context
+import android.util.Log
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,7 +57,25 @@ class QueueAwarePlayer(
     override fun seekToPreviousMediaItem() = goPrevious()
 
     private fun goNext() {
-        scope.launch { PlayerHolder.playNext(context) }
+        scope.launch { guarded { PlayerHolder.playNext(context) } }
+    }
+
+    /**
+     * Oynatma adımını çalıştırır, istisnayı yutmadan günlüğe yazar.
+     *
+     * Buradaki koruma özellikle önemli: arabanın direksiyon ve teyp
+     * tuşlarından gelen "sonraki/önceki" komutları bu yoldan geçiyor.
+     * Korumasızken ağ sektiğinde yakalanmayan istisna süreci öldürüyordu —
+     * kullanıcı bunu "tuşa bastım, müzik komple durdu" diye görüyor.
+     */
+    private suspend fun guarded(step: suspend () -> Unit) {
+        try {
+            step()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("OlustiffQueuePlayer", "Kuyruk komutu başarısız", e)
+        }
     }
 
     /**
@@ -67,6 +87,6 @@ class QueueAwarePlayer(
             seekTo(0)
             return
         }
-        scope.launch { PlayerHolder.playPrevious(context) }
+        scope.launch { guarded { PlayerHolder.playPrevious(context) } }
     }
 }
