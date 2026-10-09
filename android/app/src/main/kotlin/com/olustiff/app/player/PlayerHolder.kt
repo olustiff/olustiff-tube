@@ -365,6 +365,42 @@ object PlayerHolder {
      */
     val hasMedia: Boolean get() = currentRequest != null
 
+    /**
+     * Çalan parçayı TAZE adreslerle yeniden açar ve kaldığı yerden sürdürür.
+     *
+     * Oynatıcı kaynak hatası verdiğinde (ör. `ERROR_CODE_IO_BAD_HTTP_STATUS`)
+     * oradan kendiliğinden ÇIKMIYOR: `ERROR` durumunda kalıyor, hiçbir şey
+     * çalmıyor ve kullanıcı bunu "uygulama dondu" olarak görüyor. Gerçek
+     * cihazda sesli moda geçerken yaşandı — YouTube'un akış adresleri bir
+     * süre sonra reddediliyor ve elimizdeki adres artık geçersiz.
+     *
+     * Çözüm adresi yenilemek: video yeniden çözülüyor, aynı moda ve aynı
+     * konuma geri dönülüyor.
+     */
+    suspend fun recoverCurrent(context: Context) {
+        val item = PlaybackQueue.current() ?: return
+        val position = exoPlayer?.currentPosition ?: 0L
+        val info = withContext(Dispatchers.IO) {
+            ExtractionService.streamInfo(item.videoId)
+        }
+        val selection =
+            StreamSelector.select(info, audioOnlyMode, preferredMaxHeight) ?: return
+        currentQualityLabel = selection.qualityLabel
+        play(
+            context,
+            PlayRequest(
+                videoUrl = selection.videoUrl,
+                audioUrl = selection.audioUrl,
+                title = info.name ?: item.title,
+                artist = info.uploaderName ?: item.uploaderName,
+                artworkUrl = item.thumbnailUrl,
+                isLive = selection.isLive
+            ),
+            audioOnlyMode
+        )
+        if (position > 0 && !selection.isLive) exoPlayer?.seekTo(position)
+    }
+
     /** Duraklatılmış oynatmayı sürdürür; yüklü medya yoksa hiçbir şey yapmaz. */
     fun resume() {
         if (currentRequest == null) return

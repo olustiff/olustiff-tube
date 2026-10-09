@@ -50,8 +50,33 @@ class PlaybackController(
 
         override fun onPlayerError(error: PlaybackException) {
             eventSink?.error("PLAYBACK_ERROR", error.message, error.errorCodeName)
+
+            // Kaynak/ağ hatasından KENDİLİĞİNDEN çıkılmıyordu: oynatıcı
+            // `ERROR` durumunda kalıyor, hiçbir şey çalmıyor ve kullanıcı
+            // bunu "uygulama dondu" olarak görüyor. YouTube'un akış adresleri
+            // bir süre sonra reddediliyor; tek çare adresi yenilemek.
+            //
+            // Yalnızca IO hataları için ve BİR KEZ: kod çözücü hatasında ya
+            // da adres gerçekten ölmüşse tekrar denemek sonsuz döngü olurdu.
+            val recoverable = error.errorCode in
+                PlaybackException.ERROR_CODE_IO_UNSPECIFIED..
+                PlaybackException.ERROR_CODE_IO_NO_PERMISSION
+            if (!recoverable || recovering) return
+            recovering = true
+            scope.launch {
+                try {
+                    PlayerHolder.recoverCurrent(context)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Oynatma kurtarılamadı", e)
+                } finally {
+                    recovering = false
+                }
+            }
         }
     }
+
+    /** Kurtarma sürüyor mu; aynı hatada döngüye girmeyi engelliyor. */
+    private var recovering = false
 
     init {
         methodChannel.setMethodCallHandler { call, result -> handleMethod(call, result) }

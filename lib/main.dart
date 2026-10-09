@@ -64,6 +64,12 @@ Future<void> main() async {
       // ekranda kalmasın.
       PlaybackCoordinator.instance.handleStoppedExternally();
     }
+  }, onError: (Object error) {
+    // Oynatıcı hatası bu akışa HATA olarak geliyor. `onError` olmadan
+    // yakalanmayan bir istisnaya dönüşüyordu; native taraf zaten adresi
+    // yenileyip kurtarmayı deniyor, burada yapılacak şey akışı canlı
+    // tutmak.
+    debugPrint('oynatma hatası: $error');
   });
 
   // Televizyonda telefondan gelen videoları karşıla.
