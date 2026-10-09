@@ -626,7 +626,6 @@ class PlaybackCoordinator extends ChangeNotifier {
   Future<void> _extendQueueIfEnding(VideoDetails details, int requestId) async {
     if (!_settings.autoplay) return;
     if (_queueMode != QueueMode.mixed) return;
-    if (_queue.length >= QueueBuilder.maxTotalQueueLength) return;
     if (_index < _queue.length - _extendWhenRemaining) return;
 
     final addition = QueueBuilder.extend(
@@ -636,7 +635,19 @@ class PlaybackCoordinator extends ChangeNotifier {
     );
     if (addition.isEmpty || _isStale(requestId)) return;
 
-    _queue = [..._queue, ...addition];
+    var extended = [..._queue, ...addition];
+    var index = _index;
+    // Sınır aşılınca uzatma DURMUYOR, en baştaki çoktan çalınmış parçalar
+    // düşürülüyor. Eskiden burada uzatma kesiliyordu: uzun bir yolculukta
+    // 200. parçadan sonra müzik susuyordu. Çalan parça ve sonrası korunur.
+    final overflow = extended.length - QueueBuilder.maxTotalQueueLength;
+    if (overflow > 0) {
+      final drop = overflow < index ? overflow : index;
+      extended = extended.sublist(drop);
+      index -= drop;
+    }
+    _queue = extended;
+    _index = index;
     notifyListeners();
     // Native kuyruğun sahibi; ekran kapalıyken sıradakine o geçiyor, bu yüzden
     // uzayan listeyi ONA da bildirmek şart. İndeks korunuyor: `setQueue`

@@ -103,10 +103,14 @@ class UpdateService extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final response = await http.get(
-        Uri.parse('https://api.github.com/repos/$_repo/releases/latest'),
-        headers: const {'Accept': 'application/vnd.github+json'},
-      );
+      // Süre sınırı şart: zayıf ağda istek asılı kalınca "kontrol ediliyor"
+      // sonsuza dek dönüyor ve tekrar denemek mümkün olmuyordu.
+      final response = await http
+          .get(
+            Uri.parse('https://api.github.com/repos/$_repo/releases/latest'),
+            headers: const {'Accept': 'application/vnd.github+json'},
+          )
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 404) {
         // Depo erişilemiyor ya da hiç sürüm yayınlanmamış. "En güncelsin"

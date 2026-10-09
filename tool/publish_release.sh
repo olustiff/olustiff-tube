@@ -31,8 +31,10 @@ if [ "$PUBSPEC_VERSION" != "$VERSION" ]; then
   exit 1
 fi
 
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-export ANDROID_HOME="$HOME/Library/Android/sdk"
+# Mac'teki yollar varsayılan; otomatik bakım (GitHub Actions) kendi yollarını
+# önceden veriyor.
+export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
 echo "== derleniyor =="
 flutter build apk --release --split-per-abi > /dev/null
@@ -52,7 +54,7 @@ gh release create "v$VERSION" --repo "$REPO" --draft \
   --title "oLusTifF $VERSION" --notes-file "$NOTES_FILE"
 
 RID=$(gh release view "v$VERSION" --repo "$REPO" --json databaseId --jq .databaseId)
-TOKEN=$(gh auth token)
+TOKEN="${GH_TOKEN:-$(gh auth token)}"
 
 # gh release upload büyük dosyalarda aralıklı olarak HTTP 400 veriyor;
 # doğrudan yükleme uç noktası daha güvenilir çalışıyor.

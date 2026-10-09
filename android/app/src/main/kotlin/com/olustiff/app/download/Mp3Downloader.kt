@@ -98,46 +98,54 @@ object Mp3Downloader {
         bitrateKbps: Int,
         onProgress: (Double) -> Unit
     ) {
+        // Her kaynak HATA yolunda da bırakılıyor. Donanım kod çözücüleri
+        // sınırlı; yarıda kalan birkaç indirmeden sonra serbest bırakılmayan
+        // çözücüler yüzünden yeni indirmeler (ve video oynatma) açılamıyordu.
         val extractor = MediaExtractor()
-        extractor.setDataSource(source.absolutePath)
+        var codec: MediaCodec? = null
+        var lame: AndroidLame? = null
+        try {
+            extractor.setDataSource(source.absolutePath)
 
-        val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
-            extractor.getTrackFormat(index)
-                .getString(MediaFormat.KEY_MIME)
-                ?.startsWith("audio/") == true
-        } ?: throw IllegalStateException("Ses parçası bulunamadı")
+            val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
+                extractor.getTrackFormat(index)
+                    .getString(MediaFormat.KEY_MIME)
+                    ?.startsWith("audio/") == true
+            } ?: throw IllegalStateException("Ses parçası bulunamadı")
 
-        extractor.selectTrack(trackIndex)
-        val inputFormat = extractor.getTrackFormat(trackIndex)
-        val mime = inputFormat.getString(MediaFormat.KEY_MIME)!!
-        val sampleRate = inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-        val channels = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-        val durationUs = runCatching {
-            inputFormat.getLong(MediaFormat.KEY_DURATION)
-        }.getOrDefault(0L)
+            extractor.selectTrack(trackIndex)
+            val inputFormat = extractor.getTrackFormat(trackIndex)
+            val mime = inputFormat.getString(MediaFormat.KEY_MIME)!!
+            val sampleRate = inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channels = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val durationUs = runCatching {
+                inputFormat.getLong(MediaFormat.KEY_DURATION)
+            }.getOrDefault(0L)
 
-        val codec = MediaCodec.createDecoderByType(mime)
-        codec.configure(inputFormat, null, null, 0)
-        codec.start()
+            val decoder = MediaCodec.createDecoderByType(mime)
+            codec = decoder
+            decoder.configure(inputFormat, null, null, 0)
+            decoder.start()
 
-        val lame = LameBuilder()
-            .setInSampleRate(sampleRate)
-            .setOutChannels(channels)
-            .setOutSampleRate(sampleRate)
-            .setOutBitrate(bitrateKbps)
-            .setQuality(2) // 0 en iyi, 9 en hızlı; 2 kalite/hız dengesi
-            .build()
+            val encoder = LameBuilder()
+                .setInSampleRate(sampleRate)
+                .setOutChannels(channels)
+                .setOutSampleRate(sampleRate)
+                .setOutBitrate(bitrateKbps)
+                .setQuality(2) // 0 en iyi, 9 en hızlı; 2 kalite/hız dengesi
+                .build()
+            lame = encoder
 
-        // Akışı KAPATMIYORUZ, yalnızca boşaltıyoruz: akışın sahibi çağıran taraf
-        // (MediaStore kaydı) ve kapatma sırasını o yönetiyor.
-        val output = BufferedOutputStream(target)
-        writeMp3(extractor, codec, lame, output, channels, durationUs, onProgress)
-        output.flush()
-
-        codec.stop()
-        codec.release()
-        extractor.release()
-        lame.close()
+            // Akışı KAPATMIYORUZ, yalnızca boşaltıyoruz: akışın sahibi çağıran
+            // taraf (MediaStore kaydı) ve kapatma sırasını o yönetiyor.
+            val output = BufferedOutputStream(target)
+            writeMp3(extractor, decoder, encoder, output, channels, durationUs, onProgress)
+            output.flush()
+        } finally {
+            codec?.let { runCatching { it.stop() }; it.release() }
+            extractor.release()
+            lame?.close()
+        }
     }
 
     private fun writeMp3(

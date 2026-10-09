@@ -15,10 +15,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.olustiff.app"
@@ -28,6 +24,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    testOptions {
+        // android.util.Log gibi çağrılar JVM testinde patlamasın.
+        unitTests.isReturnDefaultValues = true
     }
 
     buildTypes {
@@ -42,6 +43,12 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 flutter {
     source = "../.."
 }
@@ -50,7 +57,9 @@ dependencies {
     // YouTube reklamsız stream çözümleme (NewPipe'ın kullandığı kütüphanenin aynısı)
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    // Çözümleyicinin canlı testi (bkz. LiveExtractorTest).
+    testImplementation("junit:junit:4.13.2")
 
     // Oynatma: arka planda müzik/medya oturumu + video render (Faz 2)
     implementation("androidx.media3:media3-exoplayer:1.11.1")

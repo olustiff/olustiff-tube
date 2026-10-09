@@ -1,0 +1,171 @@
+# Otomatik bakım: YouTube çözümleyicisini güncel tutar ve gerekirse yeni
+# sürüm yayınlar.
+#
+# ## Neden var
+#
+# Uygulamanın YouTube'la konuşan tek parçası NewPipeExtractor. YouTube bir şey
+# değiştirdiğinde video açılmaz, arama boş döner — çare yalnızca kütüphanenin
+# yeni sürümü. Bu iş, kimse bakmasa da o güncellemenin kullanıcılara
+# ulaşmasını sağlıyor. Mac'e bağlı DEĞİL: GitHub'ın sunucusunda çalışıyor.
+#
+# ## Ne yapar
+#
+# Her pazartesi:
+# 1. Çözümleyicinin yeni kararlı sürümü var mı bakar.
+# 2. Varsa yükseltir; Dart testlerini ve CANLI çözümleyici testini koşar
+#    (gerçek YouTube'da ara → çöz → akışı indir, bkz. LiveExtractorTest).
+# 3. Hepsi geçerse yama sürümü çıkarır (1.12.0 → 1.12.1) ve yayınlar;
+#    telefonlardaki uygulama içi güncelleme onu bulur.
+#
+# Yeni sürüm yoksa yine canlı testi koşar: YouTube mevcut sürümü bozduysa iş
+# KIRMIZI biter ve GitHub hesabın e-postasına haber gönderir. O durumda
+# yapılacak bir şey yok — çözümleyicinin düzeltmesini beklemek gerekiyor;
+# çıktığı hafta bu iş onu kendiliğinden yayınlar.
+#
+# Gereken gizli değerler (Settings → Secrets → Actions):
+# - DEBUG_KEYSTORE_B64: imza anahtarı (~/.android/debug.keystore, base64).
+#   Kurulu uygulamalar bu anahtarla imzalı; farklı anahtarla imzalanan
+#   güncelleme kurulmaz.
+# - RELEASE_TOKEN: olustiff/youtube deposuna sürüm açabilen GitHub anahtarı.
+name: Otomatik bakım
+
+on:
+  schedule:
+    - cron: "17 7 * * 1" # pazartesi 10:17 (TR)
+  workflow_dispatch:
+    inputs:
+      zorla:
+        description: "Yeni çözümleyici olmasa da sürüm yayınla"
+        type: boolean
+        default: false
+      deneme:
+        description: "Deneme: imzalı derle ve yayın yetkisini sına, YAYINLAMA"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: otomatik-bakim
+  cancel-in-progress: false
+
+jobs:
+  bakim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Çözümleyici sürümünü karşılaştır
+        id: surum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mevcut=$(grep -oE 'NewPipeExtractor:v[0-9]+\.[0-9]+\.[0-9]+' android/app/build.gradle.kts | head -1 | sed 's/.*://')
+          son=$(gh api repos/TeamNewPipe/NewPipeExtractor/releases \
+            --jq '[.[] | select(.draft == false and .prerelease == false)] | .[0].tag_name')
+          echo "bizdeki: $mevcut  son: $son"
+          if [ -z "$mevcut" ] || [ -z "$son" ]; then
+            echo "::error::Sürüm okunamadı"; exit 1
+          fi
+          echo "mevcut=$mevcut" >> "$GITHUB_OUTPUT"
+          echo "son=$son" >> "$GITHUB_OUTPUT"
+          if [ "$mevcut" != "$son" ] || [ "${{ inputs.zorla }}" = "true" ]; then
+            echo "yayinla=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Çözümleyiciyi yükselt
+        if: steps.surum.outputs.yayinla == '1'
+        run: |
+          sed -i "s/NewPipeExtractor:${{ steps.surum.outputs.mevcut }}/NewPipeExtractor:${{ steps.surum.outputs.son }}/" android/app/build.gradle.kts
+          git diff --stat
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Flutter SABİT sürümde: yeni bir Flutter derlemeyi bozabilir ve bu işin
+      # amacı yalnızca çözümleyiciyi taşımak.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: true
+
+      - name: Dart testleri
+        run: |
+          flutter pub get
+          flutter test
+
+      - name: Canlı çözümleyici testi (gerçek YouTube)
+        working-directory: android
+        env:
+          LIVE_EXTRACTOR_TEST: "1"
+        run: |
+          # Gradle sarmalayıcısı Flutter'ın ürettiği ayarlara ihtiyaç duyuyor.
+          (cd .. && flutter build apk --config-only)
+          ./gradlew :app:testReleaseUnitTest --tests '*LiveExtractorTest*'
+
+      - name: İmza anahtarını yerleştir
+        if: steps.surum.outputs.yayinla == '1' || inputs.deneme
+        env:
+          KEYSTORE: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::DEBUG_KEYSTORE_B64 tanımlı değil"; exit 1
+          fi
+          mkdir -p ~/.android
+          echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+
+      # Yayın yolunu GERÇEK güncelleme gelmeden sınamak için: anahtar doğru
+      # mu, imzalı derleme oluyor mu, yayın deposuna yazma yetkisi var mı.
+      - name: Deneme (yayınlamadan)
+        if: inputs.deneme && steps.surum.outputs.yayinla != '1'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          yetki=$(gh api repos/olustiff/youtube --jq .permissions.push)
+          echo "yayın deposuna yazma yetkisi: $yetki"
+          [ "$yetki" = "true" ] || { echo "::error::RELEASE_TOKEN yazamıyor"; exit 1; }
+          flutter build apk --release --split-per-abi
+          imzaci=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          imza=$("$imzaci" verify --print-certs \
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -m1 SHA-256)
+          echo "imza: $imza"
+          echo "### Deneme başarılı" >> "$GITHUB_STEP_SUMMARY"
+          echo "imza: \`$imza\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Sürümü artır ve yayınla
+        if: steps.surum.outputs.yayinla == '1'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          sudo apt-get install -y -qq zsh > /dev/null
+          eski=$(grep -E '^version:' pubspec.yaml | sed 's/version: *//')
+          ad=${eski%+*}; yapi=${eski#*+}
+          IFS=. read -r ana ara yama <<< "$ad"
+          yeni="$ana.$ara.$((yama + 1))"
+          sed -i "s/^version: .*/version: $yeni+$((yapi + 1))/" pubspec.yaml
+          echo "sürüm: $eski -> $yeni+$((yapi + 1))"
+
+          cat > /tmp/notlar.md <<NOTLAR
+          ## YouTube uyumluluk güncellemesi
+
+          YouTube tarafındaki değişikliklere uyum için çözümleyici
+          ${{ steps.surum.outputs.mevcut }} → ${{ steps.surum.outputs.son }}
+          sürümüne yükseltildi. Video açılmıyor, arama boş geliyor ya da
+          oynatma takılıyorsa bu güncelleme düzeltir.
+
+          _Bu sürüm otomatik bakım tarafından hazırlandı: testler ve gerçek
+          YouTube üzerinde arama, video çözme ve akış indirme denendi._
+          NOTLAR
+
+          tool/publish_release.sh "$yeni" /tmp/notlar.md
+
+          git config user.name "otomatik-bakim"
+          git config user.email "otomatik-bakim@users.noreply.github.com"
+          git add pubspec.yaml android/app/build.gradle.kts
+          git commit -m "Sürüm $yeni: çözümleyici ${{ steps.surum.outputs.son }} (otomatik bakım)"
+          git push
