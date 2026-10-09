@@ -114,6 +114,18 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
                 return "Şu an bir görüşme sürüyor; müzik başlatılmadı."
             }
 
+            // Elde zaten bir şey varsa KUYRUĞA DOKUNMA, kaldığı yerden sürdür.
+            //
+            // Eskiden koşulsuz olarak kayıtlı parça baştan açılıyor ve o anki
+            // kuyruk siliniyordu: uygulama açıkken, hatta müzik çalarken
+            // kulaklık bağlandığında dinlenen şey kesilip en son açılan parça
+            // baştan başlıyordu. Arabada kontak her açıldığında yaşanıyor.
+            if (PlayerHolder.hasMedia) {
+                PlayerHolder.resume()
+                Log.d(TAG, "Oynatma zaten yüklü, kaldığı yerden sürdürüldü")
+                return null
+            }
+
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val videoId = prefs.getString(KEY_LAST_VIDEO, null)
             if (videoId.isNullOrBlank()) {

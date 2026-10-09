@@ -357,6 +357,20 @@ object PlayerHolder {
      */
     private const val INITIAL_BITRATE_ESTIMATE = 700_000L
 
+    /**
+     * Oynatıcıda yüklü bir medya var mı (çalıyor ya da duraklatılmış).
+     *
+     * Bluetooth otomatik çalma bunu soruyor: elde zaten bir şey varsa onu
+     * kaldığı yerden sürdürmek gerekiyor, kayıtlı parçayı baştan açmak değil.
+     */
+    val hasMedia: Boolean get() = currentRequest != null
+
+    /** Duraklatılmış oynatmayı sürdürür; yüklü medya yoksa hiçbir şey yapmaz. */
+    fun resume() {
+        if (currentRequest == null) return
+        exoPlayer?.playWhenReady = true
+    }
+
     /** Ses yükseltme kazancını değiştirir (milibel; 0 = kapalı). */
     fun setLoudnessGain(millibels: Int) {
         loudness.setGain(millibels)

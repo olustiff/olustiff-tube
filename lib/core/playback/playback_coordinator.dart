@@ -59,9 +59,6 @@ class PlaybackCoordinator extends ChangeNotifier {
           (index: index, video: _queue[index]),
       ];
 
-  /// Kuyruğun kurulduğu ham liste (arama sonuçları / akış). Filtre
-  /// değiştiğinde kuyruk bundan yeniden üretilir.
-  List<VideoSummary> _sourceList = const [];
   QueueMode _queueMode = QueueMode.mixed;
 
   QueueMode get queueMode => _queueMode;
@@ -241,7 +238,6 @@ class PlaybackCoordinator extends ChangeNotifier {
 
       // Kuyruğun kurulacağı kaynak liste burada da GÜNCELLENMELİ; yoksa
       // "Sırada" bir önceki oynatmanın listesinden üretiliyordu.
-      _sourceList = context;
       _prepareQueue(seed, details, exactQueue, index, videoId);
       _details = details;
       // Kalite ve ses/video seçimi televizyonun işi; telefon çözümleme bile
@@ -276,7 +272,6 @@ class PlaybackCoordinator extends ChangeNotifier {
       );
     }
 
-    _sourceList = context;
     _prepareQueue(seed, details, exactQueue, index, videoId);
 
     _details = details;
@@ -344,7 +339,6 @@ class PlaybackCoordinator extends ChangeNotifier {
     if (exactQueue != null) {
       // Çalma listesi gibi sırası kullanıcı tarafından belirlenmiş listeler
       // karıştırılmaz.
-      _sourceList = exactQueue;
       _queueMode = QueueMode.listOrder;
       _queue = exactQueue;
       _index = index ?? exactQueue.indexWhere((v) => v.videoId == videoId);
@@ -370,7 +364,17 @@ class PlaybackCoordinator extends ChangeNotifier {
   List<VideoSummary> _buildQueue(VideoSummary seed, VideoDetails details) =>
       QueueBuilder.build(
         seed: seed,
-        candidates: [..._sourceList, ...details.relatedItems],
+        // Aday havuzu YALNIZCA videonun kendi önerileri.
+        //
+        // Kullanıcının o sırada gezindiği liste de havuza katılıyordu ve iki
+        // kez ters tepti: arama sonuçları zaten aranan
+        // şarkının varyasyonlarıyla dolu, ana sayfa akışı da son aramalardan
+        // kurulduğu için aynı şeyi taşıyor. Sonuç, kuyruğun baştan sona aynı
+        // şarkının remiks/hızlandırılmış sürümleri olması.
+        //
+        // İlgili videolar bu sorunu taşımıyor: YouTube'un otomatik
+        // oynatmasının beslendiği kaynak da budur.
+        candidates: details.relatedItems,
       );
 
   /// Çalan videonun gerçekten sunduğu çözünürlükler. Kalite menüsü bunu
