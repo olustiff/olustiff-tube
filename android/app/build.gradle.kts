@@ -50,18 +50,18 @@ dependencies {
     // YouTube reklamsız stream çözümleme (NewPipe'ın kullandığı kütüphanenin aynısı)
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     // Oynatma: arka planda müzik/medya oturumu + video render (Faz 2)
-    implementation("androidx.media3:media3-exoplayer:1.11.0")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
     // Canlı yayınlar (7/24 radyo vb.) yalnızca HLS manifesti üzerinden gelir.
-    implementation("androidx.media3:media3-exoplayer-hls:1.11.0")
+    implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     // "Otomatik" kalite: tüm çözünürlükler tek bir DASH manifestinde toplanır
     // ve oynatıcı bant genişliğine göre aralarında geçiş yapar.
-    implementation("androidx.media3:media3-exoplayer-dash:1.11.0")
-    implementation("androidx.media3:media3-session:1.11.0")
-    implementation("androidx.media3:media3-ui:1.11.0")
-    implementation("androidx.media3:media3-datasource-okhttp:1.11.0")
+    implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
+    implementation("androidx.media3:media3-session:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
+    implementation("androidx.media3:media3-datasource-okhttp:1.11.1")
     // MP3 kodlama: Android'in kendi kodlayıcılarında MP3 YOKTUR (yalnızca
     // çözücü var), bu yüzden LAME'in Android derlemesini gömüyoruz.
     // isTransitive=false: kütüphane eski com.android.support paketlerini
