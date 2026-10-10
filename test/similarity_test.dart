@@ -9,6 +9,16 @@ void main() {
       expect(isSameTrack('La Câlin', 'La Câlin (Slowed + Reverb)'), isTrue);
     });
 
+    test('Kiril ё ile е aynı harf sayılır', () {
+      expect(
+        isSameTrack(
+          'RAIKAHO - Лед потает (Official audio)',
+          '🎧 RAIKAHO — Лёд потает (Remix)',
+        ),
+        isTrue,
+      );
+    });
+
     test('dizinin farklı bölümleri ayrı parça', () {
       expect(
         isSameTrack('Kuruluş Osman | 57. Bölüm', 'Kuruluş Osman | 60. Bölüm'),

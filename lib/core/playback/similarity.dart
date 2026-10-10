@@ -116,8 +116,10 @@ Set<String> _coreWords(String text) => _foldAccents(text)
 /// "La Calin" aynı arama sonucunda çıktı. Aksan düşürülmezse bunlar farklı
 /// parça sayılıyor ve ikisi de kuyruğa giriyordu.
 String _foldAccents(String text) {
-  const from = 'âàäáãçğıíìïîñöóòôõşüúùûýÿéèëê';
-  const to = 'aaaaacgiiiiinooooosuuuuyyeeee';
+  // "ё" Rusçada çoğu zaman "е" diye yazılıyor; cihazda "Лед потает" ile
+  // "Лёд потает (Remix)" farklı parça sayılıp art arda çalındı.
+  const from = 'âàäáãçğıíìïîñöóòôõşüúùûýÿéèëêё';
+  const to = 'aaaaacgiiiiinooooosuuuuyyeeeeе';
   final buffer = StringBuffer();
   for (final rune in text.toLowerCase().runes) {
     final char = String.fromCharCode(rune);
