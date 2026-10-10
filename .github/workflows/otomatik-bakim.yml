@@ -124,8 +124,9 @@ jobs:
           if [ -z "$KEYSTORE" ]; then
             echo "::error::DEBUG_KEYSTORE_B64 tanımlı değil"; exit 1
           fi
-          mkdir -p ~/.android
-          echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/olustiff.keystore"
+          # Yol derlemeye açıkça veriliyor (bkz. build.gradle.kts signingConfigs).
+          echo "OLUSTIFF_KEYSTORE=$RUNNER_TEMP/olustiff.keystore" >> "$GITHUB_ENV"
 
       # Yayın yolunu GERÇEK güncelleme gelmeden sınamak için: anahtar doğru
       # mu, imzalı derleme oluyor mu, yayın deposuna yazma yetkisi var mı.
@@ -140,8 +141,12 @@ jobs:
           flutter build apk --release --split-per-abi
           imzaci=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
           imza=$("$imzaci" verify --print-certs \
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -m1 SHA-256)
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -m1 SHA-256 | awk '{print $NF}')
           echo "imza: $imza"
+          beklenen=$(grep -o 'BEKLENEN_IMZA="[0-9a-f]*"' tool/publish_release.sh | cut -d'"' -f2)
+          if [ "$imza" != "$beklenen" ]; then
+            echo "::error::İmza yanlış ($imza), beklenen $beklenen"; exit 1
+          fi
           echo "### Deneme başarılı" >> "$GITHUB_STEP_SUMMARY"
           echo "imza: \`$imza\`" >> "$GITHUB_STEP_SUMMARY"
 

@@ -31,6 +31,16 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Otomatik bakım (GitHub Actions) anahtarın yolunu AÇIKÇA veriyor.
+            // Varsayılan konuma güvenmek yanlış anahtarla imzalatmıştı:
+            // sunucu kendi anahtarını üretmişti ve o imzalı bir güncelleme
+            // telefonlarda "imza uyuşmuyor" diye reddedilirdi.
+            System.getenv("OLUSTIFF_KEYSTORE")?.let { storeFile = file(it) }
+        }
+    }
+
     buildTypes {
         release {
             // Kişisel/sideload kullanım: debug anahtarıyla imzalanıyor.

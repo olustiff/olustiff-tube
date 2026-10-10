@@ -41,6 +41,20 @@ flutter build apk --release --split-per-abi > /dev/null
 flutter build apk --release > /dev/null
 
 OUT="build/app/outputs/flutter-apk"
+
+# İmza denetimi: kurulu uygulamalar tek bir anahtarla imzalı; başka anahtarla
+# imzalanmış bir güncelleme telefonda kurulmaz. Yayından ÖNCE yakalanmalı —
+# yayınlandıktan sonra herkese kurulamayan bir güncelleme önerilmiş olur.
+BEKLENEN_IMZA="6994909a09b3d158e1377ca7b8cb86dfb71eb9355deef4cce062ca097c53a90a"
+IMZACI=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+for apk in app-arm64-v8a-release.apk app-armeabi-v7a-release.apk app-release.apk; do
+  imza=$("$IMZACI" verify --print-certs "$OUT/$apk" | grep -m1 'SHA-256' | awk '{print $NF}')
+  if [ "$imza" != "$BEKLENEN_IMZA" ]; then
+    echo "HATA: $apk yanlış anahtarla imzalı ($imza). Yayın yapılmadı." >&2
+    exit 1
+  fi
+done
+echo "== imza doğru =="
 STAGE=$(mktemp -d)
 cp "$OUT/app-arm64-v8a-release.apk"   "$STAGE/olustiff-arm64.apk"
 cp "$OUT/app-armeabi-v7a-release.apk" "$STAGE/olustiff-arm32.apk"
