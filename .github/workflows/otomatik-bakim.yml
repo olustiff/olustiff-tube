@@ -14,6 +14,9 @@
 # 1. Çözümleyicinin yeni kararlı sürümü var mı bakar.
 # 2. Varsa yükseltir; Dart testlerini ve CANLI çözümleyici testini koşar
 #    (gerçek YouTube'da ara → çöz → akışı indir, bkz. LiveExtractorTest).
+#    YouTube GitHub'ın sunucularını sık sık "bot" sanıp reddediyor; o zaman
+#    canlı test ATLANIYOR (uyarı düşer) ve yalnızca derleme + birim testleri
+#    güvence veriyor.
 # 3. Hepsi geçerse yama sürümü çıkarır (1.12.0 → 1.12.1) ve yayınlar;
 #    telefonlardaki uygulama içi güncelleme onu bulur.
 #
@@ -107,6 +110,11 @@ jobs:
           # Gradle sarmalayıcısı Flutter'ın ürettiği ayarlara ihtiyaç duyuyor.
           (cd .. && flutter build apk --config-only)
           ./gradlew :app:testReleaseUnitTest --tests '*LiveExtractorTest*'
+          # YouTube veri merkezi adreslerini çoğu zaman "bot" sanıp reddediyor;
+          # test o durumda hata değil ATLAMA veriyor (bkz. LiveExtractorTest).
+          if grep -rqs 'skipped="1"' ../build/app/test-results/testReleaseUnitTest/; then
+            echo "::warning::YouTube bu sunucuyu bot sandı; canlı test atlandı, yalnızca derleme ve birim testleri doğrulandı"
+          fi
 
       - name: İmza anahtarını yerleştir
         if: steps.surum.outputs.yayinla == '1' || inputs.deneme
