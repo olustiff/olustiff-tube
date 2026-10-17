@@ -66,6 +66,9 @@ object Mp3Downloader {
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
             )
+            // Range'siz istek YouTube'da gerçek zamanlı hıza (~30 KB/s)
+            // kısılıyor; başlıkla ~100 kat hızlı (bkz. PlayerHolder.withRangeHeader).
+            .header("Range", "bytes=0-")
             .build()
 
         client.newCall(request).execute().use { response ->

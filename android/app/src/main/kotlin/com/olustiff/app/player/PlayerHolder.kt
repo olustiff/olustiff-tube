@@ -9,9 +9,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.dash.manifest.DashManifestParser
 import androidx.media3.exoplayer.hls.HlsMediaSource
@@ -28,6 +33,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /**
  * Uygulama boyunca TEK bir ExoPlayer örneği.
@@ -170,6 +177,8 @@ object PlayerHolder {
             .also { player ->
             exoPlayer = player
             audioFocus = AudioFocusHandler(appContext, player)
+            player.addAnalyticsListener(loadLogger)
+            stallWatch.start(appContext)
             loudness.attach(player.audioSessionId)
             // Otomatik geçiş NATIVE tarafta dinleniyor: ekran kapalıyken de
             // parça bitince sıradakine geçilmeli. Bu dinleyici Dart'ta olsaydı
@@ -200,6 +209,7 @@ object PlayerHolder {
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) stallWatch.reset()
                     if (playbackState != Player.STATE_ENDED) return
                     if (!PlaybackQueue.autoplay || advancing) return
                     advancing = true
@@ -349,6 +359,157 @@ object PlayerHolder {
     }
 
     /**
+     * Yükleme hatalarını ve yavaş yüklemeleri günlüğe yazar.
+     *
+     * Oynatıcı ağ hatalarını SESSİZCE yeniden deniyor; kullanıcı yalnızca
+     * "dondu" görüyor, günlükte hiçbir iz kalmıyordu. Donmanın sebebini
+     * (hangi sunucu, ne kadar sürdü, hangi hata) görmenin tek yolu bu.
+     */
+    private val loadLogger = object : AnalyticsListener {
+        override fun onLoadError(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData,
+            error: IOException,
+            wasCanceled: Boolean
+        ) {
+            Log.w(
+                TAG,
+                "Yükleme hatası (tür=${mediaLoadData.trackType}, " +
+                    "${loadEventInfo.loadDurationMs} ms, " +
+                    "${loadEventInfo.uri.host}): ${error.javaClass.simpleName}: ${error.message}"
+            )
+        }
+
+        override fun onLoadCompleted(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData
+        ) {
+            if (loadEventInfo.loadDurationMs < SLOW_LOAD_MS) return
+            Log.i(
+                TAG,
+                "Yavaş yükleme (tür=${mediaLoadData.trackType}): " +
+                    "${loadEventInfo.bytesLoaded / 1024} KB / ${loadEventInfo.loadDurationMs} ms"
+            )
+        }
+    }
+
+    private const val SLOW_LOAD_MS = 5_000L
+
+    /**
+     * Dosyanın başından yapılan isteğe `Range: bytes=0-` ekler.
+     *
+     * TAKILMALARIN ASIL SEBEBİ BU. Oynatıcı dosyayı baştan sonuna okurken
+     * Range başlığı göndermiyor (yalnızca ileri sarınca gönderiyor) ve
+     * YouTube Range'siz isteği gerçek zamanlı hıza kısıyor. Cihazda, mobil
+     * veride, aynı adresle ölçüldü:
+     *
+     *   Range yok        ~30 KB/s  (≈240 kbps)
+     *   Range: bytes=0-  ~3.2 MB/s (≈26 Mbps)
+     *
+     * Ses modunda (Opus ~160 kbps) bu zar zor yetiyordu: açılış yavaş,
+     * en küçük ağ dalgalanmasında takılma. Video modunda 480p bile ~1 Mbps
+     * istiyor; ilk birkaç saniyelik tampon bitince oynatıcı "bağlanıyor"a
+     * düşüyordu.
+     *
+     * Yalnızca konum 0 ve uzunluk belirsizken: diğer durumlarda Range'i
+     * OkHttpDataSource zaten kendisi ekliyor, ikinci bir başlık çakışırdı.
+     */
+    private fun withRangeHeader(spec: DataSpec): DataSpec {
+        if (spec.position != 0L || spec.length != C.LENGTH_UNSET.toLong()) return spec
+        if (spec.uri.scheme?.startsWith("http") != true) return spec
+        return spec.withAdditionalHeaders(mapOf("Range" to "bytes=0-"))
+    }
+
+    /**
+     * Akış adresinin hangi IP ve istemci için verildiğini günlüğe yazar.
+     *
+     * YouTube adresleri isteyen IP'ye bağlıyor; adres başka bir IP'den
+     * indirilmeye çalışılırsa 403 dönüyor. Mobil veride (operatör NAT'ı)
+     * dış IP bağlantıdan bağlantıya değişebildiği için bu, donmaların
+     * birincil şüphelisi.
+     */
+    private fun logStreamOrigin(request: PlayRequest) {
+        // Yalnızca ip ve istemci yazılıyor; adresin tamamı imza taşıyor.
+        val url = request.audioUrl.takeIf { it.startsWith("http") } ?: return
+        val uri = Uri.parse(url)
+        Log.i(TAG, "Akış: ip=${uri.getQueryParameter("ip")} c=${uri.getQueryParameter("c")}")
+    }
+
+    /**
+     * Takılma bekçisi: çalması gereken oynatıcı tamponda İLERLEMEDEN
+     * bekliyorsa adresleri tazeleyip kaldığı yerden sürdürür.
+     *
+     * Cihazda ölçülen durum: yeni parçanın başında oynatıcı ~50 sn "yükleniyor"
+     * dedi; bu sürede hiçbir hata bildirilmedi (oynatıcı zaman aşımlarını
+     * kendi içinde sessizce yeniden deniyor), sonra parçanın tamamı bir anda
+     * geldi. Hata bildirilmediği için hata üzerine çalışan kurtarma hiç
+     * devreye girmiyordu.
+     *
+     * Parça başına BİR KEZ: tazelenmiş adres de ilerlemiyorsa sorun ağdadır
+     * (ör. kapsama dışı) ve tekrar tekrar çözümlemek yalnızca pil yakar.
+     */
+    private val stallWatch = object : Runnable {
+        private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var context: Context? = null
+        private var lastBuffered = -1L
+        private var stuckSince = 0L
+        private var recoveredFor: String? = null
+
+        fun start(appContext: Context) {
+            context = appContext
+            handler.removeCallbacks(this)
+            handler.postDelayed(this, STALL_CHECK_MS)
+        }
+
+        /** Parça akmaya başladı: bir sonraki takılmada yeniden deneme hakkı var. */
+        fun reset() {
+            recoveredFor = null
+            stuckSince = 0L
+        }
+
+        override fun run() {
+            handler.postDelayed(this, STALL_CHECK_MS)
+            val player = exoPlayer ?: return
+            val waiting = player.playWhenReady &&
+                player.playbackState == Player.STATE_BUFFERING &&
+                currentRequest != null
+            if (!waiting) {
+                stuckSince = 0L
+                return
+            }
+            val buffered = player.bufferedPosition
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (buffered != lastBuffered || stuckSince == 0L) {
+                lastBuffered = buffered
+                stuckSince = now
+                return
+            }
+            if (now - stuckSince < STALL_LIMIT_MS) return
+
+            val videoId = PlaybackQueue.current()?.videoId ?: return
+            if (recoveredFor == videoId) return
+            recoveredFor = videoId
+            stuckSince = 0L
+            Log.w(TAG, "Takılma: ${STALL_LIMIT_MS / 1000} sn ilerleme yok, adres tazeleniyor ($videoId)")
+            val ctx = context ?: return
+            scope.launch {
+                try {
+                    recoverCurrent(ctx)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Takılmadan kurtarılamadı", e)
+                }
+            }
+        }
+    }
+
+    private const val STALL_CHECK_MS = 2_000L
+    private const val STALL_LIMIT_MS = 12_000L
+
+    /**
      * Oynatıcının başlangıç bant genişliği tahmini (bit/sn).
      *
      * Media3'ün varsayılanı ülkeye göre birkaç Mbps; bu akışlarda o tahmin
@@ -424,12 +585,23 @@ object PlayerHolder {
 
     @Synchronized
     private fun getDataSourceFactory(): DataSource.Factory {
-        return dataSourceFactory ?: OkHttpDataSource.Factory(OkHttpClient.Builder().build())
+        // Zaman aşımları kısa: YouTube sunucusu bazen bağlantıyı açık tutup
+        // hiç veri göndermiyor. Varsayılan 10 sn'lik bekleme, oynatıcının
+        // sessiz yeniden denemeleriyle çarpılınca cihazda ~50 sn donma
+        // olarak ölçüldü (bkz. [StallWatch]).
+        val http = OkHttpDataSource.Factory(
+            OkHttpClient.Builder()
+                .connectTimeout(6, TimeUnit.SECONDS)
+                .readTimeout(6, TimeUnit.SECONDS)
+                .build()
+        )
             .setUserAgent(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
             )
-            .also { dataSourceFactory = it }
+        return dataSourceFactory ?: ResolvingDataSource.Factory(http) { spec ->
+            withRangeHeader(spec)
+        }.also { dataSourceFactory = it }
     }
 
     /**
@@ -439,6 +611,7 @@ object PlayerHolder {
      */
     fun play(context: Context, request: PlayRequest, audioOnly: Boolean) {
         val player = getPlayer(context)
+        logStreamOrigin(request)
         currentRequest = request
         audioOnlyMode = audioOnly
         adaptiveQuality = !audioOnly && DashManifestBuilder.isManifest(request.videoUrl)
