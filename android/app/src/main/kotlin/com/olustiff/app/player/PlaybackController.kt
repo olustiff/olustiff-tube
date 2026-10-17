@@ -1,6 +1,7 @@
 package com.olustiff.app.player
 
 import android.content.Context
+import com.olustiff.app.diag.Tanilama
 import android.util.Log
 import android.content.Intent
 import android.os.Handler
@@ -55,6 +56,12 @@ class PlaybackController(
 
         override fun onPlayerError(error: PlaybackException) {
             eventSink?.error("PLAYBACK_ERROR", error.message, error.errorCodeName)
+            Tanilama.olay(
+                TAG,
+                "Oynatıcı hatası ${error.errorCodeName} " +
+                    "(${PlaybackQueue.current()?.videoId})",
+                error.cause
+            )
 
             // Kaynak/ağ hatasından KENDİLİĞİNDEN çıkılmıyordu: oynatıcı
             // `ERROR` durumunda kalıyor, hiçbir şey çalmıyor ve kullanıcı
@@ -77,7 +84,7 @@ class PlaybackController(
                 try {
                     PlayerHolder.recoverCurrent(context)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Oynatma kurtarılamadı", e)
+                    Tanilama.olay(TAG, "Oynatma kurtarılamadı", e)
                 }
             }
         }
@@ -128,7 +135,7 @@ class PlaybackController(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Oynatma adımı başarısız", e)
+            Tanilama.olay(TAG, "Oynatma adımı başarısız", e)
             result.error("PLAYBACK_ERROR", e.message ?: e.javaClass.simpleName, null)
         }
     }

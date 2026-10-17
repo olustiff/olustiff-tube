@@ -1,6 +1,7 @@
 package com.olustiff.app.player
 
 import android.content.Context
+import com.olustiff.app.diag.Tanilama
 import android.net.Uri
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -30,10 +31,12 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.io.IOException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -115,6 +118,7 @@ object PlayerHolder {
     fun getPlayer(context: Context): ExoPlayer {
         exoPlayer?.let { return it }
         val appContext = context.applicationContext
+        Tanilama.init(appContext)
         return ExoPlayer.Builder(appContext)
             // Bant genişliği tahmini DÜŞÜKTEN başlıyor.
             //
@@ -209,6 +213,7 @@ object PlayerHolder {
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    trackBuffering(player, playbackState)
                     if (playbackState == Player.STATE_READY) stallWatch.reset()
                     if (playbackState != Player.STATE_ENDED) return
                     if (!PlaybackQueue.autoplay || advancing) return
@@ -222,7 +227,7 @@ object PlayerHolder {
                             // istisna doğrudan sistemin "uygulamayı öldür"
                             // işleyicisine gidiyor. Gerçek cihazda tam olarak
                             // bu oldu (bkz. [playNext] belgesi).
-                            Log.w(TAG, "Sıradakine geçilemedi", e)
+                            Tanilama.olay(TAG, "Sıradakine geçilemedi", e)
                         } finally {
                             advancing = false
                         }
@@ -244,7 +249,7 @@ object PlayerHolder {
         SupervisorJob() +
             Dispatchers.Main +
             CoroutineExceptionHandler { _, e ->
-                Log.w(TAG, "Oynatma işi başarısız", e)
+                Tanilama.olay(TAG, "Oynatma işi başarısız", e)
             }
     )
 
@@ -330,7 +335,7 @@ object PlayerHolder {
     suspend fun playAt(context: Context, index: Int) {
         val item = PlaybackQueue.jumpTo(index) ?: return
         runCatching { playQueueItem(context, item) }
-            .onFailure { Log.w(TAG, "Seçilen parça açılamadı: ${item.videoId}", it) }
+            .onFailure { Tanilama.olay(TAG, "Seçilen parça açılamadı: ${item.videoId}", it) }
     }
 
     /**
@@ -343,8 +348,13 @@ object PlayerHolder {
         context: Context,
         nextItem: () -> PlaybackQueue.Item?
     ) {
-        repeat(MAX_ADVANCE_ATTEMPTS) {
-            val item = nextItem() ?: return
+        // Yeni bir ilerleme isteği, ağ bekleyen eskisini geçersiz kılıyor:
+        // ikisi birden ağ gelince parça açmaya çalışmasın.
+        val generation = ++playGeneration
+        var networkRetries = 0
+        var attempts = 0
+        var item = nextItem() ?: return
+        while (attempts < MAX_ADVANCE_ATTEMPTS) {
             try {
                 playQueueItem(context, item)
                 return
@@ -352,11 +362,66 @@ object PlayerHolder {
                 // İptal bir hata değil: yeni bir oynatma isteği geldi.
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Parça açılamadı, sıradakine geçiliyor: ${item.videoId}", e)
+                // AĞ HATASINDA PARÇA ATLANMIYOR. Cihazda kalıcı günlükle
+                // görüldü: ağ geçiş anında koptuğunda üç parça aynı saniyede
+                // denenip "açılabilen parça yok" deniyor, müzik duruyor ve ağ
+                // geri gelince de başlamıyordu (arabada tünel, çekmeyen yol).
+                // Ağ yoksa sıradaki parça da açılmaz; atlamak yalnızca
+                // şarkı kaybettirir. Ağ beklenip AYNI parça yeniden deneniyor.
+                if (isNetworkError(e) && networkRetries < MAX_NETWORK_RETRIES) {
+                    networkRetries++
+                    Tanilama.olay(TAG, "Ağ hatası, ağ bekleniyor: ${item.videoId}", e)
+                    if (!waitForNetwork(context, generation)) return
+                    Tanilama.olay(TAG, "Ağ geri geldi, yeniden deneniyor: ${item.videoId}")
+                    continue
+                }
+                attempts++
+                Tanilama.olay(TAG, "Parça açılamadı, sıradakine geçiliyor: ${item.videoId}", e)
+                if (generation != playGeneration) return
+                item = nextItem() ?: return
             }
         }
-        Log.w(TAG, "Kuyrukta açılabilen parça bulunamadı")
+        Tanilama.olay(TAG, "Kuyrukta açılabilen parça bulunamadı")
     }
+
+    /**
+     * Her yeni oynatmada artıyor. Ağ beklenirken kullanıcı başka bir şey
+     * seçtiyse bekleyen deneme bunu görüp vazgeçiyor; yoksa ağ gelince
+     * kullanıcının seçiminin üstüne eski parçayı açardı.
+     */
+    @Volatile
+    private var playGeneration = 0
+
+    private fun isNetworkError(e: Throwable): Boolean =
+        generateSequence(e) { it.cause }.take(8).any { it is IOException }
+
+    /**
+     * İnternet gelene kadar bekler (en fazla [NETWORK_WAIT_MS]).
+     *
+     * Dönüş: yeniden denemeye değer mi. Süre dolduysa ya da bu arada yeni bir
+     * oynatma başladıysa false.
+     */
+    private suspend fun waitForNetwork(context: Context, generation: Int): Boolean {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val deadline = android.os.SystemClock.elapsedRealtime() + NETWORK_WAIT_MS
+        // İlk deneme hemen değil: kopma anında ağ "var" görünüp yine de
+        // isim çözülemiyor olabiliyor; kısa bir nefes aynı hatayı tekrarlamaz.
+        delay(NETWORK_POLL_MS)
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            if (generation != playGeneration) return false
+            val caps = runCatching { cm.getNetworkCapabilities(cm.activeNetwork) }.getOrNull()
+            if (caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true) {
+                return true
+            }
+            delay(NETWORK_POLL_MS)
+        }
+        Tanilama.olay(TAG, "Ağ ${NETWORK_WAIT_MS / 60_000} dk içinde gelmedi, bekleme bırakıldı")
+        return false
+    }
+
+    private const val MAX_NETWORK_RETRIES = 5
+    private const val NETWORK_WAIT_MS = 5 * 60_000L
+    private const val NETWORK_POLL_MS = 2_000L
 
     /**
      * Yükleme hatalarını ve yavaş yüklemeleri günlüğe yazar.
@@ -373,7 +438,7 @@ object PlayerHolder {
             error: IOException,
             wasCanceled: Boolean
         ) {
-            Log.w(
+            Tanilama.olay(
                 TAG,
                 "Yükleme hatası (tür=${mediaLoadData.trackType}, " +
                     "${loadEventInfo.loadDurationMs} ms, " +
@@ -386,16 +451,60 @@ object PlayerHolder {
             loadEventInfo: LoadEventInfo,
             mediaLoadData: MediaLoadData
         ) {
+            // Süre tek başına ölçü değil: bütün videoyu tek istekte indirmek
+            // hızlı ağda da onlarca saniye sürüyor. Yalnızca hız gerçekten
+            // düşükse yazılıyor.
             if (loadEventInfo.loadDurationMs < SLOW_LOAD_MS) return
-            Log.i(
+            val kbps = loadEventInfo.bytesLoaded * 8 / loadEventInfo.loadDurationMs
+            if (kbps >= SLOW_LOAD_KBPS) return
+            Tanilama.olay(
                 TAG,
                 "Yavaş yükleme (tür=${mediaLoadData.trackType}): " +
-                    "${loadEventInfo.bytesLoaded / 1024} KB / ${loadEventInfo.loadDurationMs} ms"
+                    "${loadEventInfo.bytesLoaded / 1024} KB / ${loadEventInfo.loadDurationMs} ms " +
+                    "(${loadEventInfo.bytesLoaded * 8 / loadEventInfo.loadDurationMs} kbps)"
             )
         }
     }
 
     private const val SLOW_LOAD_MS = 5_000L
+    private const val SLOW_LOAD_KBPS = 1_000L
+
+    /** Süren bekleme (yükleniyor) başlangıcı; yoksa 0. */
+    private var bufferingSince = 0L
+    private var bufferingAt = 0L
+
+    /**
+     * Her "yükleniyor" beklemesinin süresini kalıcı günlüğe yazar.
+     *
+     * Kullanıcının "donuyor" dediği şeyin ölçüsü bu: kaç saniye, parçanın
+     * açılışında mı ortasında mı. Kısa beklemeler (ör. normal açılış)
+     * gürültü olmasın diye [BUFFERING_LOG_MS] altı yazılmıyor.
+     */
+    private fun trackBuffering(player: ExoPlayer, state: Int) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        when {
+            state == Player.STATE_BUFFERING && player.playWhenReady -> {
+                if (bufferingSince == 0L) {
+                    bufferingSince = now
+                    bufferingAt = player.currentPosition
+                }
+            }
+            bufferingSince != 0L -> {
+                val waited = now - bufferingSince
+                bufferingSince = 0L
+                if (state != Player.STATE_READY || waited < BUFFERING_LOG_MS) return
+                val where = if (bufferingAt < 1_000) "açılışta" else "${bufferingAt / 1000}. saniyede"
+                val mode = if (audioOnlyMode) "ses" else "video"
+                Tanilama.olay(
+                    TAG,
+                    "Bekleme ${"%.1f".format(Locale.ROOT, waited / 1000.0)} sn, $where " +
+                        "($mode, ${PlaybackQueue.current()?.videoId})"
+                )
+            }
+        }
+    }
+
+    private const val BUFFERING_LOG_MS = 3_000L
 
     /**
      * Dosyanın başından yapılan isteğe `Range: bytes=0-` ekler.
@@ -492,7 +601,7 @@ object PlayerHolder {
             if (recoveredFor == videoId) return
             recoveredFor = videoId
             stuckSince = 0L
-            Log.w(TAG, "Takılma: ${STALL_LIMIT_MS / 1000} sn ilerleme yok, adres tazeleniyor ($videoId)")
+            Tanilama.olay(TAG, "Takılma: ${STALL_LIMIT_MS / 1000} sn ilerleme yok, adres tazeleniyor ($videoId)")
             val ctx = context ?: return
             scope.launch {
                 try {
@@ -500,7 +609,7 @@ object PlayerHolder {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.w(TAG, "Takılmadan kurtarılamadı", e)
+                    Tanilama.olay(TAG, "Takılmadan kurtarılamadı", e)
                 }
             }
         }
@@ -611,6 +720,7 @@ object PlayerHolder {
      */
     fun play(context: Context, request: PlayRequest, audioOnly: Boolean) {
         val player = getPlayer(context)
+        playGeneration++
         logStreamOrigin(request)
         currentRequest = request
         audioOnlyMode = audioOnly
@@ -857,6 +967,7 @@ object PlayerHolder {
 
     @Synchronized
     fun release() {
+        playGeneration++ // ağ bekleyen bir geçiş, kapatılan oynatıcıyı diriltmesin
         audioFocus?.abandon()
         audioFocus = null
         loudness.release()

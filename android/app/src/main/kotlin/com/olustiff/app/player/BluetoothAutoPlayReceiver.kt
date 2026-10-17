@@ -1,6 +1,7 @@
 package com.olustiff.app.player
 
 import android.bluetooth.BluetoothA2dp
+import com.olustiff.app.diag.Tanilama
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -33,6 +34,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) return
+        Tanilama.init(context)
 
         val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
         if (state != BluetoothProfile.STATE_CONNECTED) return
@@ -68,7 +70,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
                 // Servis ayağa kalkar kalkmaz yayını serbest bırakıyoruz.
                 app.startService(Intent(app, PlaybackService::class.java))
             } catch (e: Exception) {
-                Log.w(TAG, "Oynatma servisi başlatılamadı", e)
+                Tanilama.olay(TAG, "Oynatma servisi başlatılamadı", e)
             } finally {
                 pending.finish()
             }
@@ -76,7 +78,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
             try {
                 startSavedTrack(app)
             } catch (e: Exception) {
-                Log.w(TAG, "Otomatik çalma başarısız", e)
+                Tanilama.olay(TAG, "Otomatik çalma başarısız", e)
             }
         }
     }
@@ -144,7 +146,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
                 Log.d(TAG, "Otomatik çalma başlatıldı: $videoId")
                 null
             } catch (e: Exception) {
-                Log.w(TAG, "Otomatik çalma başarısız", e)
+                Tanilama.olay(TAG, "Otomatik çalma başarısız", e)
                 e.message ?: "Bilinmeyen hata"
             }
         }
@@ -186,7 +188,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
                     .take(RELATED_LIMIT)
                 listOf(first) + related
             } catch (e: Exception) {
-                Log.w(TAG, "İlgili videolar alınamadı, tek parça çalınacak", e)
+                Tanilama.olay(TAG, "İlgili videolar alınamadı, tek parça çalınacak", e)
                 listOf(first)
             }
         }

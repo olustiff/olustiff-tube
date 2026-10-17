@@ -1,6 +1,7 @@
 package com.olustiff.app.player
 
 import android.media.audiofx.LoudnessEnhancer
+import com.olustiff.app.diag.Tanilama
 import android.util.Log
 
 /**
@@ -50,7 +51,7 @@ class LoudnessBoost {
             }
         } catch (e: Exception) {
             // Bazı cihazlarda bu efekt yok; ses kısık kalır ama oynatma sürer.
-            Log.w(TAG, "Ses yükseltme kurulamadı", e)
+            Tanilama.olay(TAG, "Ses yükseltme kurulamadı", e)
             null
         }
     }
@@ -63,7 +64,7 @@ class LoudnessBoost {
                 it.setTargetGain(gainMillibels)
                 it.enabled = gainMillibels > 0
             } catch (e: Exception) {
-                Log.w(TAG, "Ses kazancı uygulanamadı", e)
+                Tanilama.olay(TAG, "Ses kazancı uygulanamadı", e)
             }
         }
     }

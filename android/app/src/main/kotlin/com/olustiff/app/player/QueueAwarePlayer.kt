@@ -1,6 +1,7 @@
 package com.olustiff.app.player
 
 import android.content.Context
+import com.olustiff.app.diag.Tanilama
 import android.util.Log
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
@@ -74,7 +75,7 @@ class QueueAwarePlayer(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w("OlustiffQueuePlayer", "Kuyruk komutu başarısız", e)
+            Tanilama.olay("OlustiffQueuePlayer", "Kuyruk komutu başarısız", e)
         }
     }
 

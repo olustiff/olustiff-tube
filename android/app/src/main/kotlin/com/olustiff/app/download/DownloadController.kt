@@ -1,6 +1,7 @@
 package com.olustiff.app.download
 
 import android.content.Context
+import com.olustiff.app.diag.Tanilama
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -170,7 +171,7 @@ class DownloadController(
                 )
             } catch (e: Exception) {
                 // Teşhis için tam yığın izi; kullanıcıya yalnızca mesaj gider.
-                Log.e("AkisDownload", "MP3 indirme başarısız", e)
+                Tanilama.olay("AkisDownload", "MP3 indirme başarısız", e)
                 result.error("DOWNLOAD_FAILED", e.message ?: "İndirme başarısız", null)
             }
         }

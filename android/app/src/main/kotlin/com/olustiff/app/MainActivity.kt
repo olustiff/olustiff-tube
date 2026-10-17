@@ -1,6 +1,7 @@
 package com.olustiff.app
 
 import android.Manifest
+import com.olustiff.app.diag.Tanilama
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.UiModeManager
@@ -73,6 +74,7 @@ class MainActivity : FlutterActivity() {
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Tanilama.init(this)
         if (!isTelevision()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
