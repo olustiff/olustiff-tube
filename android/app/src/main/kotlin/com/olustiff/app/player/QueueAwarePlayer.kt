@@ -57,7 +57,20 @@ class QueueAwarePlayer(
 
     override fun seekToPreviousMediaItem() = goPrevious()
 
+    // Bildirim, kilit ekranı, araba teybi ve direksiyon tuşları buradan
+    // geliyor: hepsi kullanıcının iradesi, çıkış kilidini kaldırır.
+    override fun play() {
+        PlayerHolder.userIntent()
+        super.play()
+    }
+
+    override fun setPlayWhenReady(playWhenReady: Boolean) {
+        if (playWhenReady) PlayerHolder.userIntent()
+        super.setPlayWhenReady(playWhenReady)
+    }
+
     private fun goNext() {
+        PlayerHolder.userIntent()
         scope.launch { guarded { PlayerHolder.playNext(context) } }
     }
 
@@ -84,6 +97,7 @@ class QueueAwarePlayer(
      * başındaysak başa sarmak daha doğal olduğu için o davranışa düşeriz.
      */
     private fun goPrevious() {
+        PlayerHolder.userIntent()
         if (!PlaybackQueue.hasPrevious()) {
             seekTo(0)
             return

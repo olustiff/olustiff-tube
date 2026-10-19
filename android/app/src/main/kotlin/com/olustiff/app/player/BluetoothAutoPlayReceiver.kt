@@ -122,6 +122,9 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
             // kuyruk siliniyordu: uygulama açıkken, hatta müzik çalarken
             // kulaklık bağlandığında dinlenen şey kesilip en son açılan parça
             // baştan başlıyordu. Arabada kontak her açıldığında yaşanıyor.
+            // Bluetooth yeniden bağlandı: çıkış kilidi kalkar (yoksa
+            // sıfırdan açılan parça da sessiz beklerdi).
+            PlayerHolder.userIntent()
             if (PlayerHolder.hasMedia) {
                 PlayerHolder.resume()
                 Log.d(TAG, "Oynatma zaten yüklü, kaldığı yerden sürdürüldü")

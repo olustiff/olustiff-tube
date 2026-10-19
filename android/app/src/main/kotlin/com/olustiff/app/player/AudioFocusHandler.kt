@@ -1,6 +1,11 @@
 package com.olustiff.app.player
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioAttributes as PlatformAudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -8,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.media3.exoplayer.ExoPlayer
 
 /**
@@ -126,6 +132,12 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
                     player.volume = 1f
                     Log.d(TAG, "Kesinti bitti, ses geri açıldı")
                 }
+                if (resumeOnFocusGain && PlayerHolder.outputLost) {
+                    // Bu arada Bluetooth/kulaklık koptu: odak dönüşü sesi
+                    // HOPARLÖRDEN başlatırdı (bkz. PlayerHolder.outputLost).
+                    resumeOnFocusGain = false
+                    Log.d(TAG, "Odak geri geldi ama ses çıkışı koptu; başlatılmadı")
+                }
                 if (resumeOnFocusGain) {
                     resumeOnFocusGain = false
 
@@ -220,6 +232,55 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
         handler.removeCallbacks(durationWatch)
     }
 
+    /**
+     * Ses çıkışının (Bluetooth/kulaklık) kopmasını OYNATMA DURUMUNDAN BAĞIMSIZ
+     * dinler.
+     *
+     * Oynatıcının kendi "kulaklık çıktı" koruması yalnızca çalarken devrede.
+     * Araba Bluetooth'u koparken önce odağı alıp oynatmayı durdurduğu için
+     * kopma anında oynatıcı zaten duruyordu, koruma hiç tetiklenmiyordu ve
+     * odak dönünce müzik hoparlörden başlıyordu. İki kaynak birden dinleniyor
+     * çünkü cihazlar arasında hangisinin geleceği tutarlı değil.
+     */
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY) return
+            onOutputLost("ses çıkışı hoparlöre döndü")
+        }
+    }
+
+    private val deviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+            val lost = removedDevices.firstOrNull { it.isSink && it.type in PERSONAL_OUTPUTS }
+                ?: return
+            onOutputLost("${lost.productName} ayrıldı")
+        }
+    }
+
+    private fun onOutputLost(reason: String) {
+        stopDuckWatch()
+        player.volume = 1f
+        resumeOnFocusGain = false
+        PlayerHolder.onOutputLost(reason)
+    }
+
+    init {
+        ContextCompat.registerReceiver(
+            appContext,
+            noisyReceiver,
+            IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        audioManager.registerAudioDeviceCallback(deviceCallback, handler)
+    }
+
+    /** Oynatıcı kapatılırken dinleyicileri bırakır. */
+    fun release() {
+        abandon()
+        runCatching { appContext.unregisterReceiver(noisyReceiver) }
+        audioManager.unregisterAudioDeviceCallback(deviceCallback)
+    }
+
     /** Oynatma tamamen bittiğinde odağı bırakır. */
     fun abandon() {
         stopDuckWatch()
@@ -235,6 +296,16 @@ class AudioFocusHandler(context: Context, private val player: ExoPlayer) {
 
     private companion object {
         const val TAG = "OlustiffAudioFocus"
+
+        /** Kopunca sesin hoparlöre düşeceği kişisel çıkışlar. */
+        val PERSONAL_OUTPUTS = setOf(
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+            26, // TYPE_BLE_HEADSET (API 31)
+            27, // TYPE_BLE_SPEAKER (API 31)
+        )
 
         /**
          * Kısma sırasındaki ses seviyesi.

@@ -141,6 +141,9 @@ class PlaybackController(
     }
 
     private fun handleMethod(call: MethodCall, result: MethodChannel.Result) {
+        // Uygulamadan gelen oynatma komutları KULLANICININ iradesi: çıkış
+        // kilidini kaldırır (bkz. PlayerHolder.outputLost).
+        if (call.method in USER_PLAY_METHODS) PlayerHolder.userIntent()
         when (call.method) {
             "play" -> {
                 val audioUrl = call.argument<String>("audioUrl")
@@ -423,3 +426,8 @@ class PlaybackController(
         private const val POSITION_UPDATE_INTERVAL_MS = 500L
     }
 }
+
+/** Kullanıcı iradesiyle oynatma başlatan komutlar. */
+private val USER_PLAY_METHODS = setOf(
+    "play", "playLocal", "next", "previous", "playQueueIndex", "resume"
+)

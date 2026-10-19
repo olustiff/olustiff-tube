@@ -392,6 +392,44 @@ object PlayerHolder {
     @Volatile
     private var playGeneration = 0
 
+    /**
+     * Ses çıkışı (Bluetooth/kulaklık) koptu ve kullanıcı o zamandan beri
+     * hiçbir şeye basmadı.
+     *
+     * Kilitliyken HİÇBİR otomatik mekanizma (odak dönüşü, ağ geri gelince
+     * yeniden deneme, takılma bekçisi, adres tazeleme, sıradaki parça) sesi
+     * başlatamıyor. Gerçek kullanımda görülen: arabanın Bluetooth'u koptu,
+     * müzik TELEFONUN HOPARLÖRÜNDEN çalmaya devam etti. Sebep: araba
+     * koparken önce ses odağını kısa süreliğine alıyor (oynatıcı "geçici
+     * kesinti" deyip duruyor), sonra Bluetooth kopuyor, odak telefona dönünce
+     * "kesinti bitti" sanılıp çalma yeniden başlatılıyordu. Oynatıcının kendi
+     * "kulaklık çıktı" koruması yalnızca ÇALARKEN dinlediği için o anda
+     * devrede değildi.
+     *
+     * Kilidi yalnızca kullanıcının bir komutu ([userIntent]) ya da Bluetooth'un
+     * yeniden bağlanması açıyor.
+     */
+    @Volatile
+    var outputLost = false
+        private set
+
+    /** Çıkış koptu: duraklat ve otomatik başlatmayı kilitle. */
+    fun onOutputLost(reason: String) {
+        val wasPlaying = exoPlayer?.playWhenReady == true
+        // İki kaynak (sistem yayını + cihaz listesi) aynı kopmayı bildirebiliyor.
+        if (outputLost && !wasPlaying) return
+        outputLost = true
+        exoPlayer?.playWhenReady = false
+        Tanilama.olay(TAG, "Ses çıkışı koptu ($reason), ${if (wasPlaying) "duraklatıldı" else "zaten duruyordu"}; otomatik başlatma kilitli")
+    }
+
+    /** Kullanıcı bilerek bir şey istedi: çıkış kilidi kalkar. */
+    fun userIntent() {
+        if (!outputLost) return
+        outputLost = false
+        Tanilama.olay(TAG, "Kullanıcı komutu, çıkış kilidi kalktı")
+    }
+
     private fun isNetworkError(e: Throwable): Boolean =
         generateSequence(e) { it.cause }.take(8).any { it is IOException }
 
@@ -678,12 +716,14 @@ object PlayerHolder {
         )
         if (position > 0 && !selection.isLive) exoPlayer?.seekTo(position)
         // Kullanıcı duraklatmışken gelen hata, oynatmayı kendiliğinden başlatmasın.
-        exoPlayer?.playWhenReady = wasPlaying
+        exoPlayer?.playWhenReady = wasPlaying && !outputLost
     }
 
     /** Duraklatılmış oynatmayı sürdürür; yüklü medya yoksa hiçbir şey yapmaz. */
     fun resume() {
         if (currentRequest == null) return
+        // Çağıranlar: Bluetooth yeniden bağlandı ya da kullanıcı istedi.
+        outputLost = false
         exoPlayer?.playWhenReady = true
     }
 
@@ -734,7 +774,9 @@ object PlayerHolder {
         // Odak istenir ama SONUCU beklenmez: kullanıcı bilerek bir şey
         // açtıysa (süren arama sırasında bile) oynatma başlamalı.
         audioFocus?.request()
-        player.playWhenReady = true
+        // Çıkış koptuysa (bkz. [outputLost]) parça hazırlanır ama SESSİZ
+        // bekler; kullanıcı komutları kilidi önceden kaldırıyor.
+        player.playWhenReady = !outputLost
     }
 
     /**
@@ -830,7 +872,9 @@ object PlayerHolder {
         // Odak istenir ama SONUCU beklenmez: kullanıcı bilerek bir şey
         // açtıysa (süren arama sırasında bile) oynatma başlamalı.
         audioFocus?.request()
-        player.playWhenReady = true
+        // Çıkış koptuysa (bkz. [outputLost]) parça hazırlanır ama SESSİZ
+        // bekler; kullanıcı komutları kilidi önceden kaldırıyor.
+        player.playWhenReady = !outputLost
     }
 
     /**
@@ -968,7 +1012,7 @@ object PlayerHolder {
     @Synchronized
     fun release() {
         playGeneration++ // ağ bekleyen bir geçiş, kapatılan oynatıcıyı diriltmesin
-        audioFocus?.abandon()
+        audioFocus?.release()
         audioFocus = null
         loudness.release()
         exoPlayer?.release()
@@ -992,6 +1036,7 @@ object PlayerHolder {
         if (current.playWhenReady) {
             current.playWhenReady = false
         } else {
+            userIntent()
             audioFocus?.request()
             current.playWhenReady = true
         }

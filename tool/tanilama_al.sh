@@ -15,7 +15,7 @@ mkdir -p "$HEDEF"
 for f in olaylar.1.log olaylar.log; do
   ${=ADB} ${=CIHAZ} pull "$KAYNAK/$f" "$HEDEF/$f" > /dev/null 2>&1 || true
 done
-if ! ls "$HEDEF"/*.log > /dev/null 2>&1; then
+if [ -z "$(ls "$HEDEF" 2>/dev/null)" ]; then
   echo "Günlük bulunamadı (uygulama hiç açılmamış ya da telefon bağlı değil)." >&2
   exit 1
 fi
