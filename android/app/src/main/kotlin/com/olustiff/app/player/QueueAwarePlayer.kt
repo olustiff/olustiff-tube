@@ -69,6 +69,20 @@ class QueueAwarePlayer(
         super.setPlayWhenReady(playWhenReady)
     }
 
+    /**
+     * Dışarıdan gelen "durdur" DURAKLATMA olarak uygulanıyor.
+     *
+     * Araba teybi (cihazda: Pioneer MVH-AV280BT) kontak kapanırken ya da
+     * kaynak değişirken önce STOP gönderip sonra Bluetooth'u kesiyor.
+     * Gerçek durdurma oynatıcıyı boşaltıyordu: şarkı ve konum kayboluyor,
+     * araba yeniden bağlanınca "sürdürülecek bir şey yok" denip kayıtlı
+     * parça BAŞTAN açılıyordu. Duraklatınca araba bağlanınca kaldığı yerden
+     * sürüyor — diğer müzik uygulamaları da böyle davranıyor.
+     */
+    override fun stop() {
+        super.setPlayWhenReady(false)
+    }
+
     private fun goNext() {
         PlayerHolder.userIntent()
         scope.launch { guarded { PlayerHolder.playNext(context) } }

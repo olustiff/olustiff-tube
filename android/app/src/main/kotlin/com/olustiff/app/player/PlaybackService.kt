@@ -105,8 +105,12 @@ class PlaybackService : MediaSessionService() {
 
             // Kuyruğu da boşalt: yalnızca durdurmak bildirimi ayakta
             // bırakıyor, kullanıcı ise oynatmayı bitirmek istiyor.
-            session.player.stop()
-            session.player.clearMediaItems()
+            // Alttaki oynatıcı DOĞRUDAN durduruluyor: oturumun oynatıcısı
+            // (QueueAwarePlayer) dışarıdan gelen "stop"u duraklatmaya
+            // çeviriyor (araba teybi), "Kapat" ise gerçekten kapatmalı.
+            val player = PlayerHolder.getPlayer(this@PlaybackService)
+            player.stop()
+            player.clearMediaItems()
             PlaybackQueue.clear()
             stopSelf()
 

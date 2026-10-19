@@ -462,7 +462,13 @@ object PlayerHolder {
     private const val NETWORK_POLL_MS = 2_000L
 
     /**
-     * Yükleme hatalarını ve yavaş yüklemeleri günlüğe yazar.
+     * Yükleme hatalarını günlüğe yazar.
+     *
+     * "Yavaş yükleme" bilerek YAZILMIYOR: oynatıcı 90 sn'lik tampon dolunca
+     * okumayı kendisi yavaşlatıyor, yani bir yüklemenin süresi şarkının
+     * süresine yayılıyor ve hız ağ hakkında hiçbir şey söylemiyor. İlk sürüm
+     * bunu yazıyordu ve kayıtları yanlış alarmla dolduruyordu. Gerçek
+     * takılmayı "Bekleme" satırları ölçüyor.
      *
      * Oynatıcı ağ hatalarını SESSİZCE yeniden deniyor; kullanıcı yalnızca
      * "dondu" görüyor, günlükte hiçbir iz kalmıyordu. Donmanın sebebini
@@ -483,29 +489,8 @@ object PlayerHolder {
                     "${loadEventInfo.uri.host}): ${error.javaClass.simpleName}: ${error.message}"
             )
         }
-
-        override fun onLoadCompleted(
-            eventTime: AnalyticsListener.EventTime,
-            loadEventInfo: LoadEventInfo,
-            mediaLoadData: MediaLoadData
-        ) {
-            // Süre tek başına ölçü değil: bütün videoyu tek istekte indirmek
-            // hızlı ağda da onlarca saniye sürüyor. Yalnızca hız gerçekten
-            // düşükse yazılıyor.
-            if (loadEventInfo.loadDurationMs < SLOW_LOAD_MS) return
-            val kbps = loadEventInfo.bytesLoaded * 8 / loadEventInfo.loadDurationMs
-            if (kbps >= SLOW_LOAD_KBPS) return
-            Tanilama.olay(
-                TAG,
-                "Yavaş yükleme (tür=${mediaLoadData.trackType}): " +
-                    "${loadEventInfo.bytesLoaded / 1024} KB / ${loadEventInfo.loadDurationMs} ms " +
-                    "(${loadEventInfo.bytesLoaded * 8 / loadEventInfo.loadDurationMs} kbps)"
-            )
-        }
     }
 
-    private const val SLOW_LOAD_MS = 5_000L
-    private const val SLOW_LOAD_KBPS = 1_000L
 
     /** Süren bekleme (yükleniyor) başlangıcı; yoksa 0. */
     private var bufferingSince = 0L

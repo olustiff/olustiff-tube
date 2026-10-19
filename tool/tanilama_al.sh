@@ -26,6 +26,7 @@ echo "== özet =="
 echo "beklemeler (3 sn+): $(grep -c 'Bekleme ' "$HEDEF/hepsi.log" || true)"
 echo "ağ beklemeleri    : $(grep -c 'ağ bekleniyor' "$HEDEF/hepsi.log" || true)"
 echo "takılma bekçisi   : $(grep -c 'Takılma:' "$HEDEF/hepsi.log" || true)"
+echo "ses çıkışı kopması: $(grep -c 'Ses çıkışı koptu' "$HEDEF/hepsi.log" || true)"
 echo "oynatıcı hataları : $(grep -c 'Oynatıcı hatası' "$HEDEF/hepsi.log" || true)"
 echo "açılamayan parça  : $(grep -c 'Parça açılamadı' "$HEDEF/hepsi.log" || true)"
 echo
