@@ -2,6 +2,8 @@ package com.olustiff.app.player
 
 import android.content.Context
 import com.olustiff.app.diag.Tanilama
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -11,6 +13,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -25,6 +28,8 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import com.olustiff.app.extractor.ExtractionService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -486,8 +491,49 @@ object PlayerHolder {
                 TAG,
                 "Yükleme hatası (tür=${mediaLoadData.trackType}, " +
                     "${loadEventInfo.loadDurationMs} ms, " +
-                    "${loadEventInfo.uri.host}): ${error.javaClass.simpleName}: ${error.message}"
+                    "${loadEventInfo.uri.host}): ${error.javaClass.simpleName}: ${error.message}" +
+                    if (isForbidden(error)) forbiddenContext(eventTime) else ""
             )
+        }
+    }
+
+    private fun isForbidden(error: IOException) =
+        (error as? HttpDataSource.InvalidResponseCodeException)?.responseCode == 403
+
+    /**
+     * 403'ün SEBEBİNİ ayırt etmeye yarayan bağlam. Üç şüpheli var:
+     * adresin süresi dolmuş (uzun duraklatma), ağ değişmiş (adres IP'ye
+     * bağlı), ya da YouTube adresi parçanın ortasında reddetmiş.
+     */
+    private fun forbiddenContext(eventTime: AnalyticsListener.EventTime): String {
+        val ageMin = (android.os.SystemClock.elapsedRealtime() - requestAt) / 60_000
+        val expire = currentRequest?.audioUrl
+            ?.let { runCatching { Uri.parse(it).getQueryParameter("expire")?.toLong() }.getOrNull() }
+        val expired = expire?.let { if (System.currentTimeMillis() / 1000 > it) "evet" else "hayır" } ?: "?"
+        val netChanged = connectivity?.let {
+            if (it.activeNetwork == requestNetwork) "hayır" else "evet"
+        } ?: "?"
+        return " | konum ${eventTime.currentPlaybackPositionMs / 1000} sn, adres $ageMin dk önce " +
+            "alındı, süresi doldu: $expired, ağ değişti: $netChanged"
+    }
+
+    /** Adresin alındığı an ve ağ; 403 bağlamı için (bkz. [forbiddenContext]). */
+    private var requestAt = 0L
+    private var requestNetwork: Network? = null
+    private var connectivity: ConnectivityManager? = null
+
+    /**
+     * 403'ü YENİDEN DENEMEYEN hata politikası.
+     *
+     * Reddedilmiş adres tekrar denenince de reddediliyor; oynatıcı yine de
+     * 4 kez deniyordu (günlükte her 403 dörtlü geliyor) ve bu ~3.5 sn
+     * boşa bekleme demekti. Hemen hata verince [PlaybackController] adresi
+     * tazeleyip kaldığı yerden sürdürüyor.
+     */
+    private val loadErrorPolicy: LoadErrorHandlingPolicy = object : DefaultLoadErrorHandlingPolicy() {
+        override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+            if (isForbidden(loadErrorInfo.exception)) return C.TIME_UNSET
+            return super.getRetryDelayMsFor(loadErrorInfo)
         }
     }
 
@@ -678,6 +724,7 @@ object PlayerHolder {
         val item = PlaybackQueue.current() ?: return
         val position = exoPlayer?.currentPosition ?: 0L
         val wasPlaying = exoPlayer?.playWhenReady ?: true
+        val startedAt = android.os.SystemClock.elapsedRealtime()
         val info = withContext(Dispatchers.IO) {
             // Önbellekteki kayıt tam da reddedilen adresleri taşıyor;
             // silinmezse "yenileme" aynı adresi yeniden açardı.
@@ -702,6 +749,11 @@ object PlayerHolder {
         if (position > 0 && !selection.isLive) exoPlayer?.seekTo(position)
         // Kullanıcı duraklatmışken gelen hata, oynatmayı kendiliğinden başlatmasın.
         exoPlayer?.playWhenReady = wasPlaying && !outputLost
+        Tanilama.olay(
+            TAG,
+            "Adres tazelendi, ${position / 1000}. saniyeden sürüyor " +
+                "(${android.os.SystemClock.elapsedRealtime() - startedAt} ms, ${item.videoId})"
+        )
     }
 
     /** Duraklatılmış oynatmayı sürdürür; yüklü medya yoksa hiçbir şey yapmaz. */
@@ -748,6 +800,9 @@ object PlayerHolder {
         playGeneration++
         logStreamOrigin(request)
         currentRequest = request
+        requestAt = android.os.SystemClock.elapsedRealtime()
+        connectivity = context.getSystemService(ConnectivityManager::class.java)
+        requestNetwork = connectivity?.activeNetwork
         audioOnlyMode = audioOnly
         adaptiveQuality = !audioOnly && DashManifestBuilder.isManifest(request.videoUrl)
         // Yeni medya: eski karenin "yeni video" sanılmaması için bayrak sıfırlanır.
@@ -932,7 +987,9 @@ object PlayerHolder {
 
         val videoUrl = request.videoUrl.takeUnless { audioOnly }
 
-        val audioSource = ProgressiveMediaSource.Factory(factory).createMediaSource(
+        val audioSource = ProgressiveMediaSource.Factory(factory)
+            .setLoadErrorHandlingPolicy(loadErrorPolicy)
+            .createMediaSource(
             MediaItem.Builder()
                 .setUri(request.audioUrl)
                 // Bildirimde gösterilecek meta veriyi tek bir kaynağa bağlıyoruz;
@@ -949,7 +1006,9 @@ object PlayerHolder {
         val videoSource = if (DashManifestBuilder.isManifest(videoUrl)) {
             dashSource(factory, videoUrl, metadata) ?: return audioSource
         } else {
-            ProgressiveMediaSource.Factory(factory).createMediaSource(
+            ProgressiveMediaSource.Factory(factory)
+                .setLoadErrorHandlingPolicy(loadErrorPolicy)
+                .createMediaSource(
                 MediaItem.Builder().setUri(videoUrl).setMediaMetadata(metadata).build()
             )
         }
