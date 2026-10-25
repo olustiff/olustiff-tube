@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -28,7 +30,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _feed = HomeFeed();
   final _library = LibraryStore.instance;
 
@@ -44,10 +46,19 @@ class _HomeScreenState extends State<HomeScreen> {
   /// akışın yenilenmesi gerektiğini buradan anlıyoruz.
   List<String> _feedSeeds = const [];
 
+  /// Son yükleme ağ yüzünden başarısız oldu; yeniden denenecek.
+  bool _failed = false;
+  int _retries = 0;
+  Timer? _retryTimer;
+
   @override
   void initState() {
     super.initState();
+    // Önce son başarılı liste: açılışta internet yoksa ana sayfa boş kalmasın.
+    _videos = _library.feedCache;
+    _feedSeeds = _feed.seeds();
     _library.addListener(_onLibraryChanged);
+    WidgetsBinding.instance.addObserver(this);
     _load();
 
     // Güncelleme denetimi açılışı geciktirmesin: ilk kare çizildikten sonra
@@ -59,6 +70,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _library.removeListener(_onLibraryChanged);
     _searchFocus.dispose();
     super.dispose();
@@ -74,7 +87,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (changed) _load();
   }
 
+  /// Uygulamaya geri dönülünce başarısız kalmış akışı hemen yeniden dene.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _failed && !_loading) {
+      _retries = 0;
+      _load();
+    }
+  }
+
   Future<void> _load() async {
+    if (_loading) return;
+    _retryTimer?.cancel();
     setState(() {
       _loading = true;
       _error = null;
@@ -83,19 +107,38 @@ class _HomeScreenState extends State<HomeScreen> {
       final seeds = _feed.seeds();
       final videos = await _feed.load();
       if (!mounted) return;
+      if (videos.isNotEmpty) unawaited(_library.saveFeedCache(videos));
       setState(() {
         _videos = videos;
         _feedSeeds = seeds;
         _loading = false;
+        _failed = false;
+        _retries = 0;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e;
+        // Önbellekten gösterilen liste varsa hata ekranı yerine o kalıyor.
+        if (_videos.isEmpty) _error = e;
         _loading = false;
+        _failed = true;
       });
+      _scheduleRetry();
     }
   }
+
+  /// İnternet gelince kullanıcı bir şey yapmadan dolsun: artan aralıklarla
+  /// (15 sn, 30 sn, … en çok 2 dk) birkaç kez yeniden dener.
+  void _scheduleRetry() {
+    if (_retries >= _maxRetries) return;
+    _retries++;
+    final seconds = (15 * _retries).clamp(15, 120);
+    _retryTimer = Timer(Duration(seconds: seconds), () {
+      if (mounted && _failed) _load();
+    });
+  }
+
+  static const _maxRetries = 8;
 
   List<VideoSummary> get _currentList =>
       _tab == HomeTab.forYou ? _videos : _library.mostPlayed;

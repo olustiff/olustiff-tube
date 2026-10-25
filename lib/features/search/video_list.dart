@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/extraction/models.dart';
@@ -134,7 +136,7 @@ class VideoTile extends StatelessWidget {
           child: video.thumbnailUrl == null
               ? Container(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest)
-              : Image.network(video.thumbnailUrl!, fit: BoxFit.cover),
+              : _Thumbnail(url: video.thumbnailUrl!),
         ),
       ),
       title: Text(video.title, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -217,6 +219,59 @@ class _FocusHighlightState extends State<_FocusHighlight> {
         ),
         child: widget.child,
       ),
+    );
+  }
+}
+
+/// Küçük resim; yüklenemezse bir süre sonra YENİDEN dener.
+///
+/// İnternetsiz açılışta ana sayfa önbellekten gösteriliyor ve resimler
+/// yüklenemiyor. Düz `Image.network` bir kez başarısız olunca o satır için
+/// bir daha denemiyordu: internet gelse de resim boş kalıyordu.
+class _Thumbnail extends StatefulWidget {
+  const _Thumbnail({required this.url});
+
+  final String url;
+
+  @override
+  State<_Thumbnail> createState() => _ThumbnailState();
+}
+
+class _ThumbnailState extends State<_Thumbnail> {
+  int _attempt = 0;
+  Timer? _retry;
+
+  static const _maxAttempts = 6;
+  static const _retryDelay = Duration(seconds: 10);
+
+  @override
+  void dispose() {
+    _retry?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleRetry() {
+    if (_retry != null || _attempt >= _maxAttempts) return;
+    _retry = Timer(_retryDelay, () {
+      _retry = null;
+      if (!mounted) return;
+      NetworkImage(widget.url).evict();
+      setState(() => _attempt++);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      widget.url,
+      key: ValueKey(_attempt),
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        _scheduleRetry();
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        );
+      },
     );
   }
 }

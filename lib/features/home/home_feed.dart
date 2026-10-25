@@ -58,17 +58,23 @@ class HomeFeed {
     // bekleniyordu. Paralelde süre en yavaş isteğinkine iniyor.
     //
     // `Future.wait` sırayı koruyor; serpiştirme buna dayandığı için şart.
+    Object? lastError;
     final pages = await Future.wait(
       seedList.map((seed) async {
         try {
           return (await _client.search(seed, keepSession: false)).items;
-        } catch (_) {
+        } catch (e) {
           // Tek bir tohum başarısız olursa akışın tamamı çökmesin.
+          lastError = e;
           return const <VideoSummary>[];
         }
       }),
     );
     final results = pages.where((page) => page.isNotEmpty).toList();
+    // HEPSİ hata verdiyse bu "öneri yok" değil, "ulaşılamadı": boş liste
+    // döndürmek ana sayfayı sessizce boş bırakıyordu (açılışta internet
+    // yokken). Hata fırlatılınca ekran önbelleği tutuyor ve yeniden deniyor.
+    if (results.isEmpty && lastError != null) throw lastError!;
     if (results.isEmpty) return const [];
 
     final watchedIds = _library.watched

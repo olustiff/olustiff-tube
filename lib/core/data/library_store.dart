@@ -20,6 +20,7 @@ class LibraryStore extends ChangeNotifier {
   static const _kPlaylists = 'playlists';
   static const _kPlayCounts = 'play_counts';
   static const _kPositions = 'watch_positions';
+  static const _kFeed = 'home_feed_cache';
 
   static const _maxSearches = 40;
   static const _maxWatched = 200;
@@ -41,6 +42,20 @@ class LibraryStore extends ChangeNotifier {
   /// gömülü olsaydı her konum yazımı geçmişi de yeniden yazardı.
   Map<String, int> _positions = {};
   Map<String, List<VideoSummary>> _playlists = {};
+
+  /// Ana sayfanın ("Sana özel") son BAŞARILI hali.
+  ///
+  /// Akış her açılışta YouTube'da arama yapılarak üretiliyor; açılış anında
+  /// internet yoksa ya da zayıfsa (araba, tünel) ana sayfa bomboş
+  /// kalıyordu. Son liste saklanıp önce o gösteriliyor, yenisi gelince
+  /// yerine geçiyor.
+  List<VideoSummary> _feedCache = [];
+  List<VideoSummary> get feedCache => List.unmodifiable(_feedCache);
+
+  Future<void> saveFeedCache(List<VideoSummary> videos) async {
+    _feedCache = List.of(videos);
+    await _prefs?.setString(_kFeed, _encodeVideos(_feedCache));
+  }
 
   List<String> get searches => List.unmodifiable(_searches);
   List<VideoSummary> get watched => List.unmodifiable(_watched);
@@ -95,6 +110,12 @@ class LibraryStore extends ChangeNotifier {
 
     _searches = prefs.getStringList(_kSearches) ?? [];
     _watched = _decodeVideos(prefs.getString(_kWatched));
+    // Bozuk önbellek açılışı engellemesin; yalnızca öneri listesi.
+    try {
+      _feedCache = _decodeVideos(prefs.getString(_kFeed));
+    } catch (_) {
+      _feedCache = [];
+    }
 
     final rawCounts = prefs.getString(_kPlayCounts);
     if (rawCounts != null) {
@@ -145,6 +166,10 @@ class LibraryStore extends ChangeNotifier {
   Future<void> clearSearches() async {
     _searches = [];
     await _prefs?.setStringList(_kSearches, _searches);
+    // "Ana sayfa önerileri de sıfırlanır": eski aramaların sonuçları
+    // önbellekten de gelmesin.
+    _feedCache = [];
+    await _prefs?.remove(_kFeed);
     notifyListeners();
   }
 
