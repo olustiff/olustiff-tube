@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Oynatma sorunlarının KALICI günlüğü.
@@ -87,6 +88,37 @@ object Tanilama {
             append('\n')
         }
         writer.execute { append(target, line) }
+    }
+
+    /**
+     * Paylaşılmak üzere tek dosya hazırlar: önce eski, sonra güncel günlük,
+     * başında sürüm ve cihaz bilgisi. Kullanıcı telefonu bilgisayara
+     * takmadan günlüğü gönderebilsin diye (Ayarlar → Tanılama kaydı).
+     *
+     * Yazma kuyruğundaki satırlar da dahil olsun diye iş aynı yazıcı
+     * iş parçacığında yapılıyor. Günlük boşsa null.
+     */
+    fun exportFile(context: Context): File? {
+        val target = dir ?: return null
+        val app = context.applicationContext
+        val version = runCatching {
+            app.packageManager.getPackageInfo(app.packageName, 0).versionName
+        }.getOrNull()
+        return runCatching {
+            writer.submit<File?> {
+                val parts = listOf(File(target, OLD_FILE_NAME), File(target, FILE_NAME))
+                    .filter { it.exists() && it.length() > 0 }
+                if (parts.isEmpty()) return@submit null
+                val out = File(app.cacheDir, "olustiff-tanilama.txt")
+                out.writeText(
+                    "oLusTifF $version • Android ${android.os.Build.VERSION.RELEASE} • " +
+                        "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
+                        "Hazırlandı: ${timeFormat.format(Date())}\n\n"
+                )
+                parts.forEach { out.appendText(it.readText()) }
+                out
+            }.get(5, TimeUnit.SECONDS)
+        }.getOrNull()
     }
 
     private fun append(target: File, line: String) {

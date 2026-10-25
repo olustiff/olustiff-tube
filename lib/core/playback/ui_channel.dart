@@ -40,6 +40,11 @@ class UiChannel {
   Future<void> setCastVolumeKeys(bool enabled) =>
       _channel.invokeMethod<void>('setCastVolumeKeys', {'enabled': enabled});
 
+  /// Oynatma tanılama günlüğünü paylaşılabilir tek dosyada toplar; yolunu
+  /// döndürür. Henüz kayıt yoksa null.
+  Future<String?> diagnosticsFile() =>
+      _channel.invokeMethod<String>('diagnosticsFile');
+
   /// Video izlenirken ekranın kapanmasını engeller. Sesli modda kapatılır ki
   /// telefon normal şekilde uyuyabilsin.
   Future<void> setKeepScreenOn(bool enabled) =>

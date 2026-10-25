@@ -162,6 +162,9 @@ class MainActivity : FlutterActivity() {
 
                 "enterPictureInPicture" -> result.success(enterPip())
 
+                // Ayarlardaki "Tanılama kaydını paylaş": paylaşılacak dosyanın yolu.
+                "diagnosticsFile" -> result.success(Tanilama.exportFile(this)?.absolutePath)
+
                 // Yayın açıkken telefonun fiziksel ses tuşları TELEVİZYONUN
                 // sesini değiştirmeli: ses oradan geliyor, kullanıcının ilk
                 // refleksi telefonun yan tuşuna basmak oluyor.

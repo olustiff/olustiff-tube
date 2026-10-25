@@ -6,6 +6,7 @@ import '../../core/playback/playback_client.dart';
 import '../../core/ui/tv_mode.dart';
 import 'bluetooth_setting.dart';
 import 'cast_receiver_setting.dart';
+import 'diagnostics_tile.dart';
 import 'feedback_tile.dart';
 import 'update_section.dart';
 
@@ -122,6 +123,7 @@ class SettingsScreen extends StatelessWidget {
               const _SectionHeader('Uygulama'),
               const UpdateSection(),
               const FeedbackTile(),
+              const DiagnosticsTile(),
               const Divider(),
               const _SectionHeader('Veriler'),
               ListTile(
