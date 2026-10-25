@@ -217,9 +217,24 @@ object PlayerHolder {
                     }
                 }
 
+                // Kaynak/ağ hatasından KENDİLİĞİNDEN çıkılmıyor: oynatıcı
+                // `ERROR` durumunda kalıyor, kullanıcı "dondu" görüyor.
+                // YouTube akış adresini ara ara reddediyor (403); çare adresi
+                // tazelemek. Burada, çünkü bu dinleyici HER ZAMAN takılı —
+                // arayüzünki yalnızca uygulama açıkken.
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    Tanilama.olay(
+                        TAG,
+                        "Oynatıcı hatası ${error.errorCodeName} (${PlaybackQueue.current()?.videoId})",
+                        error.cause
+                    )
+                    if (!recovery.isRefreshable(error.errorCode)) return
+                    requestRefresh(appContext, "Oynatıcı hatası ${error.errorCodeName}")
+                }
+
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     trackBuffering(player, playbackState)
-                    if (playbackState == Player.STATE_READY) stallWatch.reset()
+                    if (playbackState == Player.STATE_READY) recovery.onReady()
                     if (playbackState != Player.STATE_ENDED) return
                     if (!PlaybackQueue.autoplay || advancing) return
                     advancing = true
@@ -257,9 +272,6 @@ object PlayerHolder {
                 Tanilama.olay(TAG, "Oynatma işi başarısız", e)
             }
     )
-
-    /** Kuyrukta art arda kaç parça denenecek. */
-    private const val MAX_ADVANCE_ATTEMPTS = 3
 
     private const val TAG = "OlustiffPlayer"
 
@@ -326,7 +338,7 @@ object PlayerHolder {
      * donup kalıyor" demek.
      *
      * Artık başarısız parça kuyruğu bitirmiyor: bir sonraki denenıyor.
-     * [MAX_ADVANCE_ATTEMPTS] ile sınırlı, çünkü ağ tamamen yoksa kuyruğun
+     * Sınırlı (bkz. [RecoveryPolicy.onOpenFailure]), çünkü ağ tamamen yoksa kuyruğun
      * tamamını tek tek denemek yalnızca pili yakar.
      */
     suspend fun playNext(context: Context, manual: Boolean = true) {
@@ -357,9 +369,9 @@ object PlayerHolder {
         // ikisi birden ağ gelince parça açmaya çalışmasın.
         val generation = ++playGeneration
         var networkRetries = 0
-        var attempts = 0
+        var skips = 0
         var item = nextItem() ?: return
-        while (attempts < MAX_ADVANCE_ATTEMPTS) {
+        while (true) {
             try {
                 playQueueItem(context, item)
                 return
@@ -367,26 +379,29 @@ object PlayerHolder {
                 // İptal bir hata değil: yeni bir oynatma isteği geldi.
                 throw e
             } catch (e: Exception) {
-                // AĞ HATASINDA PARÇA ATLANMIYOR. Cihazda kalıcı günlükle
-                // görüldü: ağ geçiş anında koptuğunda üç parça aynı saniyede
-                // denenip "açılabilen parça yok" deniyor, müzik duruyor ve ağ
-                // geri gelince de başlamıyordu (arabada tünel, çekmeyen yol).
-                // Ağ yoksa sıradaki parça da açılmaz; atlamak yalnızca
-                // şarkı kaybettirir. Ağ beklenip AYNI parça yeniden deneniyor.
-                if (isNetworkError(e) && networkRetries < MAX_NETWORK_RETRIES) {
-                    networkRetries++
-                    Tanilama.olay(TAG, "Ağ hatası, ağ bekleniyor: ${item.videoId}", e)
-                    if (!waitForNetwork(context, generation)) return
-                    Tanilama.olay(TAG, "Ağ geri geldi, yeniden deneniyor: ${item.videoId}")
-                    continue
+                val network = RecoveryPolicy.isNetworkError(e)
+                when (recovery.onOpenFailure(network, networkRetries, skips)) {
+                    RecoveryPolicy.OpenFailure.WAIT_FOR_NETWORK -> {
+                        networkRetries++
+                        Tanilama.olay(TAG, "Ağ hatası, ağ bekleniyor: ${item.videoId}", e)
+                        if (!waitForNetwork(context, generation)) return
+                        Tanilama.olay(TAG, "Ağ geri geldi, yeniden deneniyor: ${item.videoId}")
+                    }
+                    RecoveryPolicy.OpenFailure.SKIP -> {
+                        skips++
+                        networkRetries = 0
+                        Tanilama.olay(TAG, "Parça açılamadı, sıradakine geçiliyor: ${item.videoId}", e)
+                        if (generation != playGeneration) return
+                        item = nextItem() ?: return
+                    }
+                    RecoveryPolicy.OpenFailure.GIVE_UP -> {
+                        Tanilama.olay(TAG, "Parça açılamadı: ${item.videoId}", e)
+                        Tanilama.olay(TAG, "Kuyrukta açılabilen parça bulunamadı")
+                        return
+                    }
                 }
-                attempts++
-                Tanilama.olay(TAG, "Parça açılamadı, sıradakine geçiliyor: ${item.videoId}", e)
-                if (generation != playGeneration) return
-                item = nextItem() ?: return
             }
         }
-        Tanilama.olay(TAG, "Kuyrukta açılabilen parça bulunamadı")
     }
 
     /**
@@ -398,45 +413,30 @@ object PlayerHolder {
     private var playGeneration = 0
 
     /**
-     * Ses çıkışı (Bluetooth/kulaklık) koptu ve kullanıcı o zamandan beri
-     * hiçbir şeye basmadı.
-     *
-     * Kilitliyken HİÇBİR otomatik mekanizma (odak dönüşü, ağ geri gelince
-     * yeniden deneme, takılma bekçisi, adres tazeleme, sıradaki parça) sesi
-     * başlatamıyor. Gerçek kullanımda görülen: arabanın Bluetooth'u koptu,
-     * müzik TELEFONUN HOPARLÖRÜNDEN çalmaya devam etti. Sebep: araba
-     * koparken önce ses odağını kısa süreliğine alıyor (oynatıcı "geçici
-     * kesinti" deyip duruyor), sonra Bluetooth kopuyor, odak telefona dönünce
-     * "kesinti bitti" sanılıp çalma yeniden başlatılıyordu. Oynatıcının kendi
-     * "kulaklık çıktı" koruması yalnızca ÇALARKEN dinlediği için o anda
-     * devrede değildi.
-     *
-     * Kilidi yalnızca kullanıcının bir komutu ([userIntent]) ya da Bluetooth'un
-     * yeniden bağlanması açıyor.
+     * Kurtarma kararlarının TEK sahibi: çıkış kilidi, tazeleme hakkı,
+     * takılma ölçümü, açılamayan parçada ne yapılacağı (bkz. [RecoveryPolicy]).
      */
-    @Volatile
-    var outputLost = false
-        private set
+    private val recovery = RecoveryPolicy(stallLimitMs = STALL_LIMIT_MS)
+
+    /** Oynatıcı hatası adres tazelemeyle düzelir mi (bkz. [RecoveryPolicy.isRefreshable]). */
+    fun isRefreshable(errorCode: Int): Boolean = recovery.isRefreshable(errorCode)
+
+    /** Ses çıkışı koptu ve kullanıcı o zamandan beri bir şeye basmadı (bkz. [RecoveryPolicy.outputLost]). */
+    val outputLost: Boolean
+        get() = recovery.outputLost
 
     /** Çıkış koptu: duraklat ve otomatik başlatmayı kilitle. */
     fun onOutputLost(reason: String) {
         val wasPlaying = exoPlayer?.playWhenReady == true
-        // İki kaynak (sistem yayını + cihaz listesi) aynı kopmayı bildirebiliyor.
-        if (outputLost && !wasPlaying) return
-        outputLost = true
+        if (!recovery.onOutputLost(wasPlaying)) return
         exoPlayer?.playWhenReady = false
         Tanilama.olay(TAG, "Ses çıkışı koptu ($reason), ${if (wasPlaying) "duraklatıldı" else "zaten duruyordu"}; otomatik başlatma kilitli")
     }
 
     /** Kullanıcı bilerek bir şey istedi: çıkış kilidi kalkar. */
     fun userIntent() {
-        if (!outputLost) return
-        outputLost = false
-        Tanilama.olay(TAG, "Kullanıcı komutu, çıkış kilidi kalktı")
+        if (recovery.onUserIntent()) Tanilama.olay(TAG, "Kullanıcı komutu, çıkış kilidi kalktı")
     }
-
-    private fun isNetworkError(e: Throwable): Boolean =
-        generateSequence(e) { it.cause }.take(8).any { it is IOException }
 
     /**
      * İnternet gelene kadar bekler (en fazla [NETWORK_WAIT_MS]).
@@ -462,7 +462,6 @@ object PlayerHolder {
         return false
     }
 
-    private const val MAX_NETWORK_RETRIES = 5
     private const val NETWORK_WAIT_MS = 5 * 60_000L
     private const val NETWORK_POLL_MS = 2_000L
 
@@ -631,20 +630,11 @@ object PlayerHolder {
     private val stallWatch = object : Runnable {
         private val handler = android.os.Handler(android.os.Looper.getMainLooper())
         private var context: Context? = null
-        private var lastBuffered = -1L
-        private var stuckSince = 0L
-        private var recoveredFor: String? = null
 
         fun start(appContext: Context) {
             context = appContext
             handler.removeCallbacks(this)
             handler.postDelayed(this, STALL_CHECK_MS)
-        }
-
-        /** Parça akmaya başladı: bir sonraki takılmada yeniden deneme hakkı var. */
-        fun reset() {
-            recoveredFor = null
-            stuckSince = 0L
         }
 
         override fun run() {
@@ -653,35 +643,55 @@ object PlayerHolder {
             val waiting = player.playWhenReady &&
                 player.playbackState == Player.STATE_BUFFERING &&
                 currentRequest != null
-            if (!waiting) {
-                stuckSince = 0L
-                return
-            }
-            val buffered = player.bufferedPosition
             val now = android.os.SystemClock.elapsedRealtime()
-            if (buffered != lastBuffered || stuckSince == 0L) {
-                lastBuffered = buffered
-                stuckSince = now
-                return
-            }
-            if (now - stuckSince < STALL_LIMIT_MS) return
-
-            val videoId = PlaybackQueue.current()?.videoId ?: return
-            if (recoveredFor == videoId) return
-            recoveredFor = videoId
-            stuckSince = 0L
-            Tanilama.olay(TAG, "Takılma: ${STALL_LIMIT_MS / 1000} sn ilerleme yok, adres tazeleniyor ($videoId)")
+            if (!recovery.observeStall(now, waiting, player.bufferedPosition)) return
             val ctx = context ?: return
-            scope.launch {
+            requestRefresh(ctx, "Takılma: ${STALL_LIMIT_MS / 1000} sn ilerleme yok")
+        }
+    }
+
+    /**
+     * Çalan parçanın adreslerini tazeler — oynatıcı hatası ve takılma
+     * bekçisinin ORTAK yolu.
+     *
+     * Parça başına bir hak ([RecoveryPolicy.claimRefresh]); ikisi aynı
+     * parçayı ayrı ayrı tazelemiyor. Tazeleme AĞ yüzünden başarısız olursa
+     * vazgeçilmiyor: ağ beklenip yeniden deneniyor. Önceden "kurtarılamadı"
+     * deyip bırakılıyordu ve zayıf çekimde (günlükte 22 Ekim) parça takılı
+     * kalıyordu.
+     *
+     * @return tazeleme başlatıldı mı (hak kullanılmışsa false)
+     */
+    fun requestRefresh(context: Context, reason: String): Boolean {
+        val videoId = PlaybackQueue.current()?.videoId ?: return false
+        if (!recovery.claimRefresh(videoId)) return false
+        Tanilama.olay(TAG, "$reason, adres tazeleniyor ($videoId)")
+        val generation = playGeneration
+        scope.launch {
+            var networkRetries = 0
+            while (true) {
+                // Bu arada başka parçaya geçildiyse eski parçayı açmamalı.
+                if (generation != playGeneration || PlaybackQueue.current()?.videoId != videoId) return@launch
                 try {
-                    recoverCurrent(ctx)
+                    recoverCurrent(context)
+                    return@launch
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Tanilama.olay(TAG, "Takılmadan kurtarılamadı", e)
+                    val network = RecoveryPolicy.isNetworkError(e)
+                    if (recovery.onOpenFailure(network, networkRetries, skips = 0) !=
+                        RecoveryPolicy.OpenFailure.WAIT_FOR_NETWORK
+                    ) {
+                        Tanilama.olay(TAG, "Adres tazelenemedi ($videoId)", e)
+                        return@launch
+                    }
+                    networkRetries++
+                    Tanilama.olay(TAG, "Tazeleme için ağ bekleniyor ($videoId)", e)
+                    if (!waitForNetwork(context, generation)) return@launch
                 }
             }
         }
+        return true
     }
 
     private const val STALL_CHECK_MS = 2_000L
@@ -748,7 +758,7 @@ object PlayerHolder {
         )
         if (position > 0 && !selection.isLive) exoPlayer?.seekTo(position)
         // Kullanıcı duraklatmışken gelen hata, oynatmayı kendiliğinden başlatmasın.
-        exoPlayer?.playWhenReady = wasPlaying && !outputLost
+        exoPlayer?.playWhenReady = recovery.mayAutoStart(wasPlaying)
         Tanilama.olay(
             TAG,
             "Adres tazelendi, ${position / 1000}. saniyeden sürüyor " +
@@ -760,7 +770,7 @@ object PlayerHolder {
     fun resume() {
         if (currentRequest == null) return
         // Çağıranlar: Bluetooth yeniden bağlandı ya da kullanıcı istedi.
-        outputLost = false
+        recovery.onOutputRestored()
         exoPlayer?.playWhenReady = true
     }
 
@@ -816,7 +826,7 @@ object PlayerHolder {
         audioFocus?.request()
         // Çıkış koptuysa (bkz. [outputLost]) parça hazırlanır ama SESSİZ
         // bekler; kullanıcı komutları kilidi önceden kaldırıyor.
-        player.playWhenReady = !outputLost
+        player.playWhenReady = recovery.mayAutoStart()
     }
 
     /**
@@ -914,7 +924,7 @@ object PlayerHolder {
         audioFocus?.request()
         // Çıkış koptuysa (bkz. [outputLost]) parça hazırlanır ama SESSİZ
         // bekler; kullanıcı komutları kilidi önceden kaldırıyor.
-        player.playWhenReady = !outputLost
+        player.playWhenReady = recovery.mayAutoStart()
     }
 
     /**

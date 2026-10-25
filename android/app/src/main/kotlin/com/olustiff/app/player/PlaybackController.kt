@@ -46,9 +46,6 @@ class PlaybackController(
 
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            // Kurtarılan parça gerçekten çalmaya başladıysa bir sonraki
-            // hatada yeniden denemeye hakkı var.
-            if (playbackState == Player.STATE_READY) recoveredVideoId = null
             emitState()
         }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = emitState()
@@ -56,42 +53,10 @@ class PlaybackController(
 
         override fun onPlayerError(error: PlaybackException) {
             eventSink?.error("PLAYBACK_ERROR", error.message, error.errorCodeName)
-            Tanilama.olay(
-                TAG,
-                "Oynatıcı hatası ${error.errorCodeName} " +
-                    "(${PlaybackQueue.current()?.videoId})",
-                error.cause
-            )
-
-            // Kaynak/ağ hatasından KENDİLİĞİNDEN çıkılmıyordu: oynatıcı
-            // `ERROR` durumunda kalıyor, hiçbir şey çalmıyor ve kullanıcı
-            // bunu "uygulama dondu" olarak görüyor. YouTube'un akış adresleri
-            // bir süre sonra reddediliyor; tek çare adresi yenilemek.
-            //
-            // Yalnızca IO hataları için ve BİR KEZ: kod çözücü hatasında ya
-            // da adres gerçekten ölmüşse tekrar denemek sonsuz döngü olurdu.
-            val recoverable = error.errorCode in
-                PlaybackException.ERROR_CODE_IO_UNSPECIFIED..
-                PlaybackException.ERROR_CODE_IO_NO_PERMISSION
-            if (!recoverable) return
-            val videoId = PlaybackQueue.current()?.videoId ?: return
-            // Parça başına tek deneme: kurtarılan adres de hata verirse
-            // (video gerçekten açılamıyorsa) yeniden denemek sonsuz döngü.
-            // Hak, parça READY olunca ya da başka parçaya geçilince yenilenir.
-            if (recoveredVideoId == videoId) return
-            recoveredVideoId = videoId
-            scope.launch {
-                try {
-                    PlayerHolder.recoverCurrent(context)
-                } catch (e: Exception) {
-                    Tanilama.olay(TAG, "Oynatma kurtarılamadı", e)
-                }
-            }
+            // Günlüğe yazma ve kurtarma PlayerHolder'da: bu dinleyici yalnızca
+            // arayüz bağlıyken takılı, kurtarma ise ekran kapalıyken de lazım.
         }
     }
-
-    /** Son kurtarma denenen parça; aynı hatada döngüye girmeyi engelliyor. */
-    private var recoveredVideoId: String? = null
 
     init {
         methodChannel.setMethodCallHandler { call, result -> handleMethod(call, result) }

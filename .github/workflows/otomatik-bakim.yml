@@ -102,17 +102,18 @@ jobs:
           flutter pub get
           flutter test
 
-      - name: Canlı çözümleyici testi (gerçek YouTube)
+      - name: Kotlin testleri (oynatıcı kurtarma + gerçek YouTube'a canlı test)
         working-directory: android
         env:
           LIVE_EXTRACTOR_TEST: "1"
         run: |
           # Gradle sarmalayıcısı Flutter'ın ürettiği ayarlara ihtiyaç duyuyor.
           (cd .. && flutter build apk --config-only)
-          ./gradlew :app:testReleaseUnitTest --tests '*LiveExtractorTest*'
+          # Hepsi: kurtarma kuralları (RecoveryPolicyTest) da her yayından önce sınanıyor.
+          ./gradlew :app:testReleaseUnitTest
           # YouTube veri merkezi adreslerini çoğu zaman "bot" sanıp reddediyor;
           # test o durumda hata değil ATLAMA veriyor (bkz. LiveExtractorTest).
-          if grep -rqs 'skipped="1"' ../build/app/test-results/testReleaseUnitTest/; then
+          if grep -qs 'skipped="1"' ../build/app/test-results/testReleaseUnitTest/*LiveExtractorTest.xml; then
             echo "::warning::YouTube bu sunucuyu bot sandı; canlı test atlandı, yalnızca derleme ve birim testleri doğrulandı"
           fi
 
