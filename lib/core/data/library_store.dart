@@ -271,6 +271,10 @@ class LibraryStore extends ChangeNotifier {
     await _prefs?.setString(_kWatched, _encodeVideos(_watched));
     await _prefs?.setString(_kPlayCounts, jsonEncode(_playCounts));
     await _prefs?.setString(_kPositions, jsonEncode(_positions));
+    // Ana sayfa artık dinlenenlerden kuruluyor: silinen geçmişin benzerleri
+    // önbellekten de gelmesin.
+    _feedCache = [];
+    await _prefs?.remove(_kFeed);
     notifyListeners();
   }
 

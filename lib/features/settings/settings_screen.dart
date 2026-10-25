@@ -129,12 +129,12 @@ class SettingsScreen extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.history),
                 title: const Text('İzleme geçmişini temizle'),
+                subtitle: const Text('"Sana özel" önerileri de sıfırlanır.'),
                 onTap: () => LibraryStore.instance.clearWatched(),
               ),
               ListTile(
                 leading: const Icon(Icons.search_off),
                 title: const Text('Arama geçmişini temizle'),
-                subtitle: const Text('Ana sayfa önerileri de sıfırlanır.'),
                 onTap: () => LibraryStore.instance.clearSearches(),
               ),
             ],

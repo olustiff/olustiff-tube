@@ -42,9 +42,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Object? _error;
   HomeTab _tab = HomeTab.forYou;
 
-  /// Akışın hangi aramalardan üretildiği. Kullanıcı bir aramayı silince
-  /// akışın yenilenmesi gerektiğini buradan anlıyoruz.
-  List<String> _feedSeeds = const [];
+  /// Akışın hangi tohumlardan üretildiği. Kullanıcı geçmişi silince akışın
+  /// yenilenmesi gerektiğini buradan anlıyoruz.
+  List<FeedSeed> _feedSeeds = const [];
 
   /// Son yükleme ağ yüzünden başarısız oldu; yeniden denenecek.
   bool _failed = false;
@@ -77,14 +77,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// Arama geçmişi değişince akışı tazele: silinen bir aramanın sonuçları
-  /// ana sayfada kalmamalı.
+  /// Geçmiş silinince akışı tazele: silinen şeylerin benzerleri ana
+  /// sayfada kalmamalı. YENİ bir şarkı dinlemek akışı baştan kurdurmuyor —
+  /// her şarkıda liste kullanıcının elinde değişir ve beş çözümleme daha
+  /// yapılırdı; yeni dinlenenler bir sonraki açılışta akışa yansıyor.
   void _onLibraryChanged() {
     if (_loading) return;
-    final seeds = _feed.seeds();
-    final changed = seeds.length != _feedSeeds.length ||
-        !seeds.every(_feedSeeds.contains);
-    if (changed) _load();
+    final removed = _feedSeeds.any((seed) => !_feed.isStillInHistory(seed));
+    final firstHistory = _feedSeeds.isEmpty && _feed.seeds().isNotEmpty;
+    if (removed || firstHistory) _load();
   }
 
   /// Uygulamaya geri dönülünce başarısız kalmış akışı hemen yeniden dene.

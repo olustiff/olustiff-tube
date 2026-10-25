@@ -18,18 +18,51 @@ VideoSummary video(String id, String title, String uploader) =>
       'thumbnailUrl': null,
     });
 
-/// Ağ yerine elle verilen sonuçlar: tohum → sonuç, ya da hata.
+/// Ağ yerine elle verilen sonuçlar. Anahtar video kimliği (benzerleri) ya da
+/// arama metni; değer sonuç listesi ya da fırlatılacak hata.
 class _FakeClient extends ExtractionClient {
   _FakeClient(this.results);
 
   final Map<String, Object> results;
+  final requested = <String>[];
+
+  List<VideoSummary> _answer(String key) {
+    requested.add(key);
+    final r = results[key];
+    if (r is Exception) throw r;
+    return r as List<VideoSummary>? ?? const [];
+  }
 
   @override
-  Future<PagedVideos> search(String query, {bool keepSession = true}) async {
-    final r = results[query];
-    if (r is Exception) throw r;
-    return PagedVideos(items: r as List<VideoSummary>? ?? const [], hasMore: false);
-  }
+  Future<PagedVideos> search(String query, {bool keepSession = true}) async =>
+      PagedVideos(items: _answer(query), hasMore: false);
+
+  @override
+  Future<VideoDetails> videoDetails(String videoId) async =>
+      VideoDetails.fromMap({'videoId': videoId, 'title': ''})
+          .withRelated(_answer(videoId));
+}
+
+extension on VideoDetails {
+  VideoDetails withRelated(List<VideoSummary> related) => VideoDetails(
+        videoId: videoId,
+        title: title,
+        uploaderName: uploaderName,
+        uploaderUrl: uploaderUrl,
+        durationSeconds: durationSeconds,
+        viewCount: viewCount,
+        description: description,
+        category: category,
+        tags: tags,
+        isLive: isLive,
+        thumbnailUrl: thumbnailUrl,
+        hlsUrl: hlsUrl,
+        dashMpdUrl: dashMpdUrl,
+        videoStreams: videoStreams,
+        videoOnlyStreams: videoOnlyStreams,
+        audioStreams: audioStreams,
+        relatedItems: related,
+      );
 }
 
 void main() {
@@ -41,69 +74,120 @@ void main() {
     // LibraryStore bir singleton: testler arasında geçmiş sızmasın.
     await LibraryStore.instance.clearSearches();
     await LibraryStore.instance.clearWatched();
+    for (final v in LibraryStore.instance.favorites.toList()) {
+      await LibraryStore.instance.toggleFavorite(v);
+    }
   });
 
-  test('akış tohumları kullanıcının aramalarından gelir', () async {
+  test('akış DİNLENENLERDEN kurulur, aramalardan değil', () async {
     final store = LibraryStore.instance;
-    await store.recordSearch('selena gomez');
-    await store.recordSearch('sezen aksu');
-    // İzlenen videonun kanalı aramaya benzemiyor: derleme/VEVO kanalları
-    // ana sayfayı alakasız içerikle dolduruyordu.
-    await store.recordWatch(video('x', 'Bir şey', 'Various Artists - Topic'));
-    await store.recordWatch(video('x', 'Bir şey', 'Various Artists - Topic'));
+    await store.recordSearch('bir kez aranıp beğenilmeyen');
+    await store.recordWatch(video('d1', 'Dinlenen', 'Kanal'));
 
     final seeds = HomeFeed().seeds();
 
-    expect(seeds, contains('selena gomez'));
-    expect(seeds, contains('sezen aksu'));
-    expect(seeds, isNot(contains('Various Artists - Topic')),
-        reason: 'akış aramaya göre kurulur, kanal adına göre değil');
+    expect(seeds, contains(const FeedSeed.video('d1')));
+    expect(seeds.where((s) => !s.isVideo), isEmpty);
   });
 
-  test('hiç arama yoksa akış en çok dinlenen kanaldan kurulur', () async {
+  test('tohumlar: favori, çok dinlenen, son dinlenen — her birinden en çok 2',
+      () async {
     final store = LibraryStore.instance;
-    await store.recordWatch(video('a', 'Şarkı', 'Çok Kanal'));
-    await store.recordWatch(video('a', 'Şarkı', 'Çok Kanal'));
+    for (final id in ['f1', 'f2', 'f3']) {
+      await store.toggleFavorite(video(id, 'Fav $id', 'K'));
+    }
+    // m1 üç kez: en çok dinlenen.
+    for (var i = 0; i < 3; i++) {
+      await store.recordWatch(video('m1', 'Çok dinlenen', 'K'));
+    }
+    await store.recordWatch(video('r1', 'Son 1', 'K'));
+    await store.recordWatch(video('r2', 'Son 2', 'K'));
 
-    expect(HomeFeed().seeds(), contains('Çok Kanal'),
-        reason: 'arama geçmişi boşken ana sayfa bomboş kalmamalı');
+    final ids = HomeFeed().seeds().map((s) => s.value).toList();
+
+    expect(ids.where((id) => id.startsWith('f')).length, 2,
+        reason: 'tek kaynak akışı tek sanatçıya kilitlemesin');
+    expect(ids, contains('m1'));
+    expect(ids, contains('r2'));
+    expect(ids.length, lessThanOrEqualTo(5));
+    expect(ids.toSet().length, ids.length, reason: 'aynı tohum iki kez yok');
   });
 
-  // Gerçekte yaşanan: açılışta internet yoktu, her arama hata verdi ve ana
-  // sayfa "öneri yok" diye BOŞ kaldı; internet gelince de dolmadı.
-  test('tüm aramalar hata verirse akış boş değil HATA döner', () async {
-    await LibraryStore.instance.recordSearch('tarkan');
+  test('dinleme geçmişi yoksa son aramalar yedek tohum olur', () async {
     await LibraryStore.instance.recordSearch('sezen aksu');
+    expect(HomeFeed().seeds(), [const FeedSeed.search('sezen aksu')],
+        reason: 'yeni kullanıcının ana sayfası boş kalmamalı');
+  });
+
+  test('benzerler serpiştirilir; bilinenler ve aynı şarkının sürümleri elenir',
+      () async {
+    final store = LibraryStore.instance;
+    await store.recordWatch(video('a', 'Tarkan - Kuzu Kuzu', 'Tarkan'));
+    await store.recordWatch(video('b', 'Sezen Aksu - Gülümse', 'Sezen'));
+
     final feed = HomeFeed(
       client: _FakeClient({
-        'tarkan': Exception('ağ yok'),
-        'sezen aksu': Exception('ağ yok'),
+        'b': [
+          video('s1', 'Sezen Aksu - Firuze', 'Sezen'),
+          video('s2', 'Sezen Aksu - Gülümse (Canlı)', 'X'), // dinlenenin sürümü
+        ],
+        'a': [
+          video('a', 'Tarkan - Kuzu Kuzu', 'Tarkan'), // zaten dinlendi
+          video('t1', 'Tarkan - Şımarık', 'Tarkan'),
+          video('t2', 'Tarkan - Şımarık (Lyrics)', 'Y'), // aynı şarkı
+        ],
+      }),
+    );
+    final ids = (await feed.load()).map((v) => v.videoId).toList();
+
+    expect(ids, ['s1', 't1']);
+  });
+
+  // Gerçekte yaşanan: açılışta internet yoktu, her istek hata verdi ve ana
+  // sayfa "öneri yok" diye BOŞ kaldı; internet gelince de dolmadı.
+  test('tüm istekler hata verirse akış boş değil HATA döner', () async {
+    await LibraryStore.instance.recordWatch(video('a', 'A şarkısı', 'K'));
+    await LibraryStore.instance.recordWatch(video('b', 'B şarkısı', 'K'));
+    final feed = HomeFeed(
+      client: _FakeClient({
+        'a': Exception('ağ yok'),
+        'b': Exception('ağ yok'),
       }),
     );
     await expectLater(feed.load(), throwsException);
   });
 
-  test('bir arama hata verse de diğerleriyle akış dolar', () async {
-    await LibraryStore.instance.recordSearch('tarkan');
-    await LibraryStore.instance.recordSearch('sezen aksu');
+  test('bir istek hata verse de diğerleriyle akış dolar', () async {
+    await LibraryStore.instance.recordWatch(video('a', 'A şarkısı', 'K'));
+    await LibraryStore.instance.recordWatch(video('b', 'B şarkısı', 'K'));
     final feed = HomeFeed(
       client: _FakeClient({
-        'tarkan': Exception('ağ yok'),
-        'sezen aksu': [video('s1', 'Gülümse', 'Sezen Aksu')],
+        'a': Exception('ağ yok'),
+        'b': [video('s1', 'Gülümse', 'Sezen Aksu')],
       }),
     );
     final videos = await feed.load();
     expect(videos.map((v) => v.videoId), ['s1']);
   });
 
-  test('son akış saklanır, arama geçmişi silinince o da silinir', () async {
+  test('geçmiş silinince tohum geçersiz olur (akış yenilenir)', () async {
+    final store = LibraryStore.instance;
+    await store.recordWatch(video('a', 'A şarkısı', 'K'));
+    final feed = HomeFeed();
+    final seed = feed.seeds().single;
+    expect(feed.isStillInHistory(seed), isTrue);
+
+    await store.clearWatched();
+    expect(feed.isStillInHistory(seed), isFalse);
+  });
+
+  test('son akış saklanır, geçmiş silinince o da silinir', () async {
     final store = LibraryStore.instance;
     await store.saveFeedCache([video('a', 'Şarkı', 'Kanal')]);
     await store.load(); // uygulama yeniden açıldı
     expect(store.feedCache.map((v) => v.videoId), ['a']);
 
-    await store.clearSearches();
-    expect(store.feedCache, isEmpty,
-        reason: '"Ana sayfa önerileri de sıfırlanır" deniyor');
+    await store.clearWatched();
+    expect(store.feedCache, isEmpty);
   });
 }
