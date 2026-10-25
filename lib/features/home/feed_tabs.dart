@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Ana sayfadaki liste türü.
 enum HomeTab {
-  /// Aramalardan ve dinlenenlerden üretilen kişisel akış.
+  /// En çok tekrar dinlenenler.
   forYou,
 
   /// Kullanıcının kalple işaretledikleri.
