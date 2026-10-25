@@ -57,6 +57,9 @@ import java.util.concurrent.TimeUnit
 object PlayerHolder {
 
     private var exoPlayer: ExoPlayer? = null
+
+    /** Oynatıcının ölçtüğü indirme hızı; bekleme günlüğüne yazılıyor. */
+    private var bandwidthMeter: DefaultBandwidthMeter? = null
     private var dataSourceFactory: DataSource.Factory? = null
 
     /** Arama/bildirim geldiğinde duraklatmayı sağlayan ses odağı yöneticisi. */
@@ -142,6 +145,7 @@ object PlayerHolder {
                 DefaultBandwidthMeter.Builder(appContext)
                     .setInitialBitrateEstimate(INITIAL_BITRATE_ESTIMATE)
                     .build()
+                    .also { bandwidthMeter = it }
             )
             // Tampon hedefi büyük tutuluyor ki hızlı fazlar yavaş fazları
             // karşılayabilsin; ama OYNATMAYA BAŞLAMA eşiği küçük.
@@ -230,6 +234,14 @@ object PlayerHolder {
                     )
                     if (!recovery.isRefreshable(error.errorCode)) return
                     requestRefresh(appContext, "Oynatıcı hatası ${error.errorCodeName}")
+                }
+
+                // Uzun duraklatmadan sonra sürdürülen parçanın adresi çoktan
+                // ölmüş olabiliyor: 403'ü beklemeden, çalmaya başlarken tazele.
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    if (!playWhenReady || currentRequest == null) return
+                    if (!recovery.isExpiring(currentExpire(), System.currentTimeMillis() / 1000)) return
+                    requestRefresh(appContext, "Adresin süresi dolmuş")
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
@@ -506,8 +518,7 @@ object PlayerHolder {
      */
     private fun forbiddenContext(eventTime: AnalyticsListener.EventTime): String {
         val ageMin = (android.os.SystemClock.elapsedRealtime() - requestAt) / 60_000
-        val expire = currentRequest?.audioUrl
-            ?.let { runCatching { Uri.parse(it).getQueryParameter("expire")?.toLong() }.getOrNull() }
+        val expire = currentExpire()
         val expired = expire?.let { if (System.currentTimeMillis() / 1000 > it) "evet" else "hayır" } ?: "?"
         val netChanged = connectivity?.let {
             if (it.activeNetwork == requestNetwork) "hayır" else "evet"
@@ -515,6 +526,10 @@ object PlayerHolder {
         return " | konum ${eventTime.currentPlaybackPositionMs / 1000} sn, adres $ageMin dk önce " +
             "alındı, süresi doldu: $expired, ağ değişti: $netChanged"
     }
+
+    /** Çalan adresin `expire` değeri (sn); bilinmiyorsa null. */
+    private fun currentExpire(): Long? = currentRequest?.audioUrl
+        ?.let { runCatching { Uri.parse(it).getQueryParameter("expire")?.toLong() }.getOrNull() }
 
     /** Adresin alındığı an ve ağ; 403 bağlamı için (bkz. [forbiddenContext]). */
     private var requestAt = 0L
@@ -566,7 +581,8 @@ object PlayerHolder {
                 Tanilama.olay(
                     TAG,
                     "Bekleme ${"%.1f".format(Locale.ROOT, waited / 1000.0)} sn, $where " +
-                        "($mode, ${PlaybackQueue.current()?.videoId})"
+                        "($mode, ${PlaybackQueue.current()?.videoId}, " +
+                        "ölçülen hız ${(bandwidthMeter?.bitrateEstimate ?: 0) / 1000} kbps)"
                 )
             }
         }
@@ -1052,7 +1068,9 @@ object PlayerHolder {
             Uri.parse("dash://otomatik"),
             java.io.ByteArrayInputStream(DashManifestBuilder.decode(manifestUri))
         )
-        DashMediaSource.Factory(factory).createMediaSource(
+        DashMediaSource.Factory(factory)
+            .setLoadErrorHandlingPolicy(loadErrorPolicy)
+            .createMediaSource(
             manifest,
             MediaItem.Builder()
                 .setUri("dash://otomatik")

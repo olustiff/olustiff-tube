@@ -107,6 +107,30 @@ class RecoveryPolicyTest {
         assertEquals(PlaybackException.ERROR_CODE_IO_NO_PERMISSION, RecoveryPolicy.IO_ERROR_LAST)
     }
 
+    // ---- Adresin süresi ------------------------------------------------------
+
+    /** 25 Ekim: sabah duraklatılan video akşam sürdürüldü, adres 8 saatlikti. */
+    @Test
+    fun suresiDolmusAdres_tazelenir() {
+        assertTrue(policy.isExpiring(expireEpochSec = 1_000, nowEpochSec = 1_000 + 2 * 3600))
+    }
+
+    @Test
+    fun suresiDolmakUzereAdres_tazelenir() {
+        assertTrue(policy.isExpiring(expireEpochSec = 10_000, nowEpochSec = 10_000 - 5 * 60))
+    }
+
+    @Test
+    fun tazeAdres_dokunulmaz() {
+        assertFalse(policy.isExpiring(expireEpochSec = 10_000 + 6 * 3600, nowEpochSec = 10_000))
+    }
+
+    /** Canlı yayın / indirilmiş dosya: süre bilinmiyor, tazeleme yok. */
+    @Test
+    fun suresiBilinmeyenAdres_dokunulmaz() {
+        assertFalse(policy.isExpiring(expireEpochSec = null, nowEpochSec = 10_000))
+    }
+
     // ---- Takılma -------------------------------------------------------------
 
     /** Cihazda ~50 sn hatasız "yükleniyor": tampon hiç büyümedi. */

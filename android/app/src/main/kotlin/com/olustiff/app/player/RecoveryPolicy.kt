@@ -99,6 +99,22 @@ class RecoveryPolicy(
      */
     fun isRefreshable(errorCode: Int): Boolean = errorCode in IO_ERROR_FIRST..IO_ERROR_LAST
 
+    // ---- Adresin süresi ------------------------------------------------------
+
+    /**
+     * Akış adresinin süresi dolmuş ya da dolmak üzere mi.
+     *
+     * YouTube adresleri ~6 saat geçerli. Günlükte (25 Ekim) görülen: uzun bir
+     * video sabah duraklatıldı, akşam sürdürüldü; adres 8 saatlikti ve her
+     * istek 403 aldı. Oynatıcı ~50 sn boyunca 17 kez deneyip ancak sonra hata
+     * verdi, adres tazelendi, bir 34 sn de açılış bekledi. Süre adresin
+     * içinde yazılı (`expire`), yani ÇALMADAN ÖNCE bilinebiliyor.
+     *
+     * @param expireEpochSec adresteki `expire`; bilinmiyorsa null (ör. canlı yayın)
+     */
+    fun isExpiring(expireEpochSec: Long?, nowEpochSec: Long): Boolean =
+        expireEpochSec != null && nowEpochSec >= expireEpochSec - EXPIRY_MARGIN_SEC
+
     // ---- Takılma -------------------------------------------------------------
 
     private var lastBuffered = -1L
@@ -169,6 +185,9 @@ class RecoveryPolicy(
         // eşitlikleri RecoveryPolicyTest'te sınanıyor).
         const val IO_ERROR_FIRST = 2000
         const val IO_ERROR_LAST = 2006
+
+        /** Süresine bu kadar kalmış adres de tazelenir: çalarken dolmasın. */
+        const val EXPIRY_MARGIN_SEC = 10 * 60L
 
         /** Hata zincirinde bir ağ (G/Ç) hatası var mı. */
         fun isNetworkError(e: Throwable): Boolean =
