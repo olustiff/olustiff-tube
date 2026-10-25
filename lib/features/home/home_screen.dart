@@ -141,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const _maxRetries = 8;
 
   List<VideoSummary> get _currentList =>
-      _tab == HomeTab.forYou ? _videos : _library.mostPlayed;
+      _tab == HomeTab.forYou ? _videos : _library.favorites;
 
   void _open(int index) {
     final list = _currentList;
@@ -199,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildTabs() {
     // Geçmiş de favori de yokken filtre göstermek anlamsız.
-    if (!_feed.hasHistory && _library.mostPlayed.isEmpty) {
+    if (!_feed.hasHistory && _library.favorites.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -236,14 +236,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (_tab == HomeTab.favorites) {
       return VideoList(
-        videos: _library.mostPlayed,
+        videos: _library.favorites,
         loading: false,
         hasMore: false,
         onLoadMore: () {},
         onTap: _open,
         emptyMessage:
-            'Henüz tekrar dinlediğin bir şey yok.\n'
-            'Bir şarkıyı ikinci kez açtığında burada görünür.',
+            'Henüz favorin yok.\n'
+            'Çalan şarkıda ♥ simgesine dokunduğunda burada görünür.',
       );
     }
 

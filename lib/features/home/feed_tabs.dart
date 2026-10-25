@@ -5,7 +5,7 @@ enum HomeTab {
   /// Aramalardan ve dinlenenlerden üretilen kişisel akış.
   forYou,
 
-  /// Geçmişte en çok tekrar edilenler.
+  /// Kullanıcının kalple işaretledikleri.
   favorites,
 }
 
@@ -41,7 +41,7 @@ class FeedTabs extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: _TabChip(
-              icon: Icons.repeat,
+              icon: Icons.favorite,
               label: 'Favoriler',
               isSelected: selected == HomeTab.favorites,
               onTap: () => onChanged(HomeTab.favorites),

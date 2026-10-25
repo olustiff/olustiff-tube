@@ -19,6 +19,7 @@ import 'cast_button.dart';
 import 'cast_panel.dart';
 import 'double_tap_seek.dart';
 import 'download_menu.dart';
+import 'favorite_button.dart';
 import 'quality_menu.dart';
 import 'tv_player.dart';
 import 'video_player_view.dart';
@@ -551,9 +552,20 @@ class _PlayerScreenState extends State<PlayerScreen>
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: [
-                    Text(
-                      details.title,
-                      style: Theme.of(context).textTheme.titleMedium,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text(
+                              details.title,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ),
+                        FavoriteButton(coordinator: _coordinator),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(

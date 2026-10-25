@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/data/library_store.dart';
+
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
@@ -94,6 +96,9 @@ class _TvPlayerState extends State<TvPlayer> {
 
   /// Düğme sırasındaki seçim: 0 önceki, 1 kalite, 2 sonraki.
   int _buttonIndex = 1;
+
+  /// Alt sıradaki düğme sayısı: önceki, kalite, sonraki, favori.
+  static const _buttonCount = 4;
   int _panelIndex = 0;
   int _qualityIndex = 0;
 
@@ -292,6 +297,13 @@ class _TvPlayerState extends State<TvPlayer> {
         _openQuality();
       case 2:
         widget.coordinator.playNext();
+      case 3:
+        final summary = widget.coordinator.currentSummary;
+        if (summary != null) {
+          LibraryStore.instance
+              .toggleFavorite(summary)
+              .then((_) => mounted ? setState(() {}) : null);
+        }
     }
     _touch();
   }
@@ -378,7 +390,7 @@ class _TvPlayerState extends State<TvPlayer> {
 
     if (key == LogicalKeyboardKey.arrowRight) {
       if (_row == _Row.buttons) {
-        setState(() => _buttonIndex = (_buttonIndex + 1) % 3);
+        setState(() => _buttonIndex = (_buttonIndex + 1) % _buttonCount);
         _touch();
       } else {
         _seekKey(event, forward: true);
@@ -387,7 +399,7 @@ class _TvPlayerState extends State<TvPlayer> {
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
       if (_row == _Row.buttons) {
-        setState(() => _buttonIndex = (_buttonIndex + 2) % 3);
+        setState(() => _buttonIndex = (_buttonIndex + _buttonCount - 1) % _buttonCount);
         _touch();
       } else {
         _seekKey(event, forward: false);
@@ -688,6 +700,15 @@ class _TvPlayerState extends State<TvPlayer> {
                 selected: _row == _Row.buttons && _buttonIndex == 2,
                 enabled: state.hasNext,
                 label: 'Sonraki',
+              ),
+              const SizedBox(width: 24),
+              _TvButton(
+                icon: LibraryStore.instance.isFavorite(details?.videoId)
+                    ? Icons.favorite
+                    : Icons.favorite_border,
+                selected: _row == _Row.buttons && _buttonIndex == 3,
+                enabled: details != null,
+                label: 'Favori',
               ),
             ],
           ),

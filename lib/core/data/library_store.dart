@@ -21,6 +21,7 @@ class LibraryStore extends ChangeNotifier {
   static const _kPlayCounts = 'play_counts';
   static const _kPositions = 'watch_positions';
   static const _kFeed = 'home_feed_cache';
+  static const _kFavorites = 'favorites';
 
   static const _maxSearches = 40;
   static const _maxWatched = 200;
@@ -42,6 +43,32 @@ class LibraryStore extends ChangeNotifier {
   /// gömülü olsaydı her konum yazımı geçmişi de yeniden yazardı.
   Map<String, int> _positions = {};
   Map<String, List<VideoSummary>> _playlists = {};
+
+  /// Kullanıcının kalple işaretledikleri; en son eklenen başta.
+  ///
+  /// Ana sayfadaki "Favoriler" sekmesi bunu gösteriyor. Önceden orada "en
+  /// çok dinlenenler" vardı; kullanıcı neyin orada duracağını kendisi seçmek
+  /// istedi.
+  List<VideoSummary> _favorites = [];
+  List<VideoSummary> get favorites => List.unmodifiable(_favorites);
+
+  bool isFavorite(String? videoId) =>
+      videoId != null && _favorites.any((v) => v.videoId == videoId);
+
+  /// Favoriye ekler ya da çıkarır. Dönüş: artık favoride mi.
+  Future<bool> toggleFavorite(VideoSummary video) async {
+    final id = video.videoId;
+    if (id == null) return false;
+    final added = !isFavorite(id);
+    if (added) {
+      _favorites.insert(0, video);
+    } else {
+      _favorites.removeWhere((v) => v.videoId == id);
+    }
+    await _prefs?.setString(_kFavorites, _encodeVideos(_favorites));
+    notifyListeners();
+    return added;
+  }
 
   /// Ana sayfanın ("Sana özel") son BAŞARILI hali.
   ///
@@ -110,6 +137,7 @@ class LibraryStore extends ChangeNotifier {
 
     _searches = prefs.getStringList(_kSearches) ?? [];
     _watched = _decodeVideos(prefs.getString(_kWatched));
+    _favorites = _decodeVideos(prefs.getString(_kFavorites));
     // Bozuk önbellek açılışı engellemesin; yalnızca öneri listesi.
     try {
       _feedCache = _decodeVideos(prefs.getString(_kFeed));

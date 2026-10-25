@@ -102,6 +102,12 @@ class PlaybackCoordinator extends ChangeNotifier {
   VideoSummary? get pending => _pending;
 
   VideoDetails? get details => _details;
+
+  /// Çalan içeriğin liste kaydı (favori, çalma listesi için); yoksa null.
+  VideoSummary? get currentSummary {
+    final d = _details;
+    return d == null ? null : _summaryOf(d);
+  }
   bool get audioOnly => _audioOnly;
   /// Kalite rozetinde gösterilecek metin; bilinmiyorsa null.
   ///
