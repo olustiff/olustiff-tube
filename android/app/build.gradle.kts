@@ -65,7 +65,7 @@ flutter {
 
 dependencies {
     // YouTube reklamsız stream çözümleme (NewPipe'ın kullandığı kütüphanenin aynısı)
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     // Çözümleyicinin canlı testi (bkz. LiveExtractorTest).
