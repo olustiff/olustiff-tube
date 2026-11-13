@@ -282,16 +282,18 @@ class PlaybackCoordinator extends ChangeNotifier {
       return;
     }
 
-    // Açılış modu içeriğin türünden belirlenir; sonrası yalnızca kullanıcının.
+    // Açılış modu: kullanıcının elle seçtiği son mod, yoksa içeriğin türü.
     // Kullanıcı tercihi kapalıysa müzik de video modunda açılır.
     //
     // Televizyonda sesli mod hiç kullanılmıyor: ekran zaten karşıda ve
     // "ekranı kapatıp dinleme" diye bir senaryo yok — müzik videosu da
     // izlemek için açılıyor.
+    // Kullanıcı modu elle seçtiyse O geçerli; tahmin yalnızca hiç seçmediyse.
     final audioOnly = !forceVideo &&
         !TvMode.isTv.value &&
-        _settings.musicAsAudio &&
-        detectContentKind(details) == ContentKind.music;
+        (_settings.lastAudioOnly ??
+            (_settings.musicAsAudio &&
+                detectContentKind(details) == ContentKind.music));
     final streams = selectStreams(
       details,
       audioOnly: audioOnly,
@@ -524,6 +526,8 @@ class PlaybackCoordinator extends ChangeNotifier {
     _audioOnly = next;
     _qualityLabel = streams.qualityLabel;
     notifyListeners();
+    // Sonraki açılanlar da bu modda başlasın (bkz. SettingsStore.lastAudioOnly).
+    await _settings.setLastAudioOnly(next);
   }
 
   /// Sıradakine geçer.

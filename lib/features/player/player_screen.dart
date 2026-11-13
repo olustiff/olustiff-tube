@@ -274,6 +274,36 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (mounted) setState(() {});
   }
 
+  /// Mod değişimi ONAYLA yapılıyor: seçim sonraki videolara da geçtiği
+  /// için (bkz. SettingsStore.lastAudioOnly) yanlışlıkla bir dokunuş
+  /// bundan sonraki her şeyi değiştirirdi.
+  Future<void> _confirmToggleMode() async {
+    final toVideo = _coordinator.audioOnly;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(toVideo ? 'Video moduna geçilsin mi?' : 'Sesli moda geçilsin mi?'),
+        content: Text(
+          toVideo
+              ? 'Görüntü de indirilecek. Bundan sonra açtıkların da video olarak başlar.'
+              : 'Yalnızca ses çalar, internet ve pil tasarrufu sağlar. '
+                  'Bundan sonra açtıkların da sesli başlar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(toVideo ? 'Videoya geç' : 'Sesliye geç'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _coordinator.toggleMode();
+  }
+
   void _share() {
     final details = _coordinator.details;
     if (details == null) return;
@@ -408,7 +438,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     icon: Icon(
                       audioOnly ? Icons.videocam_outlined : Icons.headphones,
                     ),
-                    onPressed: details == null ? null : _coordinator.toggleMode,
+                    onPressed: details == null ? null : _confirmToggleMode,
                   ),
                 PopupMenuButton<String>(
                   onSelected: (value) {

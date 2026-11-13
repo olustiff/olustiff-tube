@@ -27,6 +27,9 @@ object Mp3Downloader {
 
     private val client = OkHttpClient.Builder().build()
 
+    /** Bkz. [fetch]: oynatıcıdaki parça boyutuyla aynı. */
+    private const val CHUNK_SIZE = 1L shl 20
+
     /**
      * Sesi indirir ve MP3'e kodlayıp [output] akışına yazar.
      *
@@ -56,40 +59,53 @@ object Mp3Downloader {
         }
     }
 
-    /** Ses akışını diske indirir. */
+    /**
+     * Ses akışını diske PARÇA PARÇA indirir.
+     *
+     * Tek uzun istek YouTube'da oynatma hızına kısılıyor (ölçüldü: ses
+     * akışı tek istekle 60 sn hiç veri vermedi; görüntüde 1 MB'lık
+     * parçalar 5,5 kat hızlı — bkz. PlayerHolder'daki ChunkedDataSource).
+     * Bir şarkıyı indirmek şarkının süresi kadar sürüyordu.
+     */
     private fun fetch(url: String, target: File, onProgress: (Double) -> Unit) {
-        val request = Request.Builder()
-            .url(url)
-            // YouTube, tarayıcı görünmeyen isteklere içerik vermeyebiliyor.
-            .header(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-            )
-            // Range'siz istek YouTube'da gerçek zamanlı hıza (~30 KB/s)
-            // kısılıyor; başlıkla ~100 kat hızlı (bkz. PlayerHolder.withRangeHeader).
-            .header("Range", "bytes=0-")
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Ses indirilemedi (HTTP ${response.code})")
-            }
-            val body = response.body ?: throw IllegalStateException("Boş yanıt")
-            val total = body.contentLength()
-            var written = 0L
-
-            body.byteStream().use { input ->
-                FileOutputStream(target).use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        written += read
-                        if (total > 0) onProgress(written.toDouble() / total)
+        // Toplam boyut adreste yazılı; yoksa son parça kısa gelince bitiyor.
+        val total = android.net.Uri.parse(url).getQueryParameter("clen")?.toLongOrNull() ?: -1L
+        var written = 0L
+        FileOutputStream(target).use { output ->
+            val buffer = ByteArray(64 * 1024)
+            while (total < 0 || written < total) {
+                val last = written + CHUNK_SIZE - 1
+                val request = Request.Builder()
+                    .url(url)
+                    // YouTube, tarayıcı görünmeyen isteklere içerik vermeyebiliyor.
+                    .header(
+                        "User-Agent",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+                    )
+                    .header("Range", "bytes=$written-${if (total > 0) minOf(last, total - 1) else last}")
+                    .build()
+                var chunkBytes = 0L
+                client.newCall(request).execute().use { response ->
+                    // Uzunluk bilinmiyorken dosya sonunu aşan parça: bitti.
+                    if (response.code == 416 && total < 0) return
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("Ses indirilemedi (HTTP ${response.code})")
+                    }
+                    val body = response.body ?: throw IllegalStateException("Boş yanıt")
+                    body.byteStream().use { input ->
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            written += read
+                            chunkBytes += read
+                            if (total > 0) onProgress(written.toDouble() / total)
+                        }
                     }
                 }
+                // Parça istenenden kısa geldiyse dosyanın sonu.
+                if (chunkBytes < CHUNK_SIZE) break
             }
         }
     }

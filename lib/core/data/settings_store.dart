@@ -14,6 +14,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kSpeed = 'playback_speed';
   static const _kAutoplay = 'autoplay';
   static const _kMusicAsAudio = 'music_as_audio';
+  static const _kLastAudioOnly = 'last_audio_only';
   static const _kBluetoothAutoPlay = 'bluetooth_autoplay';
   static const _kLoudnessBoost = 'loudness_boost';
 
@@ -44,6 +45,21 @@ class SettingsStore extends ChangeNotifier {
   /// Müzik olarak tespit edilen içerikler sesli modda mı açılsın.
   /// Kapatılırsa her şey video modunda başlar.
   bool _musicAsAudio = true;
+
+  /// Kullanıcının oynatıcıda ELLE seçtiği son mod (true = sesli); hiç
+  /// seçmediyse null.
+  ///
+  /// Doluysa yeni açılan her şey bu modda başlar. Önceden her videoda mod
+  /// içeriğin türüne göre yeniden tahmin ediliyordu ve aynı sanatçının bir
+  /// videosu "Music", ötekisi "Entertainment" kategorisinde olabildiği için
+  /// kullanıcı bunu "uygulama kendiliğinden mod değiştiriyor" diye yaşadı.
+  bool? _lastAudioOnly;
+  bool? get lastAudioOnly => _lastAudioOnly;
+
+  Future<void> setLastAudioOnly(bool value) async {
+    _lastAudioOnly = value;
+    await _prefs?.setBool(_kLastAudioOnly, value);
+  }
 
   /// Bluetooth ses aygıtı bağlanınca son çalınan otomatik başlasın mı.
   bool _bluetoothAutoPlay = false;
@@ -77,6 +93,7 @@ class SettingsStore extends ChangeNotifier {
     _speed = prefs.getDouble(_kSpeed) ?? 1.0;
     _autoplay = prefs.getBool(_kAutoplay) ?? true;
     _musicAsAudio = prefs.getBool(_kMusicAsAudio) ?? true;
+    _lastAudioOnly = prefs.getBool(_kLastAudioOnly);
     _bluetoothAutoPlay = prefs.getBool(_kBluetoothAutoPlay) ?? false;
     _loudnessBoost = prefs.getInt(_kLoudnessBoost) ?? _defaultLoudness;
     await _syncLoudnessToNative();
@@ -134,6 +151,10 @@ class SettingsStore extends ChangeNotifier {
   Future<void> setMusicAsAudio(bool value) async {
     _musicAsAudio = value;
     await _prefs?.setBool(_kMusicAsAudio, value);
+    // Ayarı bilerek değiştiren kullanıcı onun uygulanmasını bekliyor; elle
+    // seçilmiş son mod onu ezmesin.
+    _lastAudioOnly = null;
+    await _prefs?.remove(_kLastAudioOnly);
     notifyListeners();
   }
 

@@ -98,7 +98,8 @@ class SettingsScreen extends StatelessWidget {
                   title: const Text('Müzikleri sesli modda başlat'),
                   subtitle: const Text(
                     'Şarkı ve müzik videoları görüntü indirilmeden açılır. '
-                    'Kapatırsan her şey video olarak başlar.',
+                    'Kapatırsan her şey video olarak başlar. Oynatıcıda modu '
+                    'elle değiştirirsen sonrakiler de o modda açılır.',
                   ),
                   value: settings.musicAsAudio,
                   onChanged: settings.setMusicAsAudio,
