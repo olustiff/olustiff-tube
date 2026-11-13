@@ -1,0 +1,2 @@
+- SponsorBlock: skips sponsor segments, self-promotion, subscribe reminders and non-music parts of music videos
+- English interface (follows the phone's language; Settings > Language)

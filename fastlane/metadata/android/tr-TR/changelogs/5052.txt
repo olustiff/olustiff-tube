@@ -1,0 +1,2 @@
+- SponsorBlock: sponsor, tanıtım, abone hatırlatması ve müzik dışı bölümler atlanıyor
+- İngilizce arayüz (telefonun dilini izler; Ayarlar > Dil)
