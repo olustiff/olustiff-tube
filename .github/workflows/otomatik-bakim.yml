@@ -29,7 +29,7 @@
 # - DEBUG_KEYSTORE_B64: imza anahtarı (~/.android/debug.keystore, base64).
 #   Kurulu uygulamalar bu anahtarla imzalı; farklı anahtarla imzalanan
 #   güncelleme kurulmaz.
-# - RELEASE_TOKEN: olustiff/youtube deposuna sürüm açabilen GitHub anahtarı.
+# - RELEASE_TOKEN: olustiff/olustiff-tube (ve geçiş için olustiff/youtube) deposuna sürüm açabilen GitHub anahtarı.
 name: Otomatik bakım
 
 on:
@@ -136,7 +136,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          yetki=$(gh api repos/olustiff/youtube --jq .permissions.push)
+          yetki=$(gh api repos/olustiff/olustiff-tube --jq .permissions.push)
           echo "yayın deposuna yazma yetkisi: $yetki"
           [ "$yetki" = "true" ] || { echo "::error::RELEASE_TOKEN yazamıyor"; exit 1; }
           flutter build apk --release --split-per-abi

@@ -37,7 +37,7 @@ class UpdateService extends ChangeNotifier {
   static const _channel = MethodChannel('olustiff/update');
   static const _progressChannel = EventChannel('olustiff/update_progress');
 
-  static const _repo = 'olustiff/youtube';
+  static const _repo = 'olustiff/olustiff-tube';
 
   /// "Daha sonra" denen sürüm. Açılışta aynı sürüm için tekrar tekrar
   /// sorulması rahatsız edici olurdu; kullanıcı isterse ayarlardan yine

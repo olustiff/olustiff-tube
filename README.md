@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/olustiff/youtube/releases/latest/download/olustiff.apk"><b>⬇ Download APK / APK'yı indir</b></a>
+  <a href="https://github.com/olustiff/olustiff-tube/releases/latest/download/olustiff.apk"><b>⬇ Download APK / APK'yı indir</b></a>
   ·
-  <a href="https://github.com/olustiff/youtube/releases">Releases / Sürümler</a>
+  <a href="https://github.com/olustiff/olustiff-tube/releases">Releases / Sürümler</a>
   ·
   <a href="#türkçe">Türkçe</a>
 </p>
@@ -43,12 +43,12 @@ the remote control.
 
 ### Install
 
-1. Download [`olustiff.apk`](https://github.com/olustiff/youtube/releases/latest/download/olustiff.apk) on your phone or TV
+1. Download [`olustiff.apk`](https://github.com/olustiff/olustiff-tube/releases/latest/download/olustiff.apk) on your phone or TV
 2. Open it and allow installing from this source when Android asks
 3. Updates are offered inside the app (Settings → Check for updates)
 
 Smaller per-device builds (`olustiff-arm64.apk`, `olustiff-arm32.apk`) are on the
-[releases page](https://github.com/olustiff/youtube/releases). Most phones use arm64;
+[releases page](https://github.com/olustiff/olustiff-tube/releases). Most phones use arm64;
 most TVs and TV boxes use arm32.
 
 ### Build from source
@@ -88,12 +88,12 @@ arka planda çalmaya devam eder ve **Android TV**'de kumandayla çalışır.
 
 ### Kurulum
 
-1. Telefonundan ya da televizyonundan [`olustiff.apk`](https://github.com/olustiff/youtube/releases/latest/download/olustiff.apk) dosyasını indir
+1. Telefonundan ya da televizyonundan [`olustiff.apk`](https://github.com/olustiff/olustiff-tube/releases/latest/download/olustiff.apk) dosyasını indir
 2. Aç ve Android sorduğunda bu kaynaktan yüklemeye izin ver
 3. Güncellemeler uygulamanın içinden gelir (Ayarlar → Güncellemeleri denetle)
 
 Cihaza özel daha küçük dosyalar (`olustiff-arm64.apk`, `olustiff-arm32.apk`)
-[sürümler sayfasında](https://github.com/olustiff/youtube/releases). Telefonların
+[sürümler sayfasında](https://github.com/olustiff/olustiff-tube/releases). Telefonların
 çoğu arm64, televizyon ve TV kutularının çoğu arm32 kullanır.
 
 ### Öneri ve hata bildirimi

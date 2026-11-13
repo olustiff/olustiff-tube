@@ -12,7 +12,11 @@ set -e
 
 VERSION="$1"
 NOTES_FILE="$2"
-REPO="olustiff/youtube"
+# Sürümler kod deposunda (olustiff/olustiff-tube). Eski sürüm deposu
+# (olustiff/youtube) GEÇİŞ için ayna: kurulu uygulamalar güncellemeyi hâlâ
+# orada arıyor ve yeni adresi ancak onu içeren bir sürümü kurunca öğreniyor.
+# Cihazlar yeni adrese geçince AYNA boşaltılıp eski depo arşivlenebilir.
+DEPOLAR=("olustiff/olustiff-tube" "olustiff/youtube")
 APP_DIR="${0:a:h}/.."
 
 if [ -z "$VERSION" ] || [ ! -f "$NOTES_FILE" ]; then
@@ -60,49 +64,54 @@ cp "$OUT/app-arm64-v8a-release.apk"   "$STAGE/olustiff-arm64.apk"
 cp "$OUT/app-armeabi-v7a-release.apk" "$STAGE/olustiff-arm32.apk"
 cp "$OUT/app-release.apk"             "$STAGE/olustiff.apk"
 
-# TASLAK olarak açılıyor, dosyalar yüklendikten SONRA yayınlanıyor. Doğrudan
-# yayınlanınca uygulamalar dosyalar yüklenirken yeni sürümü görüyor, eksik
-# APK'yı indirmeye çalışıp hata veriyordu.
-echo "== taslak oluşturuluyor: v$VERSION =="
-gh release create "v$VERSION" --repo "$REPO" --draft \
-  --title "oLusTifF $VERSION" --notes-file "$NOTES_FILE"
-
-RID=$(gh release view "v$VERSION" --repo "$REPO" --json databaseId --jq .databaseId)
+# Her depoya: TASLAK olarak açılıyor, dosyalar yüklendikten SONRA
+# yayınlanıyor. Doğrudan yayınlanınca uygulamalar dosyalar yüklenirken yeni
+# sürümü görüyor, eksik APK'yı indirmeye çalışıp hata veriyordu.
 TOKEN="${GH_TOKEN:-$(gh auth token)}"
 
-# gh release upload büyük dosyalarda aralıklı olarak HTTP 400 veriyor;
-# doğrudan yükleme uç noktası daha güvenilir çalışıyor.
-# x86_64 ayrica yayinlanmiyor: yalnizca emulatorlerde kullaniliyor ve
-# ortak dosya zaten onu da tasiyor.
-for name in olustiff-arm64.apk olustiff-arm32.apk olustiff.apk; do
-  echo "== yükleniyor: $name =="
-  uploaded=0
-  for attempt in 1 2 3; do
-    # --progress-bar: yukleme ilerlemesi gorunur olsun (-s onu susturuyordu).
-    code=$(curl --progress-bar -o /dev/null -w '%{http_code}' --max-time 1800 \
-      -X POST -H "Authorization: Bearer $TOKEN" \
-      -H "Content-Type: application/vnd.android.package-archive" \
-      --data-binary "@$STAGE/$name" \
-      "https://uploads.github.com/repos/$REPO/releases/$RID/assets?name=$name") \
-      || code="000"  # ağ hatası: set -e betiği burada öldürmesin, yeniden denensin
-    if [ "$code" = "201" ]; then
-      echo "   tamam"
-      uploaded=1
-      break
-    fi
-    echo "   HTTP $code, yeniden deneniyor"
-    sleep 5
-  done
-  if [ "$uploaded" != 1 ]; then
-    echo "HATA: $name yüklenemedi. Sürüm TASLAK olarak bırakıldı;" >&2
-    echo "GitHub'dan elle tamamlayın ya da silip yeniden çalıştırın." >&2
-    rm -rf "$STAGE"
-    exit 1
-  fi
-done
+yayinla_depo() {
+  local REPO="$1"
+  echo "== taslak oluşturuluyor: $REPO v$VERSION =="
+  gh release create "v$VERSION" --repo "$REPO" --draft \
+    --title "oLusTifF $VERSION" --notes-file "$NOTES_FILE"
+  local RID
+  RID=$(gh release view "v$VERSION" --repo "$REPO" --json databaseId --jq .databaseId)
 
+  # gh release upload büyük dosyalarda aralıklı olarak HTTP 400 veriyor;
+  # doğrudan yükleme uç noktası daha güvenilir çalışıyor.
+  for name in olustiff-arm64.apk olustiff-arm32.apk olustiff.apk; do
+    echo "== yükleniyor: $name =="
+    local uploaded=0 code
+    for attempt in 1 2 3; do
+      code=$(curl --progress-bar -o /dev/null -w '%{http_code}' --max-time 1800 \
+        -X POST -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/vnd.android.package-archive" \
+        --data-binary "@$STAGE/$name" \
+        "https://uploads.github.com/repos/$REPO/releases/$RID/assets?name=$name") \
+        || code="000"  # ağ hatası: set -e betiği burada öldürmesin, yeniden denensin
+      if [ "$code" = "201" ]; then
+        echo "   tamam"
+        uploaded=1
+        break
+      fi
+      echo "   HTTP $code, yeniden deneniyor"
+      sleep 5
+    done
+    if [ "$uploaded" != 1 ]; then
+      echo "HATA: $name ($REPO) yüklenemedi. Sürüm TASLAK olarak bırakıldı;" >&2
+      echo "GitHub'dan elle tamamlayın ya da silip yeniden çalıştırın." >&2
+      rm -rf "$STAGE"
+      exit 1
+    fi
+  done
+
+  echo "== yayınlanıyor: $REPO =="
+  gh release edit "v$VERSION" --repo "$REPO" --draft=false
+  gh release view "v$VERSION" --repo "$REPO" --json assets \
+    --jq '.assets[] | "\(.name)  \(.size/1048576|floor)MB  \(.state)"'
+}
+
+for depo in "${DEPOLAR[@]}"; do
+  yayinla_depo "$depo"
+done
 rm -rf "$STAGE"
-echo "== yayınlanıyor =="
-gh release edit "v$VERSION" --repo "$REPO" --draft=false
-gh release view "v$VERSION" --repo "$REPO" --json assets \
-  --jq '.assets[] | "\(.name)  \(.size/1048576|floor)MB  \(.state)"'
