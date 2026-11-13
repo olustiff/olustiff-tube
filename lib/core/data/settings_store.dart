@@ -18,6 +18,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kLastAudioOnly = 'last_audio_only';
   static const _kBluetoothAutoPlay = 'bluetooth_autoplay';
   static const _kLoudnessBoost = 'loudness_boost';
+  static const _kSponsorBlock = 'sponsor_block';
 
   /// Seçilebilir kalite tavanları. `null` = "Otomatik": çözünürlüğü ağ hızına
   /// göre oynatıcı seçer.
@@ -65,6 +66,20 @@ class SettingsStore extends ChangeNotifier {
   /// Bluetooth ses aygıtı bağlanınca son çalınan otomatik başlasın mı.
   bool _bluetoothAutoPlay = false;
 
+  /// Videoya gömülü sponsor/tanıtım bölümleri atlansın mı (SponsorBlock).
+  ///
+  /// Native taraf da aynı anahtarı ('flutter.sponsor_block') kendisi okuyor:
+  /// arayüz açılmadan başlayan oynatmada da geçerli olsun.
+  bool _sponsorBlock = true;
+  bool get sponsorBlock => _sponsorBlock;
+
+  Future<void> setSponsorBlock(bool value) async {
+    _sponsorBlock = value;
+    await _prefs?.setBool(_kSponsorBlock, value);
+    notifyListeners();
+    await PlaybackClient.shared.setSponsorBlock(value);
+  }
+
   int? get maxHeight => _maxHeight;
   double get speed => _speed;
   bool get autoplay => _autoplay;
@@ -98,6 +113,7 @@ class SettingsStore extends ChangeNotifier {
     _lastAudioOnly = prefs.getBool(_kLastAudioOnly);
     _bluetoothAutoPlay = prefs.getBool(_kBluetoothAutoPlay) ?? false;
     _loudnessBoost = prefs.getInt(_kLoudnessBoost) ?? _defaultLoudness;
+    _sponsorBlock = prefs.getBool(_kSponsorBlock) ?? true;
     await _syncLoudnessToNative();
     notifyListeners();
   }

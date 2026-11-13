@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/i18n/lang.dart';
 import '../../core/playback/ui_channel.dart';
 
 /// Ayarlardaki "Tanılama kaydını paylaş" satırı.
@@ -18,14 +19,18 @@ class DiagnosticsTile extends StatelessWidget {
     final path = await UiChannel.instance.diagnosticsFile();
     if (path == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Henüz kaydedilmiş bir sorun yok')),
+        SnackBar(
+          content: Text(
+            tr('Henüz kaydedilmiş bir sorun yok', 'No problems recorded yet'),
+          ),
+        ),
       );
       return;
     }
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(path, mimeType: 'text/plain')],
-        subject: 'oLusTifF tanılama kaydı',
+        subject: tr('oLusTifF tanılama kaydı', 'oLusTifF diagnostics log'),
       ),
     );
   }
@@ -34,8 +39,11 @@ class DiagnosticsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.bug_report_outlined),
-      title: const Text('Tanılama kaydını paylaş'),
-      subtitle: const Text('Takılma veya kopma olduysa geliştiriciye gönder'),
+      title: Text(tr('Tanılama kaydını paylaş', 'Share diagnostics log')),
+      subtitle: Text(
+        tr('Takılma veya kopma olduysa geliştiriciye gönder',
+            'Send it to the developer if playback stuttered or dropped'),
+      ),
       onTap: () => _share(context),
     );
   }

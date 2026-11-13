@@ -53,7 +53,8 @@ class DownloadProgressBar extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '%${(average * 100).round()}',
+                      tr('%${(average * 100).round()}',
+                          '${(average * 100).round()}%'),
                       style: theme.textTheme.bodySmall,
                     ),
                   ],

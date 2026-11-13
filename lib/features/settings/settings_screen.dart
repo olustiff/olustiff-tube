@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/data/library_store.dart';
 import '../../core/data/settings_store.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/ui/tv_mode.dart';
 import 'bluetooth_setting.dart';
@@ -20,22 +21,29 @@ class SettingsScreen extends StatelessWidget {
     final settings = SettingsStore.instance;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ayarlar')),
+      appBar: AppBar(title: Text(tr('Ayarlar', 'Settings'))),
       body: AnimatedBuilder(
         animation: settings,
         builder: (context, _) {
           return ListView(
             children: [
-              const _SectionHeader('Oynatma'),
+              _SectionHeader(tr('Oynatma', 'Playback')),
               ListTile(
                 leading: const Icon(Icons.high_quality_outlined),
-                title: const Text('Video kalitesi'),
+                title: Text(tr('Video kalitesi', 'Video quality')),
                 subtitle: Text(
                   settings.maxHeight == null
-                      ? 'Otomatik — çözünürlük ağ hızına göre kendiliğinden '
-                          'ayarlanır'
-                      : 'En fazla ${settings.qualityLabel} — video daha düşük '
-                          'çözünürlük sunuyorsa onunki geçerli olur',
+                      ? tr(
+                          'Otomatik — çözünürlük ağ hızına göre kendiliğinden '
+                              'ayarlanır',
+                          'Auto — resolution adjusts to your network speed',
+                        )
+                      : tr(
+                          'En fazla ${settings.qualityLabel} — video daha düşük '
+                              'çözünürlük sunuyorsa onunki geçerli olur',
+                          'Up to ${settings.qualityLabel} — if the video offers '
+                              'less, that is used',
+                        ),
                 ),
                 trailing: DropdownButton<int?>(
                   value: settings.maxHeight,
@@ -44,14 +52,16 @@ class SettingsScreen extends StatelessWidget {
                     for (final option in SettingsStore.qualityOptions)
                       DropdownMenuItem(
                         value: option,
-                        child: Text(option == null ? 'Otomatik' : '${option}p'),
+                        child: Text(
+                          option == null ? tr('Otomatik', 'Auto') : '${option}p',
+                        ),
                       ),
                   ],
                 ),
               ),
               ListTile(
                 leading: const Icon(Icons.speed),
-                title: const Text('Oynatma hızı'),
+                title: Text(tr('Oynatma hızı', 'Playback speed')),
                 subtitle: Text('${settings.speed}x'),
                 trailing: DropdownButton<double>(
                   value: settings.speed,
@@ -69,12 +79,17 @@ class SettingsScreen extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.volume_up_outlined),
-                title: const Text('Ses yükseltme'),
+                title: Text(tr('Ses yükseltme', 'Volume boost')),
                 subtitle: Text(
                   settings.loudnessBoost == 0
-                      ? 'Kapalı — ses ham hâliyle, en temiz sonuç'
-                      : '${settings.loudnessLabel} — yüksek kademelerde ses '
-                          'bir sıkılıp bir açılabilir',
+                      ? tr('Kapalı — ses ham hâliyle, en temiz sonuç',
+                          'Off — original audio, cleanest sound')
+                      : tr(
+                          '${settings.loudnessLabel} — yüksek kademelerde ses '
+                              'bir sıkılıp bir açılabilir',
+                          '${settings.loudnessLabel} — at higher levels the '
+                              'volume may pump up and down',
+                        ),
                 ),
                 trailing: DropdownButton<int>(
                   value: settings.loudnessBoost,
@@ -86,7 +101,9 @@ class SettingsScreen extends StatelessWidget {
                     for (final option in SettingsStore.loudnessOptions)
                       DropdownMenuItem(
                         value: option,
-                        child: Text(option == 0 ? 'Kapalı' : '+${option ~/ 100} dB'),
+                        child: Text(
+                          option == 0 ? tr('Kapalı', 'Off') : '+${option ~/ 100} dB',
+                        ),
                       ),
                   ],
                 ),
@@ -96,11 +113,18 @@ class SettingsScreen extends StatelessWidget {
               if (!TvMode.isTv.value)
                 SwitchListTile(
                   secondary: const Icon(Icons.headphones),
-                  title: const Text('Müzikleri sesli modda başlat'),
-                  subtitle: const Text(
-                    'Şarkı ve müzik videoları görüntü indirilmeden açılır. '
-                    'Kapatırsan her şey video olarak başlar. Oynatıcıda modu '
-                    'elle değiştirirsen sonrakiler de o modda açılır.',
+                  title: Text(
+                    tr('Müzikleri sesli modda başlat', 'Play music as audio'),
+                  ),
+                  subtitle: Text(
+                    tr(
+                      'Şarkı ve müzik videoları görüntü indirilmeden açılır. '
+                          'Kapatırsan her şey video olarak başlar. Oynatıcıda modu '
+                          'elle değiştirirsen sonrakiler de o modda açılır.',
+                      'Songs and music videos open without downloading the '
+                          'video. Turn off to start everything as video. If you '
+                          'switch modes in the player, the next ones follow it.',
+                    ),
                   ),
                   value: settings.musicAsAudio,
                   onChanged: settings.setMusicAsAudio,
@@ -111,9 +135,13 @@ class SettingsScreen extends StatelessWidget {
               if (TvMode.isTv.value) const CastReceiverSetting(),
               SwitchListTile(
                 secondary: const Icon(Icons.playlist_play),
-                title: const Text('Otomatik oynatma'),
-                subtitle: const Text(
-                  'Parça bitince sıradakine geçer (ekran kapalıyken de).',
+                title: Text(tr('Otomatik oynatma', 'Autoplay')),
+                subtitle: Text(
+                  tr(
+                    'Parça bitince sıradakine geçer (ekran kapalıyken de).',
+                    'Plays the next track when one ends (even with the '
+                        'screen off).',
+                  ),
                 ),
                 value: settings.autoplay,
                 onChanged: (value) async {
@@ -122,22 +150,29 @@ class SettingsScreen extends StatelessWidget {
                 },
               ),
               const Divider(),
-              const _SectionHeader('Uygulama'),
+              _SectionHeader(tr('Uygulama', 'App')),
               const LanguageTile(),
               const UpdateSection(),
               const FeedbackTile(),
               const DiagnosticsTile(),
               const Divider(),
-              const _SectionHeader('Veriler'),
+              _SectionHeader(tr('Veriler', 'Data')),
               ListTile(
                 leading: const Icon(Icons.history),
-                title: const Text('İzleme geçmişini temizle'),
-                subtitle: const Text('"Sana özel" listesi de sıfırlanır.'),
+                title: Text(
+                  tr('İzleme geçmişini temizle', 'Clear watch history'),
+                ),
+                subtitle: Text(
+                  tr('"Sana özel" listesi de sıfırlanır.',
+                      'This also resets "For you".'),
+                ),
                 onTap: () => LibraryStore.instance.clearWatched(),
               ),
               ListTile(
                 leading: const Icon(Icons.search_off),
-                title: const Text('Arama geçmişini temizle'),
+                title: Text(
+                  tr('Arama geçmişini temizle', 'Clear search history'),
+                ),
                 onTap: () => LibraryStore.instance.clearSearches(),
               ),
             ],

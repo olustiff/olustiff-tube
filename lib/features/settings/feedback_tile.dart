@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/i18n/lang.dart';
+
 /// Ayarlardaki "öneri ve görüş" satırı: projenin GitHub'daki öneri/hata
 /// sayfasını açar.
 ///
@@ -16,7 +18,12 @@ class FeedbackTile extends StatelessWidget {
     final opened = await launchUrl(_issues, mode: LaunchMode.externalApplication);
     if (!opened) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Açılamadı • github.com/olustiff/olustiff-tube')),
+        SnackBar(
+          content: Text(
+            tr('Açılamadı • github.com/olustiff/olustiff-tube',
+                "Couldn't open • github.com/olustiff/olustiff-tube"),
+          ),
+        ),
       );
     }
   }
@@ -25,8 +32,8 @@ class FeedbackTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.chat_outlined),
-      title: const Text('Öneri ve görüş'),
-      subtitle: const Text('GitHub üzerinden yaz'),
+      title: Text(tr('Öneri ve görüş', 'Feedback')),
+      subtitle: Text(tr('GitHub üzerinden yaz', 'Write to us on GitHub')),
       onTap: () => _open(context),
     );
   }

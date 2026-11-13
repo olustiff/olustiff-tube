@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/lang.dart';
 import '../../core/playback/ui_channel.dart';
 
 /// "Uygulama kapalıyken de yayın al" ayarı — YALNIZCA televizyonda.
@@ -54,22 +55,29 @@ class _CastReceiverSettingState extends State<CastReceiverSetting>
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Bir izin gerekiyor'),
-        content: const Text(
-          'Android, arka plandaki uygulamaların kendiliğinden ekran '
-          'açmasını engelliyor. Telefondan gönderilen videonun burada '
-          'kendiliğinden açılabilmesi için oLusTifF\'e "diğer uygulamaların '
-          'üzerinde göster" izni gerekiyor.\n\n'
-          'Açılacak ekranda oLusTifF\'i bulup izni açman yeterli.',
+        title: Text(tr('Bir izin gerekiyor', 'Permission needed')),
+        content: Text(
+          tr(
+            'Android, arka plandaki uygulamaların kendiliğinden ekran '
+                'açmasını engelliyor. Telefondan gönderilen videonun burada '
+                'kendiliğinden açılabilmesi için oLusTifF\'e "diğer uygulamaların '
+                'üzerinde göster" izni gerekiyor.\n\n'
+                'Açılacak ekranda oLusTifF\'i bulup izni açman yeterli.',
+            'Android blocks background apps from opening screens on their '
+                'own. For videos sent from your phone to open here '
+                'automatically, oLusTifF needs the "Display over other apps" '
+                'permission.\n\n'
+                'Just find oLusTifF on the screen that opens and turn it on.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Şimdi değil'),
+            child: Text(tr('Şimdi değil', 'Not now')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('İzin ekranını aç'),
+            child: Text(tr('İzin ekranını aç', 'Open permission screen')),
           ),
         ],
       ),
@@ -83,12 +91,16 @@ class _CastReceiverSettingState extends State<CastReceiverSetting>
   @override
   Widget build(BuildContext context) {
     if (_canOpen) {
-      return const ListTile(
-        leading: Icon(Icons.cast_connected),
-        title: Text('Telefondan yayın'),
+      return ListTile(
+        leading: const Icon(Icons.cast_connected),
+        title: Text(tr('Telefondan yayın', 'Cast from phone')),
         subtitle: Text(
-          'Hazır. Uygulama kapalı olsa bile telefondan gönderilen video '
-          'burada kendiliğinden açılır.',
+          tr(
+            'Hazır. Uygulama kapalı olsa bile telefondan gönderilen video '
+                'burada kendiliğinden açılır.',
+            'Ready. Videos sent from your phone open here automatically, '
+                'even when the app is closed.',
+          ),
         ),
       );
     }
@@ -99,13 +111,22 @@ class _CastReceiverSettingState extends State<CastReceiverSetting>
         color: Theme.of(context).colorScheme.errorContainer,
         child: ListTile(
           leading: const Icon(Icons.warning_amber),
-          title: const Text('Telefondan yayın yarım çalışıyor'),
-          subtitle: const Text(
-            'Televizyon telefonda listede görünür, ama uygulama kapalıyken '
-            'gelen video kendiliğinden açılmaz. İzni verirsen uygulamayı '
-            'elle açman gerekmez.',
+          title: Text(tr('Telefondan yayın yarım çalışıyor',
+              'Cast from phone only partly works')),
+          subtitle: Text(
+            tr(
+              'Televizyon telefonda listede görünür, ama uygulama kapalıyken '
+                  'gelen video kendiliğinden açılmaz. İzni verirsen uygulamayı '
+                  'elle açman gerekmez.',
+              'The TV shows up in the list on your phone, but videos sent '
+                  "while the app is closed won't open by themselves. Grant "
+                  "the permission and you won't need to open the app manually.",
+            ),
           ),
-          trailing: TextButton(onPressed: _ask, child: const Text('İzin ver')),
+          trailing: TextButton(
+            onPressed: _ask,
+            child: Text(tr('İzin ver', 'Allow')),
+          ),
         ),
       ),
     );

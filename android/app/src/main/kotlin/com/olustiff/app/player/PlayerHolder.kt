@@ -192,6 +192,7 @@ object PlayerHolder {
             audioFocus = AudioFocusHandler(appContext, player)
             player.addAnalyticsListener(loadLogger)
             stallWatch.start(appContext)
+            SponsorSkipper.start(appContext) { exoPlayer }
             loudness.attach(player.audioSessionId)
             // Otomatik geçiş NATIVE tarafta dinleniyor: ekran kapalıyken de
             // parça bitince sıradakine geçilmeli. Bu dinleyici Dart'ta olsaydı

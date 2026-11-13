@@ -242,6 +242,10 @@ class PlaybackClient {
   Future<void> setQueue(List<Map<String, Object?>> items, int index) =>
       _method.invokeMethod<void>('setQueue', {'items': items, 'index': index});
 
+  /// SponsorBlock'u açar/kapatır.
+  Future<void> setSponsorBlock(bool enabled) =>
+      _method.invokeMethod<void>('setSponsorBlock', {'enabled': enabled});
+
   Future<void> setAutoplay(bool enabled) =>
       _method.invokeMethod<void>('setAutoplay', {'enabled': enabled});
 

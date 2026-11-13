@@ -236,6 +236,11 @@ class PlaybackController(
                 }
             }
 
+            "setSponsorBlock" -> {
+                SponsorSkipper.setEnabled(call.argument<Boolean>("enabled") ?: true)
+                result.success(null)
+            }
+
             "setAutoplay" -> {
                 PlaybackQueue.setAutoplayEnabled(call.argument<Boolean>("enabled") ?: true)
                 result.success(null)

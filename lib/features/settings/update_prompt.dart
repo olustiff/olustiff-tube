@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/lang.dart';
 import '../../core/update/update_service.dart';
 
 /// Uygulama açılışında yeni sürümü haber veren pencere.
@@ -54,7 +55,10 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     Navigator.of(context).pop();
     if (_service.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kurulamadı: ${_service.error}')),
+        SnackBar(
+          content: Text(tr('Kurulamadı: ${_service.error}',
+              "Couldn't install: ${_service.error}")),
+        ),
       );
     }
   }
@@ -75,13 +79,14 @@ class _UpdateDialogState extends State<_UpdateDialog> {
 
         return AlertDialog(
           icon: const Icon(Icons.system_update),
-          title: const Text('Yeni sürüm hazır'),
+          title: Text(tr('Yeni sürüm hazır', 'New version available')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Sürüm ${release.version} • ${release.sizeLabel}',
+                tr('Sürüm ${release.version} • ${release.sizeLabel}',
+                    'Version ${release.version} • ${release.sizeLabel}'),
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               if (release.notes.trim().isNotEmpty) ...[
@@ -100,7 +105,8 @@ class _UpdateDialogState extends State<_UpdateDialog> {
                 const SizedBox(height: 16),
                 LinearProgressIndicator(value: _service.progress),
                 const SizedBox(height: 8),
-                Text('İndiriliyor… %${(_service.progress * 100).round()}'),
+                Text(tr('İndiriliyor… %${(_service.progress * 100).round()}',
+                    'Downloading… ${(_service.progress * 100).round()}%')),
               ],
             ],
           ),
@@ -109,12 +115,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
               : [
                   TextButton(
                     onPressed: _later,
-                    child: const Text('Daha sonra'),
+                    child: Text(tr('Daha sonra', 'Later')),
                   ),
                   FilledButton.icon(
                     onPressed: _update,
                     icon: const Icon(Icons.download),
-                    label: const Text('Güncelle'),
+                    label: Text(tr('Güncelle', 'Update')),
                   ),
                 ],
         );

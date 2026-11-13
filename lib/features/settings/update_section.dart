@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/lang.dart';
 import '../../core/update/update_service.dart';
 
 /// Ayarlardaki güncelleme bölümü.
@@ -17,13 +18,19 @@ class UpdateSection extends StatelessWidget {
     final release = await service.check();
     if (service.error != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Denetlenemedi: ${service.error}')),
+        SnackBar(
+          content: Text(tr('Denetlenemedi: ${service.error}',
+              "Couldn't check: ${service.error}")),
+        ),
       );
       return;
     }
     if (release == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('En güncel sürümü kullanıyorsun.')),
+        SnackBar(
+          content: Text(tr('En güncel sürümü kullanıyorsun.',
+              "You're on the latest version.")),
+        ),
       );
     }
   }
@@ -35,7 +42,10 @@ class UpdateSection extends StatelessWidget {
     await service.downloadAndInstall(release);
     if (service.error != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Kurulamadı: ${service.error}')),
+        SnackBar(
+          content: Text(tr('Kurulamadı: ${service.error}',
+              "Couldn't install: ${service.error}")),
+        ),
       );
     }
   }
@@ -54,11 +64,13 @@ class UpdateSection extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.system_update),
-              title: const Text('Güncellemeleri denetle'),
+              title: Text(tr('Güncellemeleri denetle', 'Check for updates')),
               subtitle: Text(
                 release == null
-                    ? 'Yüklü sürüm: ${service.currentVersion}'
-                    : 'Yeni sürüm hazır: ${release.version}',
+                    ? tr('Yüklü sürüm: ${service.currentVersion}',
+                        'Installed version: ${service.currentVersion}')
+                    : tr('Yeni sürüm hazır: ${release.version}',
+                        'New version available: ${release.version}'),
               ),
               trailing: service.isChecking
                   ? const SizedBox(
@@ -78,7 +90,8 @@ class UpdateSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Sürüm ${release.version} • ${release.sizeLabel}',
+                        tr('Sürüm ${release.version} • ${release.sizeLabel}',
+                            'Version ${release.version} • ${release.sizeLabel}'),
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                       if (release.notes.trim().isNotEmpty) ...[
@@ -94,17 +107,25 @@ class UpdateSection extends StatelessWidget {
                       if (service.isDownloading) ...[
                         LinearProgressIndicator(value: service.progress),
                         const SizedBox(height: 8),
-                        Text('İndiriliyor… %${(service.progress * 100).round()}'),
+                        Text(tr(
+                          'İndiriliyor… %${(service.progress * 100).round()}',
+                          'Downloading… ${(service.progress * 100).round()}%',
+                        )),
                       ] else
                         FilledButton.icon(
                           onPressed: () => _install(context, release),
                           icon: const Icon(Icons.download),
-                          label: const Text('İndir ve kur'),
+                          label: Text(tr('İndir ve kur', 'Download and install')),
                         ),
                       const SizedBox(height: 8),
                       Text(
-                        'Kurulumu Android onaylatır. İlk seferde '
-                        '"bilinmeyen kaynaklara izin ver" demen gerekebilir.',
+                        tr(
+                          'Kurulumu Android onaylatır. İlk seferde '
+                              '"bilinmeyen kaynaklara izin ver" demen gerekebilir.',
+                          'Android will ask you to confirm the install. The first '
+                              'time, you may need to allow installs from unknown '
+                              'sources.',
+                        ),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],

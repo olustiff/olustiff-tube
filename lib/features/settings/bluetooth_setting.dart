@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/data/settings_store.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/ui_channel.dart';
 
@@ -74,7 +75,11 @@ class _BluetoothSettingState extends State<BluetoothSetting>
     final error = await PlaybackClient.shared.testBluetoothAutoPlay();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(error == null ? 'Çalmaya başladı.' : 'Olmadı: $error'),
+        content: Text(
+          error == null
+              ? tr('Çalmaya başladı.', 'Playback started.')
+              : tr('Olmadı: $error', "Didn't work: $error"),
+        ),
       ),
     );
   }
@@ -83,21 +88,27 @@ class _BluetoothSettingState extends State<BluetoothSetting>
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Bir izin gerekiyor'),
-        content: const Text(
-          'Android, arka plandaki uygulamaların kendiliğinden müzik '
-          'başlatmasını engelliyor. Bu özelliğin çalışması için '
-          'oLusTifF\'i pil kısıtlamasından muaf tutman gerekiyor.\n\n'
-          'Açılacak ekranda "İzin ver" demen yeterli.',
+        title: Text(tr('Bir izin gerekiyor', 'Permission needed')),
+        content: Text(
+          tr(
+            'Android, arka plandaki uygulamaların kendiliğinden müzik '
+                'başlatmasını engelliyor. Bu özelliğin çalışması için '
+                'oLusTifF\'i pil kısıtlamasından muaf tutman gerekiyor.\n\n'
+                'Açılacak ekranda "İzin ver" demen yeterli.',
+            'Android blocks background apps from starting music on their '
+                'own. For this feature to work, oLusTifF must be exempt from '
+                'battery restrictions.\n\n'
+                'Just tap "Allow" on the screen that opens.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Şimdi değil'),
+            child: Text(tr('Şimdi değil', 'Not now')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('İzin ekranını aç'),
+            child: Text(tr('İzin ekranını aç', 'Open permission screen')),
           ),
         ],
       ),
@@ -116,19 +127,26 @@ class _BluetoothSettingState extends State<BluetoothSetting>
     // açıkça söylüyoruz.
     final needsPermission = enabled && (!_exempt || !_hasBtPermission);
     final missing = [
-      if (!_hasBtPermission) 'Bluetooth izni',
-      if (!_exempt) 'pil kısıtlaması muafiyeti',
-    ].join(' ve ');
+      if (!_hasBtPermission) tr('Bluetooth izni', 'Bluetooth permission'),
+      if (!_exempt)
+        tr('pil kısıtlaması muafiyeti', 'battery restriction exemption'),
+    ].join(tr(' ve ', ' and '));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SwitchListTile(
           secondary: const Icon(Icons.bluetooth_audio),
-          title: const Text('Bluetooth\'a bağlanınca çal'),
-          subtitle: const Text(
-            'Kulaklık/hoparlör bağlanınca son dinlediğin başlar. '
-            'Uygulamayı açmaz, sadece müziği başlatır.',
+          title: Text(
+            tr('Bluetooth\'a bağlanınca çal', 'Play on Bluetooth connect'),
+          ),
+          subtitle: Text(
+            tr(
+              'Kulaklık/hoparlör bağlanınca son dinlediğin başlar. '
+                  'Uygulamayı açmaz, sadece müziği başlatır.',
+              'When headphones/a speaker connect, your last track resumes. '
+                  "It doesn't open the app, it just starts the music.",
+            ),
           ),
           value: enabled,
           onChanged: _toggle,
@@ -139,7 +157,7 @@ class _BluetoothSettingState extends State<BluetoothSetting>
             child: OutlinedButton.icon(
               onPressed: _test,
               icon: const Icon(Icons.play_arrow),
-              label: const Text('Şimdi dene'),
+              label: Text(tr('Şimdi dene', 'Try now')),
             ),
           ),
         if (needsPermission)
@@ -149,10 +167,14 @@ class _BluetoothSettingState extends State<BluetoothSetting>
               color: Theme.of(context).colorScheme.errorContainer,
               child: ListTile(
                 leading: const Icon(Icons.warning_amber),
-                title: const Text('İzin eksik'),
+                title: Text(tr('İzin eksik', 'Permission missing')),
                 subtitle: Text(
-                  '$missing gerekiyor. Bunlar olmadan Android '
-                  'müziği başlatmıyor.',
+                  tr(
+                    '$missing gerekiyor. Bunlar olmadan Android '
+                        'müziği başlatmıyor.',
+                    'Needs $missing. Without it, Android '
+                        "won't start the music.",
+                  ),
                 ),
                 trailing: TextButton(
                   onPressed: () async {
@@ -162,7 +184,7 @@ class _BluetoothSettingState extends State<BluetoothSetting>
                     }
                     if (mounted && !_exempt) await _askForExemption();
                   },
-                  child: const Text('İzin ver'),
+                  child: Text(tr('İzin ver', 'Allow')),
                 ),
               ),
             ),
