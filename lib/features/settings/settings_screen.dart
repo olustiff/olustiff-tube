@@ -134,6 +134,19 @@ class SettingsScreen extends StatelessWidget {
               // taraf orası. Telefonda gösterilecek bir karşılığı yok.
               if (TvMode.isTv.value) const CastReceiverSetting(),
               SwitchListTile(
+                secondary: const Icon(Icons.fast_forward_outlined),
+                title: Text(tr('Sponsor bölümlerini atla', 'Skip sponsor segments')),
+                subtitle: Text(tr(
+                  'SponsorBlock: videoya gömülü sponsor, tanıtım ve "abone '
+                      'ol" kısımlarını, müzik videolarındaki müzik dışı '
+                      'bölümleri atlar.',
+                  'SponsorBlock: skips sponsor segments, self-promotion, '
+                      'subscribe reminders and non-music parts of music videos.',
+                )),
+                value: settings.sponsorBlock,
+                onChanged: settings.setSponsorBlock,
+              ),
+              SwitchListTile(
                 secondary: const Icon(Icons.playlist_play),
                 title: Text(tr('Otomatik oynatma', 'Autoplay')),
                 subtitle: Text(

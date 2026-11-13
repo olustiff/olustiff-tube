@@ -156,18 +156,8 @@ class AkisApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dil değişince bütün ağaç baştan kuruluyor: metinler `tr()` ile çizim
-    // anında seçildiği için yeniden çizim yetiyor, ama `const` widget'lar
-    // yeniden çizilmez — anahtar değişince hepsi yeniden kuruluyor.
-    return ListenableBuilder(
-      listenable: Lang.instance,
-      builder: (context, _) => _buildApp(),
-    );
-  }
-
-  Widget _buildApp() {
+    // Dil değişince yeniden çizimi `Lang.setChoice` kendisi yapıyor.
     return MaterialApp(
-      key: ValueKey(Lang.instance.code),
       title: 'oLusTifF',
       navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,

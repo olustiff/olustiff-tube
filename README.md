@@ -26,12 +26,19 @@ music **without ads**, **without an account** and **without tracking**, keeps
 playing in the background with the screen off, and works on **Android TV** with
 the remote control.
 
+<p align="center">
+  <img src="docs/screenshots/en-1-oynatici.png" width="240" alt="Player">
+  <img src="docs/screenshots/en-2-arama.png" width="240" alt="Search">
+  <img src="docs/screenshots/en-3-ayarlar.png" width="240" alt="Settings">
+</p>
+
 ### Features
 
 - **No ads** — videos and music start straight away, no pre-roll or banner ads
 - **Background play** — music keeps playing with the screen off or in another app
 - **Audio-only mode** — listen to music without downloading the video (saves data and battery)
 - **Android TV** — full remote-control interface, voice search, cast from your phone to the TV
+- **SponsorBlock** — skips sponsor segments, self-promotion, subscribe reminders and non-music parts of music videos
 - **Picture-in-picture** — keep watching in a small window
 - **MP3 download** — save songs to your phone
 - **Automatic quality** — adapts to your connection, or pick a fixed resolution
@@ -39,6 +46,7 @@ the remote control.
 - **Favourites** (♥) and **most played** lists, kept on your device only
 - **Bluetooth / car** — resumes when your headphones or car connect; never jumps to the phone speaker when Bluetooth drops
 - **No Google account, no sign-in, no tracking** — your history never leaves the device
+- **English and Turkish** interface
 - **In-app updates** from this repository's releases
 
 ### Install
@@ -71,12 +79,19 @@ oLusTifF, Android için açık kaynaklı bir YouTube oynatıcısı. YouTube vide
 müziklerini **reklamsız**, **hesapsız** ve **takipsiz** oynatır. Ekran kapalıyken
 arka planda çalmaya devam eder ve **Android TV**'de kumandayla çalışır.
 
+<p align="center">
+  <img src="docs/screenshots/tr-1-oynatici.png" width="240" alt="Oynatıcı">
+  <img src="docs/screenshots/tr-2-arama.png" width="240" alt="Arama">
+  <img src="docs/screenshots/tr-3-ayarlar.png" width="240" alt="Ayarlar">
+</p>
+
 ### Özellikler
 
 - **Reklam yok**: videolar ve müzikler hemen başlar, ne başta ne arada reklam var
 - **Arka planda çalma**: ekran kapalıyken ya da başka uygulamadayken müzik devam eder
 - **Sadece ses modu**: müziği görüntüyü indirmeden dinle (internet ve pil tasarrufu)
 - **Android TV**: kumandayla tam kullanım, sesli arama, telefondan televizyona gönderme
+- **SponsorBlock**: videoya gömülü sponsor, tanıtım ve "abone ol" kısımlarını, müzik videolarındaki müzik dışı bölümleri atlar
 - **Resim içinde resim**: küçük pencerede izlemeye devam et
 - **MP3 indirme**: şarkıları telefona kaydet
 - **Otomatik kalite**: internet hızına göre ayarlanır ya da sabit çözünürlük seç
@@ -84,6 +99,7 @@ arka planda çalmaya devam eder ve **Android TV**'de kumandayla çalışır.
 - **Favoriler** (♥) ve **en çok dinlenenler**: yalnızca cihazında saklanır
 - **Bluetooth / araba**: kulaklık ya da araba bağlanınca kaldığı yerden devam eder; Bluetooth kopunca müzik telefonun hoparlöründen başlamaz
 - **Google hesabı yok, giriş yok, takip yok**: geçmişin cihazından çıkmaz
+- **Türkçe ve İngilizce** arayüz
 - **Uygulama içinden güncelleme**
 
 ### Kurulum

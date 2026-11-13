@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../playback/ui_channel.dart';
@@ -52,6 +52,24 @@ class Lang extends ChangeNotifier {
     _resolve();
     await _tellNative();
     notifyListeners();
+    _rebuildEverything();
+  }
+
+  /// Açık bütün ekranları yeni dille yeniden çizer.
+  ///
+  /// Metinler `tr()` ile çizim anında seçiliyor, ama `const` widget'lar ve
+  /// gezinme yığınındaki ekranlar kendiliğinden yeniden çizilmiyor
+  /// (MaterialApp'e yeni anahtar vermek de yetmedi: gezinici GlobalKey ile
+  /// korunuyor, açık ekranlar eski dilde kalıyordu). Her öğeyi kirli
+  /// işaretlemek hepsini bir sonraki karede yeniden kuruyor; durumları
+  /// (kaydırma, açık ekranlar, çalan video) korunuyor.
+  void _rebuildEverything() {
+    void mark(Element element) {
+      element.markNeedsBuild();
+      element.visitChildren(mark);
+    }
+
+    WidgetsBinding.instance.rootElement?.visitChildren(mark);
   }
 
   /// Testler için: dili doğrudan ayarla (kaydetmeden).
@@ -66,7 +84,7 @@ class Lang extends ChangeNotifier {
       AppLanguage.turkish => false,
       AppLanguage.english => true,
       AppLanguage.system =>
-        PlatformDispatcher.instance.locale.languageCode != 'tr',
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode != 'tr',
     };
   }
 
