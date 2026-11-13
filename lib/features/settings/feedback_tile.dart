@@ -9,14 +9,14 @@ import 'package:url_launcher/url_launcher.dart';
 class FeedbackTile extends StatelessWidget {
   const FeedbackTile({super.key});
 
-  static final _issues = Uri.parse('https://github.com/olustiff/olustiff/issues');
+  static final _issues = Uri.parse('https://github.com/olustiff/olustiff-tube/issues');
 
   Future<void> _open(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final opened = await launchUrl(_issues, mode: LaunchMode.externalApplication);
     if (!opened) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Açılamadı • github.com/olustiff/olustiff')),
+        const SnackBar(content: Text('Açılamadı • github.com/olustiff/olustiff-tube')),
       );
     }
   }

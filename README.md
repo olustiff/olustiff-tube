@@ -98,7 +98,7 @@ Cihaza özel daha küçük dosyalar (`olustiff-arm64.apk`, `olustiff-arm32.apk`)
 
 ### Öneri ve hata bildirimi
 
-[Issues](https://github.com/olustiff/olustiff/issues) sayfasından yazabilirsin.
+[Issues](https://github.com/olustiff/olustiff-tube/issues) sayfasından yazabilirsin.
 
 ---
 
