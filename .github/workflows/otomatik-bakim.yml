@@ -132,7 +132,7 @@ jobs:
       # Yayın yolunu GERÇEK güncelleme gelmeden sınamak için: anahtar doğru
       # mu, imzalı derleme oluyor mu, yayın deposuna yazma yetkisi var mı.
       - name: Deneme (yayınlamadan)
-        if: inputs.deneme && steps.surum.outputs.yayinla != '1'
+        if: inputs.deneme
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
@@ -151,8 +151,10 @@ jobs:
           echo "### Deneme başarılı" >> "$GITHUB_STEP_SUMMARY"
           echo "imza: \`$imza\`" >> "$GITHUB_STEP_SUMMARY"
 
+      # Deneme ASLA yayınlamaz: 13 Kas 2026'da deneme tam yeni çözümleyici
+      # çıktığı sırada çalıştı ve kullanıcının onayı olmadan 1.12.8 yayınlandı.
       - name: Sürümü artır ve yayınla
-        if: steps.surum.outputs.yayinla == '1'
+        if: steps.surum.outputs.yayinla == '1' && !inputs.deneme
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
