@@ -24,6 +24,7 @@ import 'quality_menu.dart';
 import 'tv_player.dart';
 import 'video_player_view.dart';
 import 'youtube_cast_panel.dart';
+import '../../core/i18n/lang.dart';
 
 /// Oynatma ekranı.
 ///
@@ -156,12 +157,12 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: ListView(
             shrinkWrap: true,
             children: [
-              const ListTile(title: Text('Çalma listesine ekle')),
+              ListTile(title: Text(tr('Çalma listesine ekle', 'Add to playlist'))),
               // Liste yoksa kullanıcıyı başka ekrana göndermeden buradan
               // oluşturmasına izin ver.
               ListTile(
                 leading: const Icon(Icons.add),
-                title: const Text('Yeni liste oluştur'),
+                title: Text(tr('Yeni liste oluştur', 'Create new playlist')),
                 onTap: () async {
                   final name = await _promptPlaylistName(sheetContext);
                   if (name == null) return;
@@ -176,7 +177,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 ListTile(
                   leading: const Icon(Icons.queue_music),
                   title: Text(name),
-                  subtitle: Text('${store.playlists[name]!.length} video'),
+                  subtitle: Text(tr('${store.playlists[name]!.length} video', store.playlists[name]!.length == 1 ? '1 video' : '${store.playlists[name]!.length} videos')),
                   onTap: () => Navigator.of(sheetContext).pop(name),
                 ),
             ],
@@ -202,7 +203,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('"$selected" listesine eklendi')));
+      ).showSnackBar(SnackBar(content: Text(tr('"$selected" listesine eklendi', 'Added to "$selected"'))));
     }
   }
 
@@ -211,25 +212,25 @@ class _PlayerScreenState extends State<PlayerScreen>
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Yeni çalma listesi'),
+        title: Text(tr('Yeni çalma listesi', 'New playlist')),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Liste adı'),
+          decoration: InputDecoration(hintText: tr('Liste adı', 'Playlist name')),
           onSubmitted: (v) =>
               Navigator.of(context).pop(v.trim().isEmpty ? null : v.trim()),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Vazgeç'),
+            child: Text(tr('Vazgeç', 'Cancel')),
           ),
           FilledButton(
             onPressed: () {
               final value = controller.text.trim();
               Navigator.of(context).pop(value.isEmpty ? null : value);
             },
-            child: const Text('Oluştur'),
+            child: Text(tr('Oluştur', 'Create')),
           ),
         ],
       ),
@@ -244,14 +245,14 @@ class _PlayerScreenState extends State<PlayerScreen>
         child: ListView(
           shrinkWrap: true,
           children: [
-            const ListTile(title: Text('Uyku zamanlayıcısı')),
+            ListTile(title: Text(tr('Uyku zamanlayıcısı', 'Sleep timer'))),
             for (final option in SleepTimer.options)
               ListTile(
                 leading: const Icon(Icons.bedtime_outlined),
                 title: Text(
                   option.inHours > 0
-                      ? '${option.inHours} saat'
-                      : '${option.inMinutes} dakika',
+                      ? tr('${option.inHours} saat', option.inHours == 1 ? '1 hour' : '${option.inHours} hours')
+                      : tr('${option.inMinutes} dakika', '${option.inMinutes} minutes'),
                 ),
                 onTap: () {
                   timer.start(option);
@@ -261,7 +262,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             if (timer.isActive)
               ListTile(
                 leading: const Icon(Icons.close),
-                title: const Text('Zamanlayıcıyı iptal et'),
+                title: Text(tr('Zamanlayıcıyı iptal et', 'Cancel timer')),
                 onTap: () {
                   timer.cancel();
                   Navigator.of(context).pop();
@@ -282,21 +283,25 @@ class _PlayerScreenState extends State<PlayerScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(toVideo ? 'Video moduna geçilsin mi?' : 'Sesli moda geçilsin mi?'),
+        title: Text(toVideo ? tr('Video moduna geçilsin mi?', 'Switch to video mode?') : tr('Sesli moda geçilsin mi?', 'Switch to audio mode?')),
         content: Text(
           toVideo
-              ? 'Görüntü de indirilecek. Bundan sonra açtıkların da video olarak başlar.'
-              : 'Yalnızca ses çalar, internet ve pil tasarrufu sağlar. '
-                  'Bundan sonra açtıkların da sesli başlar.',
+              ? tr('Görüntü de indirilecek. Bundan sonra açtıkların da video olarak başlar.', 'Video will be streamed too. Videos you open from now on will also start in video mode.')
+              : tr(
+                  'Yalnızca ses çalar, internet ve pil tasarrufu sağlar. '
+                      'Bundan sonra açtıkların da sesli başlar.',
+                  'Plays audio only, saving data and battery. '
+                      'Videos you open from now on will also start in audio mode.',
+                ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Vazgeç'),
+            child: Text(tr('Vazgeç', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(toVideo ? 'Videoya geç' : 'Sesliye geç'),
+            child: Text(toVideo ? tr('Videoya geç', 'Switch to video') : tr('Sesliye geç', 'Switch to audio')),
           ),
         ],
       ),
@@ -410,8 +415,8 @@ class _PlayerScreenState extends State<PlayerScreen>
           : AppBar(
               title: Text(
                 CastController.instance.isCasting
-                    ? "TV'de oynatılıyor"
-                    : (audioOnly ? 'Dinleniyor' : 'İzleniyor'),
+                    ? tr("TV'de oynatılıyor", 'Playing on TV')
+                    : (audioOnly ? tr('Dinleniyor', 'Listening') : tr('İzleniyor', 'Watching')),
               ),
               actions: [
                 // Televizyona gönderme yalnızca çalacak bir şey varken
@@ -424,7 +429,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 // Yeni bir şey aramak için listeye geri dönmek gerekmiyor.
                 IconButton(
                   icon: const Icon(Icons.search),
-                  tooltip: 'Ara',
+                  tooltip: tr('Ara', 'Search'),
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const SearchScreen()),
                   ),
@@ -434,7 +439,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 // kaplıyordu.
                 if (!CastController.instance.isCasting)
                   IconButton(
-                    tooltip: audioOnly ? 'Videoya geç' : 'Sadece sese geç',
+                    tooltip: audioOnly ? tr('Videoya geç', 'Switch to video') : tr('Sadece sese geç', 'Switch to audio only'),
                     icon: Icon(
                       audioOnly ? Icons.videocam_outlined : Icons.headphones,
                     ),
@@ -452,11 +457,11 @@ class _PlayerScreenState extends State<PlayerScreen>
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'download',
                       child: ListTile(
-                        leading: Icon(Icons.download_outlined),
-                        title: Text('MP3 indir'),
+                        leading: const Icon(Icons.download_outlined),
+                        title: Text(tr('MP3 indir', 'Download MP3')),
                       ),
                     ),
                     PopupMenuItem(
@@ -465,16 +470,16 @@ class _PlayerScreenState extends State<PlayerScreen>
                         leading: const Icon(Icons.bedtime_outlined),
                         title: Text(
                           SleepTimer.instance.isActive
-                              ? 'Uyku zamanlayıcısı (açık)'
-                              : 'Uyku zamanlayıcısı',
+                              ? tr('Uyku zamanlayıcısı (açık)', 'Sleep timer (on)')
+                              : tr('Uyku zamanlayıcısı', 'Sleep timer'),
                         ),
                       ),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'share',
                       child: ListTile(
-                        leading: Icon(Icons.share_outlined),
-                        title: Text('Paylaş'),
+                        leading: const Icon(Icons.share_outlined),
+                        title: Text(tr('Paylaş', 'Share')),
                       ),
                     ),
                   ],
@@ -519,7 +524,7 @@ class _PlayerScreenState extends State<PlayerScreen>
               const SizedBox(height: 12),
               Text('$error', textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              FilledButton(onPressed: _start, child: const Text('Tekrar dene')),
+              FilledButton(onPressed: _start, child: Text(tr('Tekrar dene', 'Try again'))),
             ],
           ),
         ),
@@ -614,11 +619,11 @@ class _PlayerScreenState extends State<PlayerScreen>
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       secondary: const Icon(Icons.playlist_play),
-                      title: const Text('Otomatik oynatma'),
+                      title: Text(tr('Otomatik oynatma', 'Autoplay')),
                       subtitle: Text(
                         _coordinator.upNext == null
-                            ? 'Bittiğinde durur.'
-                            : 'Sırada: ${_coordinator.upNext!.title}',
+                            ? tr('Bittiğinde durur.', 'Stops when finished.')
+                            : tr('Sırada: ${_coordinator.upNext!.title}', 'Up next: ${_coordinator.upNext!.title}'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -702,9 +707,9 @@ class _QuickSettings extends StatelessWidget {
           IconButton(
             icon: Icon(_repeatIcon),
             tooltip: switch (state.repeatMode) {
-              'one' => 'Tek parçayı tekrarla',
-              'all' => 'Listeyi tekrarla',
-              _ => 'Tekrar kapalı',
+              'one' => tr('Tek parçayı tekrarla', 'Repeat one'),
+              'all' => tr('Listeyi tekrarla', 'Repeat all'),
+              _ => tr('Tekrar kapalı', 'Repeat off'),
             },
             onPressed: () => coordinator.setRepeatMode(_nextRepeatMode),
           ),
@@ -712,14 +717,14 @@ class _QuickSettings extends StatelessWidget {
             icon: Icon(
               state.shuffle ? Icons.shuffle_on_outlined : Icons.shuffle,
             ),
-            tooltip: state.shuffle ? 'Karıştırma açık' : 'Karıştır',
+            tooltip: state.shuffle ? tr('Karıştırma açık', 'Shuffle on') : tr('Karıştır', 'Shuffle'),
             onPressed: () => coordinator.setShuffle(!state.shuffle),
           ),
           // Menünün içinde kaybolmak yerine diğer kuyruk kontrolleriyle
           // birlikte dursun.
           IconButton(
             icon: const Icon(Icons.playlist_add),
-            tooltip: 'Çalma listesine ekle',
+            tooltip: tr('Çalma listesine ekle', 'Add to playlist'),
             onPressed: onAddToPlaylist,
           ),
         ],
@@ -742,12 +747,12 @@ class _QueueSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Sırada', style: Theme.of(context).textTheme.titleSmall),
+        Text(tr('Sırada', 'Up next'), style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         if (upcoming.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text('Sırada başka video yok.'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(tr('Sırada başka video yok.', 'No more videos in the queue.')),
           )
         else
           for (final item in upcoming)
@@ -855,7 +860,7 @@ class _TransportBar extends StatelessWidget {
                       color: Theme.of(context).colorScheme.error,
                     ),
                     const SizedBox(width: 6),
-                    const Text('CANLI'),
+                    Text(tr('CANLI', 'LIVE')),
                   ],
                 )
               else if (showSeek)
@@ -863,7 +868,7 @@ class _TransportBar extends StatelessWidget {
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.skip_previous),
-                tooltip: 'Önceki',
+                tooltip: tr('Önceki', 'Previous'),
                 onPressed: state.hasPrevious ? coordinator.playPrevious : null,
               ),
               // Yükleme göstergesi görüntü/kapak alanında gösterildiği için
@@ -880,7 +885,7 @@ class _TransportBar extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.skip_next),
-                tooltip: 'Sonraki',
+                tooltip: tr('Sonraki', 'Next'),
                 onPressed: state.hasNext ? coordinator.playNext : null,
               ),
               const Spacer(),

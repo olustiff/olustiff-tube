@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../i18n/lang.dart';
 import '../playback/playback_client.dart';
 
 /// Kullanıcının oynatma tercihleri.
@@ -75,14 +76,15 @@ class SettingsStore extends ChangeNotifier {
 
   /// Ayar ekranında gösterilen etiket.
   String get loudnessLabel => switch (_loudnessBoost) {
-        0 => 'Kapalı',
-        <= 200 => 'Az (+2 dB)',
-        <= 400 => 'Orta (+4 dB)',
-        <= 700 => 'Yüksek (+7 dB)',
-        _ => 'En yüksek (+9 dB)',
+        0 => tr('Kapalı', 'Off'),
+        <= 200 => tr('Az (+2 dB)', 'Low (+2 dB)'),
+        <= 400 => tr('Orta (+4 dB)', 'Medium (+4 dB)'),
+        <= 700 => tr('Yüksek (+7 dB)', 'High (+7 dB)'),
+        _ => tr('En yüksek (+9 dB)', 'Maximum (+9 dB)'),
       };
 
-  String get qualityLabel => _maxHeight == null ? 'Otomatik' : '${_maxHeight}p';
+  String get qualityLabel =>
+      _maxHeight == null ? tr('Otomatik', 'Auto') : '${_maxHeight}p';
 
   Future<void> load() async {
     final prefs = _prefs ??= await SharedPreferences.getInstance();

@@ -1,0 +1,19 @@
+<p>oLusTifF, YouTube videolarını ve müziklerini <b>reklamsız</b>, <b>hesapsız</b> ve <b>takipsiz</b> oynatır. Telefon ve Android TV için tek uygulama.</p>
+
+<p><b>Özellikler</b></p>
+<ul>
+<li>Reklam yok: videolar ve müzikler hemen başlar</li>
+<li>Ekran kapalıyken arka planda çalma</li>
+<li>Müzik için sadece ses modu: internet ve pil tasarrufu; seçtiğin modu hatırlar</li>
+<li>Kumandaya uygun Android TV arayüzü, sesli arama, telefondan televizyona gönderme</li>
+<li>SponsorBlock: sponsor bölümlerini, tanıtımları ve müzik videolarındaki müzik dışı kısımları atlar</li>
+<li>Resim içinde resim</li>
+<li>MP3 indirme</li>
+<li>İnternet hızına göre otomatik kalite ya da sabit çözünürlük</li>
+<li>Sıra, otomatik oynatma, tekrar, karıştırma, uyku zamanlayıcısı, çalma listeleri</li>
+<li>Favoriler ve en çok dinlenenler, yalnızca cihazında saklanır</li>
+<li>Bluetooth ve araba: kulaklık ya da araba bağlanınca kaldığı yerden devam eder</li>
+<li>Türkçe ve İngilizce arayüz</li>
+</ul>
+
+<p>YouTube akışları NewPipeExtractor ile çözümlenir. oLusTifF'in YouTube ya da Google ile bağlantısı yoktur.</p>

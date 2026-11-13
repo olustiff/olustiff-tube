@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/data/downloads_store.dart';
+import '../../core/i18n/lang.dart';
 
 /// Süren MP3 indirmelerini ekranın altında gösteren ince şerit.
 ///
@@ -26,9 +27,10 @@ class DownloadProgressBar extends StatelessWidget {
                 active.length;
 
         final label = active.length > 1
-            ? '${active.length} indirme sürüyor'
+            ? tr('${active.length} indirme sürüyor',
+                '${active.length} downloads in progress')
             : (active.first.title.isEmpty
-                ? 'MP3 hazırlanıyor…'
+                ? tr('MP3 hazırlanıyor…', 'Preparing MP3…')
                 : active.first.title);
 
         return Material(

@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import 'models.dart';
+import '../i18n/lang.dart';
 
 /// Native Kotlin tarafındaki [MainActivity]'de kaydedilen `olustiff/extractor`
 /// MethodChannel'ının Dart yüzü. Tüm çağrılar native tarafta IO thread'inde
@@ -27,7 +28,9 @@ class ExtractionClient {
     } on PlatformException catch (e) {
       throw ExtractionException(
         e.code,
-        e.message ?? 'Bilinmeyen bir çıkarma hatası oluştu.',
+        e.message ??
+            tr('Bilinmeyen bir çıkarma hatası oluştu.',
+                'An unknown extraction error occurred.'),
       );
     }
   }

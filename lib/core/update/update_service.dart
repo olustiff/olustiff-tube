@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../i18n/lang.dart';
+
 /// Yayınlanmış bir sürüm.
 class AppRelease {
   final String version;
@@ -116,13 +118,17 @@ class UpdateService extends ChangeNotifier {
         // Depo erişilemiyor ya da hiç sürüm yayınlanmamış. "En güncelsin"
         // demek yanıltıcı olurdu — kullanıcı güncelleme gelmediğini
         // sanmasın, kaynağın hazır olmadığını bilsin.
-        _error = 'Sürüm kaynağına ulaşılamadı. Depo herkese açık olmalı ve '
-            'en az bir sürüm yayınlanmış olmalı.';
+        _error = tr(
+            'Sürüm kaynağına ulaşılamadı. Depo herkese açık olmalı ve '
+                'en az bir sürüm yayınlanmış olmalı.',
+            'Could not reach the release source. The repository must be '
+                'public and have at least one published release.');
         _available = null;
         return null;
       }
       if (response.statusCode != 200) {
-        throw Exception('GitHub yanıtı: ${response.statusCode}');
+        throw Exception(tr('GitHub yanıtı: ${response.statusCode}',
+            'GitHub response: ${response.statusCode}'));
       }
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -169,7 +175,7 @@ class UpdateService extends ChangeNotifier {
         'sizeBytes': release.sizeBytes,
       });
     } on PlatformException catch (e) {
-      _error = e.message ?? 'Güncelleme kurulamadı';
+      _error = e.message ?? tr('Güncelleme kurulamadı', 'Could not install the update');
     } finally {
       _downloading = false;
       notifyListeners();

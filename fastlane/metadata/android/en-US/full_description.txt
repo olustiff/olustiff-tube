@@ -1,0 +1,19 @@
+<p>oLusTifF plays YouTube videos and music <b>without ads</b>, <b>without an account</b> and <b>without tracking</b>. One app for your phone and your Android TV.</p>
+
+<p><b>Features</b></p>
+<ul>
+<li>No ads: videos and music start straight away</li>
+<li>Background play with the screen off</li>
+<li>Audio-only mode for music: saves data and battery; the app remembers the mode you chose</li>
+<li>Android TV interface for the remote control, voice search, send videos from your phone to the TV</li>
+<li>SponsorBlock: skips sponsor segments, self-promotion and non-music parts of music videos</li>
+<li>Picture-in-picture</li>
+<li>MP3 download</li>
+<li>Automatic quality based on your connection, or a fixed resolution</li>
+<li>Queue, autoplay, repeat, shuffle, sleep timer, playlists</li>
+<li>Favourites and most played lists, stored on your device only</li>
+<li>Bluetooth and car: resumes when your headphones or car connect</li>
+<li>English and Turkish interface</li>
+</ul>
+
+<p>YouTube streams are extracted with NewPipeExtractor. oLusTifF is not affiliated with YouTube or Google.</p>

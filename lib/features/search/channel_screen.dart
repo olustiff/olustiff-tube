@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../player/mini_player.dart';
 import '../player/player_route.dart';
@@ -108,7 +109,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
             ),
             if (count != null)
               Text(
-                '${formatCompactCount(count)} abone',
+                tr('${formatCompactCount(count)} abone',
+                    '${formatCompactCount(count)} subscribers'),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
           ],
@@ -122,7 +124,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
               loading: _loading,
               hasMore: _hasMore,
               error: _error,
-              emptyMessage: 'Bu kanalda gösterilecek video yok.',
+              emptyMessage: tr('Bu kanalda gösterilecek video yok.',
+                  'This channel has no videos to show.'),
               onRetry: _load,
               onLoadMore: _loadMore,
               onTap: _open,
@@ -143,14 +146,16 @@ String formatCompactCount(int value) {
   if (value < 1000000) {
     final thousands = value / 1000;
     // 10 binin altında ondalık anlamlı (9,4 B), üstünde gürültü (943 B).
-    return thousands < 10
-        ? '${thousands.toStringAsFixed(1).replaceAll('.', ',')} B'
-        : '${thousands.round()} B';
+    final short = thousands < 10
+        ? thousands.toStringAsFixed(1)
+        : '${thousands.round()}';
+    return tr('${short.replaceAll('.', ',')} B', '${short}K');
   }
   final millions = value / 1000000;
-  return millions < 10
-      ? '${millions.toStringAsFixed(1).replaceAll('.', ',')} Mn'
-      : '${millions.round()} Mn';
+  final short = millions < 10
+      ? millions.toStringAsFixed(1)
+      : '${millions.round()}';
+  return tr('${short.replaceAll('.', ',')} Mn', '${short}M');
 }
 
 /// Arama sonuçlarındaki kanal satırı.
@@ -195,8 +200,11 @@ class ChannelTile extends StatelessWidget {
       ),
       subtitle: Text(
         [
-          if (subscribers != null) '${formatCompactCount(subscribers)} abone',
-          if (videos != null) '$videos video',
+          if (subscribers != null)
+            tr('${formatCompactCount(subscribers)} abone',
+                '${formatCompactCount(subscribers)} subscribers'),
+          if (videos != null)
+            tr('$videos video', videos == 1 ? '1 video' : '$videos videos'),
         ].join(' • '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

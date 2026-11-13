@@ -1,5 +1,6 @@
 package com.olustiff.app.player
 
+import com.olustiff.app.Lang
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamType
@@ -50,7 +51,7 @@ object StreamSelector {
             return Selection(
                 videoUrl = null,
                 audioUrl = hlsUrl,
-                qualityLabel = if (audioOnly) "Canlı • sadece ses" else "Canlı",
+                qualityLabel = if (audioOnly) Lang.tr("Canlı • sadece ses", "Live • audio only") else Lang.tr("Canlı", "Live"),
                 isLive = true
             )
         }
@@ -59,7 +60,7 @@ object StreamSelector {
 
         if (audioOnly) {
             val url = audio?.contentUrl()
-            if (url != null) return Selection(null, url, "Sadece ses", false)
+            if (url != null) return Selection(null, url, Lang.tr("Sadece ses", "Audio only"), false)
 
             // Ayrık ses akışı yoksa SESSİZCE PES ETME.
             //
@@ -74,7 +75,7 @@ object StreamSelector {
             val combined = pickVideo(info.videoStreams, DEFAULT_MAX_HEIGHT)
             val combinedUrl = combined?.contentUrl()
             if (combinedUrl != null) {
-                return Selection(null, combinedUrl, "Sadece ses", false)
+                return Selection(null, combinedUrl, Lang.tr("Sadece ses", "Audio only"), false)
             }
             return null
         }
@@ -108,7 +109,7 @@ object StreamSelector {
             }
         }
 
-        return audioUrl?.let { Selection(null, it, "Sadece ses", false) }
+        return audioUrl?.let { Selection(null, it, Lang.tr("Sadece ses", "Audio only"), false) }
     }
 
     private fun pickVideo(streams: List<VideoStream>, maxHeight: Int): VideoStream? {

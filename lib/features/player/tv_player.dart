@@ -10,6 +10,7 @@ import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../../core/playback/stream_selection.dart' show autoQualityLabel;
 import 'video_surface.dart';
+import '../../core/i18n/lang.dart';
 
 /// Televizyonda oynatma ekranı: video tam ekran, kontroller kumandayla.
 ///
@@ -260,8 +261,8 @@ class _TvPlayerState extends State<TvPlayer> {
     setState(() {
       _seekTarget = target;
       _seekHint = offset.isNegative
-          ? '${offset.inSeconds.abs()} sn geri'
-          : '${offset.inSeconds} sn ileri';
+          ? tr('${offset.inSeconds.abs()} sn geri', '${offset.inSeconds.abs()}s back')
+          : tr('${offset.inSeconds} sn ileri', '${offset.inSeconds}s forward');
       // Sarınca konum çubuğu görünsün: kullanıcı nereye gittiğini görmeli.
       _controlsVisible = true;
     });
@@ -686,20 +687,20 @@ class _TvPlayerState extends State<TvPlayer> {
                 icon: Icons.skip_previous,
                 selected: _row == _Row.buttons && _buttonIndex == 0,
                 enabled: state.hasPrevious,
-                label: 'Önceki',
+                label: tr('Önceki', 'Previous'),
               ),
               const SizedBox(width: 24),
               _TvButton(
                 icon: Icons.high_quality_outlined,
                 selected: _row == _Row.buttons && _buttonIndex == 1,
-                label: 'Kalite',
+                label: tr('Kalite', 'Quality'),
               ),
               const SizedBox(width: 24),
               _TvButton(
                 icon: Icons.skip_next,
                 selected: _row == _Row.buttons && _buttonIndex == 2,
                 enabled: state.hasNext,
-                label: 'Sonraki',
+                label: tr('Sonraki', 'Next'),
               ),
               const SizedBox(width: 24),
               _TvButton(
@@ -708,7 +709,7 @@ class _TvPlayerState extends State<TvPlayer> {
                     : Icons.favorite_border,
                 selected: _row == _Row.buttons && _buttonIndex == 3,
                 enabled: details != null,
-                label: 'Favori',
+                label: tr('Favori', 'Favorite'),
               ),
             ],
           ),
@@ -789,11 +790,11 @@ class _ProgressRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.isLive) {
-      return const Row(
+      return Row(
         children: [
-          Icon(Icons.circle, color: Colors.red, size: 12),
-          SizedBox(width: 8),
-          Text('CANLI', style: TextStyle(color: Colors.white, fontSize: 16)),
+          const Icon(Icons.circle, color: Colors.red, size: 12),
+          const SizedBox(width: 8),
+          Text(tr('CANLI', 'LIVE'), style: const TextStyle(color: Colors.white, fontSize: 16)),
         ],
       );
     }
@@ -990,8 +991,8 @@ class _UpNextPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'Sırada',
+          Text(
+            tr('Sırada', 'Up next'),
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -1138,9 +1139,9 @@ class _QualityOverlay extends StatelessWidget {
             // Otomatik seçiliyken hangi çözünürlüğe ayarlandığı yazılıyor:
             // tek başına "Otomatik" o an ne oynadığını söylemiyor.
             if (selected == 0 && current != null)
-              'Otomatik • $current'
+              tr('Otomatik • $current', 'Auto • $current')
             else
-              'Otomatik',
+              tr('Otomatik', 'Auto'),
             for (final h in options) '${h}p',
           ];
 
@@ -1160,16 +1161,16 @@ class _QualityOverlay extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
-                current == null ? 'Kalite' : 'Kalite • $current',
+                current == null ? tr('Kalite', 'Quality') : tr('Kalite • $current', 'Quality • $current'),
                 style: const TextStyle(color: Colors.white70, fontSize: 15),
               ),
             ),
             if (options.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                 child: Text(
-                  'Bu video için seçenek yok.',
-                  style: TextStyle(color: Colors.white54, fontSize: 15),
+                  tr('Bu video için seçenek yok.', 'No options for this video.'),
+                  style: const TextStyle(color: Colors.white54, fontSize: 15),
                 ),
               ),
             for (var i = 0; i < labels.length; i++)

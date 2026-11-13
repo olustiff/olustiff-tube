@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/cast/cast_controller.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
+import '../../core/i18n/lang.dart';
 
 /// Yayını bitirirken ne olacağını kullanıcıya sorar.
 ///
@@ -27,26 +28,26 @@ Future<void> showCastDisconnectOptions(BuildContext context) async {
         shrinkWrap: true,
         children: [
           ListTile(
-            title: const Text('Yayını bitir'),
+            title: Text(tr('Yayını bitir', 'Stop casting')),
             subtitle: Text(device.name),
           ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.phone_android),
-            title: const Text('Telefonda devam et'),
-            subtitle: const Text("TV'de durur, telefonda kaldığı yerden çalar"),
+            title: Text(tr('Telefonda devam et', 'Continue on phone')),
+            subtitle: Text(tr("TV'de durur, telefonda kaldığı yerden çalar", 'Stops on the TV, resumes on the phone')),
             onTap: () => Navigator.of(sheetContext).pop(_CastEnd.continueOnPhone),
           ),
           ListTile(
             leading: const Icon(Icons.tv),
-            title: const Text("TV'de çalmaya devam etsin"),
-            subtitle: const Text('Telefon yalnızca bağlantıyı bırakır'),
+            title: Text(tr("TV'de çalmaya devam etsin", 'Keep playing on TV')),
+            subtitle: Text(tr('Telefon yalnızca bağlantıyı bırakır', 'The phone just disconnects')),
             onTap: () => Navigator.of(sheetContext).pop(_CastEnd.keepOnTv),
           ),
           ListTile(
             leading: const Icon(Icons.stop_circle_outlined),
-            title: const Text('Her ikisini de durdur'),
-            subtitle: const Text('TV de telefon da susar'),
+            title: Text(tr('Her ikisini de durdur', 'Stop both')),
+            subtitle: Text(tr('TV de telefon da susar', 'Both the TV and phone stop')),
             onTap: () => Navigator.of(sheetContext).pop(_CastEnd.stopEverything),
           ),
         ],

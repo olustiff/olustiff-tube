@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/data/library_store.dart';
 import '../../core/extraction/models.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../player/mini_player.dart';
 import 'download_progress_bar.dart';
@@ -20,14 +21,14 @@ class LibraryScreen extends StatelessWidget {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Kitaplık'),
-          bottom: const TabBar(
+          title: Text(tr('Kitaplık', 'Library')),
+          bottom: TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'İndirilenler'),
-              Tab(text: 'Geçmiş'),
-              Tab(text: 'Listelerim'),
-              Tab(text: 'Aramalar'),
+              Tab(text: tr('İndirilenler', 'Downloads')),
+              Tab(text: tr('Geçmiş', 'History')),
+              Tab(text: tr('Listelerim', 'My playlists')),
+              Tab(text: tr('Aramalar', 'Searches')),
             ],
           ),
         ),
@@ -63,7 +64,11 @@ class _WatchHistoryTab extends StatelessWidget {
       builder: (context, _) {
         final watched = store.watched;
         if (watched.isEmpty) {
-          return const Center(child: Text('Henüz bir şey izlemedin.'));
+          return Center(
+            child: Text(
+              tr('Henüz bir şey izlemedin.', "You haven't watched anything yet."),
+            ),
+          );
         }
         return Column(
           children: [
@@ -72,7 +77,7 @@ class _WatchHistoryTab extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: store.clearWatched,
                 icon: const Icon(Icons.delete_outline),
-                label: const Text('Geçmişi temizle'),
+                label: Text(tr('Geçmişi temizle', 'Clear history')),
               ),
             ),
             Expanded(
@@ -102,7 +107,11 @@ class _SearchHistoryTab extends StatelessWidget {
       builder: (context, _) {
         final searches = store.searches;
         if (searches.isEmpty) {
-          return const Center(child: Text('Henüz arama yapmadın.'));
+          return Center(
+            child: Text(
+              tr('Henüz arama yapmadın.', "You haven't searched for anything yet."),
+            ),
+          );
         }
         return Column(
           children: [
@@ -111,7 +120,7 @@ class _SearchHistoryTab extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: store.clearSearches,
                 icon: const Icon(Icons.delete_outline),
-                label: const Text('Aramaları temizle'),
+                label: Text(tr('Aramaları temizle', 'Clear searches')),
               ),
             ),
             Expanded(
@@ -150,21 +159,23 @@ class _PlaylistsTab extends StatelessWidget {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Yeni çalma listesi'),
+        title: Text(tr('Yeni çalma listesi', 'New playlist')),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Liste adı'),
+          decoration: InputDecoration(
+            hintText: tr('Liste adı', 'Playlist name'),
+          ),
           onSubmitted: (v) => Navigator.of(context).pop(v),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Vazgeç'),
+            child: Text(tr('Vazgeç', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Oluştur'),
+            child: Text(tr('Oluştur', 'Create')),
           ),
         ],
       ),
@@ -183,14 +194,23 @@ class _PlaylistsTab extends StatelessWidget {
         final playlists = store.playlists;
         return Scaffold(
           body: playlists.isEmpty
-              ? const Center(child: Text('Henüz çalma listen yok.'))
+              ? Center(
+                  child: Text(
+                    tr('Henüz çalma listen yok.', 'No playlists yet.'),
+                  ),
+                )
               : ListView(
                   children: [
                     for (final entry in playlists.entries)
                       ListTile(
                         leading: const Icon(Icons.queue_music),
                         title: Text(entry.key),
-                        subtitle: Text('${entry.value.length} video'),
+                        subtitle: Text(tr(
+                          '${entry.value.length} video',
+                          entry.value.length == 1
+                              ? '1 video'
+                              : '${entry.value.length} videos',
+                        )),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => store.deletePlaylist(entry.key),
@@ -231,7 +251,11 @@ class _PlaylistScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: videos.isEmpty
-                    ? const Center(child: Text('Bu liste boş.'))
+                    ? Center(
+                        child: Text(
+                          tr('Bu liste boş.', 'This playlist is empty.'),
+                        ),
+                      )
                     : ListView.builder(
                         itemCount: videos.length,
                         itemBuilder: (context, index) => Dismissible(

@@ -7,8 +7,9 @@ import '../../core/cast/youtube_cast_controller.dart';
 import '../../core/cast/youtube_cast_protocol.dart';
 import '../../core/playback/playback_coordinator.dart';
 import 'cast_disconnect.dart';
+import '../../core/i18n/lang.dart';
 
-/// "TV'ye gönder" düğmesi.
+/// tr("TV'ye gönder", 'Cast to TV') düğmesi.
 ///
 /// Cihaz araması BASILDIĞINDA yapılıyor, açılışta değil: her oynatma
 /// ekranında ağa yayın paketi salmak hem gereksiz hem de düğmenin bir süre
@@ -33,7 +34,7 @@ class CastButton extends StatelessWidget {
         final active = cast.isCasting || youtube.isCasting;
         final name = cast.device?.name ?? youtube.device?.name;
         return IconButton(
-          tooltip: active ? '$name cihazına gönderiliyor' : "TV'ye gönder",
+          tooltip: active ? tr('$name cihazına gönderiliyor', 'Casting to $name') : tr("TV'ye gönder", 'Cast to TV'),
           icon: Icon(active ? Icons.cast_connected : Icons.cast),
           color: active ? Theme.of(context).colorScheme.primary : null,
           onPressed: () => showCastPicker(context, position: positionOf()),
@@ -130,7 +131,7 @@ class _CastPickerState extends State<_CastPicker> {
     // başarı bildiriliyor — yoksa aynı hata iki kez belirirdi.
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${device.name} cihazında açılıyor…')),
+        SnackBar(content: Text(tr('${device.name} cihazında açılıyor…', 'Opening on ${device.name}…'))),
       );
     }
   }
@@ -156,7 +157,7 @@ class _CastPickerState extends State<_CastPicker> {
     final messenger = ScaffoldMessenger.of(context);
     if (ok) {
       messenger.showSnackBar(
-        SnackBar(content: Text("${device.name} · YouTube'da açılıyor…")),
+        SnackBar(content: Text(tr("${device.name} · YouTube'da açılıyor…", '${device.name} · Opening in YouTube…'))),
       );
     } else {
       // Bu yolun hatasını oynatma ekranı izlemiyor; burada gösterilmezse
@@ -183,7 +184,7 @@ class _CastPickerState extends State<_CastPicker> {
         shrinkWrap: true,
         children: [
           ListTile(
-            title: const Text("TV'ye gönder"),
+            title: Text(tr("TV'ye gönder", 'Cast to TV')),
             trailing: _sending
                 ? const SizedBox(
                     width: 20,
@@ -191,7 +192,7 @@ class _CastPickerState extends State<_CastPicker> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : IconButton(
-                    tooltip: 'Yeniden ara',
+                    tooltip: tr('Yeniden ara', 'Search again'),
                     icon: const Icon(Icons.refresh),
                     onPressed: _searching ? null : _search,
                   ),
@@ -200,33 +201,33 @@ class _CastPickerState extends State<_CastPicker> {
             ListTile(
               leading: const Icon(Icons.cast_connected),
               title: Text(_cast.device!.name),
-              subtitle: const Text('Şu an bu cihaza gönderiliyor'),
+              subtitle: Text(tr('Şu an bu cihaza gönderiliyor', 'Casting to this device now')),
               trailing: TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
                   showCastDisconnectOptions(context);
                 },
-                child: const Text('Yayını bitir'),
+                child: Text(tr('Yayını bitir', 'Stop casting')),
               ),
             ),
           if (_youtube.isCasting)
             ListTile(
               leading: const Icon(Icons.smart_display),
               title: Text(_youtube.device!.name),
-              subtitle: const Text("Şu an televizyonun YouTube'unda"),
+              subtitle: Text(tr("Şu an televizyonun YouTube'unda", "Playing in the TV's YouTube app")),
               trailing: TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
                   _youtube.disconnect();
                 },
-                child: const Text('Yayını bitir'),
+                child: Text(tr('Yayını bitir', 'Stop casting')),
               ),
             ),
 
           if (targets.isNotEmpty) ...[
-            const _SectionHeader(
-              title: 'Televizyonlar',
-              subtitle: 'Sarma, oynat/duraklat ve ses telefondan',
+            _SectionHeader(
+              title: tr('Televizyonlar', 'TVs'),
+              subtitle: tr('Sarma, oynat/duraklat ve ses telefondan', 'Seek, play/pause and volume from your phone'),
             ),
             for (final target in targets)
               _TargetTile(
@@ -238,13 +239,13 @@ class _CastPickerState extends State<_CastPicker> {
           ],
 
           if (_searching)
-            const ListTile(
-              leading: SizedBox(
+            ListTile(
+              leading: const SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              title: Text('Televizyon aranıyor…'),
+              title: Text(tr('Televizyon aranıyor…', 'Searching for TVs…')),
             ),
           if (nothingFound) const _NoDevicesFound(),
         ],
@@ -283,8 +284,8 @@ class _TargetTile extends StatelessWidget {
     final ours = target.ours;
 
     final subtitle = youtube != null
-        ? "${target.host} · Televizyonun kendi YouTube'u"
-        : '${target.host} · oLusTifF alıcısı';
+        ? tr("${target.host} · Televizyonun kendi YouTube'u", "${target.host} · TV's own YouTube app")
+        : tr('${target.host} · oLusTifF alıcısı', '${target.host} · oLusTifF receiver');
 
     return ListTile(
       leading: Icon(
@@ -296,7 +297,7 @@ class _TargetTile extends StatelessWidget {
       trailing: target.hasBoth
           ? TextButton(
               onPressed: enabled ? () => onSendToApp(ours!) : null,
-              child: const Text('oLusTifF ile'),
+              child: Text(tr('oLusTifF ile', 'With oLusTifF')),
             )
           : null,
       onTap: !enabled
@@ -350,31 +351,39 @@ class _NoDevicesFound extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.tv_off),
-              SizedBox(width: 12),
+              const Icon(Icons.tv_off),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'TV bulunamadı',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  tr('TV bulunamadı', 'No TV found'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           Text(
-            '• İki cihaz da AYNI Wi-Fi ağında olmalı.\n'
-            "• Televizyonun kendi YouTube'una gönderebilmek için televizyon "
-            'açık olmalı (uyku modunda cevap vermez).\n'
-            '• Bazı modemler 2.4 GHz ve 5 GHz ağlarındaki cihazların '
-            'birbirini görmesini engeller; ikisini de aynı banda alıp '
-            'tekrar deneyin.',
+            tr(
+              '• İki cihaz da AYNI Wi-Fi ağında olmalı.\n'
+              "• Televizyonun kendi YouTube'una gönderebilmek için televizyon "
+              'açık olmalı (uyku modunda cevap vermez).\n'
+              '• Bazı modemler 2.4 GHz ve 5 GHz ağlarındaki cihazların '
+              'birbirini görmesini engeller; ikisini de aynı banda alıp '
+              'tekrar deneyin.',
+              '• Both devices must be on the SAME Wi-Fi network.\n'
+              "• To cast to the TV's own YouTube app, the TV must be on "
+              "(it doesn't respond in sleep mode).\n"
+              '• Some routers block devices on the 2.4 GHz and 5 GHz networks '
+              'from seeing each other; put both on the same band and '
+              'try again.',
+            ),
           ),
         ],
       ),

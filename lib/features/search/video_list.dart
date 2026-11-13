@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/extraction/models.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/ui/tv_mode.dart';
 
 /// Sonsuz kaydırmalı video listesi.
@@ -19,7 +20,7 @@ class VideoList extends StatefulWidget {
     required this.onTap,
     this.error,
     this.onRetry,
-    this.emptyMessage = 'Sonuç bulunamadı.',
+    this.emptyMessage,
   });
 
   final List<VideoSummary> videos;
@@ -27,7 +28,8 @@ class VideoList extends StatefulWidget {
   final bool hasMore;
   final Object? error;
   final VoidCallback? onRetry;
-  final String emptyMessage;
+  /// Boşsa 'Sonuç bulunamadı.' (dil çizim anında seçilsin diye burada).
+  final String? emptyMessage;
   final VoidCallback onLoadMore;
   final void Function(int index) onTap;
 
@@ -70,7 +72,8 @@ class _VideoListState extends State<VideoList> {
       return Center(
         child: widget.loading
             ? const CircularProgressIndicator()
-            : Text(widget.emptyMessage),
+            : Text(widget.emptyMessage ??
+                tr('Sonuç bulunamadı.', 'No results found.')),
       );
     }
 
@@ -170,7 +173,7 @@ class _ErrorView extends StatelessWidget {
             Text('$error', textAlign: TextAlign.center),
             const SizedBox(height: 12),
             if (onRetry != null)
-              FilledButton(onPressed: onRetry, child: const Text('Tekrar dene')),
+              FilledButton(onPressed: onRetry, child: Text(tr('Tekrar dene', 'Retry'))),
           ],
         ),
       ),

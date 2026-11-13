@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'cast_protocol.dart' show CastException;
 import 'youtube_cast_protocol.dart';
+import '../i18n/lang.dart';
 
 /// Televizyonun Cast (8009/TLS) denetim kanalı.
 ///
@@ -50,10 +51,12 @@ class CastChannel {
       );
     } catch (e) {
       debugPrint('youtube-cast: $host Cast kanalı açılamadı: $e');
-      throw const CastException(
+      throw CastException(tr(
         'Televizyona bağlanılamadı. Televizyon açık ve aynı Wi-Fi ağında '
         'olmalı.',
-      );
+        'Could not connect to the TV. The TV must be on and on the same '
+        'Wi-Fi network.',
+      ));
     }
 
     final channel = CastChannel._(socket);
@@ -104,21 +107,25 @@ class CastChannel {
         if (json?['type'] == 'LAUNCH_ERROR') return true;
         return _findYouTubeTransport(json) != null;
       },
-      onTimeout: 'Televizyonda YouTube açılamadı.',
+      onTimeout: tr('Televizyonda YouTube açılamadı.',
+          'Could not open YouTube on the TV.'),
     );
 
     final json = status.json;
     if (json?['type'] == 'LAUNCH_ERROR') {
       // En sık sebebi: televizyonda YouTube kurulu değil.
-      throw const CastException(
+      throw CastException(tr(
         'Televizyon YouTube uygulamasını açamadı. Uygulamanın televizyonda '
         'kurulu olduğundan emin olun.',
-      );
+        'The TV could not open the YouTube app. Make sure the app is '
+        'installed on the TV.',
+      ));
     }
 
     final transportId = _findYouTubeTransport(json);
     if (transportId == null) {
-      throw const CastException('Televizyonda YouTube açılamadı.');
+      throw CastException(tr('Televizyonda YouTube açılamadı.',
+          'Could not open YouTube on the TV.'));
     }
     _youTubeTransportId = transportId;
 
@@ -141,7 +148,8 @@ class CastChannel {
           accept: (message) =>
               message.namespace == CastNamespace.youtubeMdx &&
               message.json?['type'] == 'mdxSessionStatus',
-          onTimeout: 'Televizyondaki YouTube oturumu okunamadı.',
+          onTimeout: tr('Televizyondaki YouTube oturumu okunamadı.',
+              'Could not read the YouTube session on the TV.'),
           timeout: const Duration(seconds: 4),
         );
         final data = mdx.json?['data'];
@@ -152,7 +160,8 @@ class CastChannel {
         if (attempt >= 2) rethrow;
       }
       if (attempt >= 2) {
-        throw const CastException('Televizyondaki YouTube oturumu okunamadı.');
+        throw CastException(tr('Televizyondaki YouTube oturumu okunamadı.',
+            'Could not read the YouTube session on the TV.'));
       }
     }
   }
@@ -316,7 +325,8 @@ class CastChannel {
       throw CastException(onTimeout);
     } on StateError {
       // Akış cevap gelmeden kapandı: bağlantı düştü.
-      throw const CastException('Televizyonla bağlantı kesildi.');
+      throw CastException(
+          tr('Televizyonla bağlantı kesildi.', 'Connection to the TV was lost.'));
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/data/library_store.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
@@ -497,10 +498,14 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
   Widget _buildSuggestions() {
     final suggestions = _suggestions;
     final history = LibraryStore.instance.searches;
-    final title = _query.trim().isEmpty ? 'Son aramalar' : 'Öneriler';
+    final title = _query.trim().isEmpty
+        ? tr('Son aramalar', 'Recent searches')
+        : tr('Öneriler', 'Suggestions');
 
     if (suggestions.isEmpty) {
-      return const Center(child: Text('Aramak için harfleri seç.'));
+      return Center(
+        child: Text(tr('Aramak için harfleri seç.', 'Pick letters to search.')),
+      );
     }
 
     return Column(
@@ -545,7 +550,7 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: Text(
-                            'Kaldırmak için ▶',
+                            tr('Kaldırmak için ▶', 'Press ▶ to remove'),
                             style: TextStyle(
                               fontSize: 13,
                               color: Theme.of(context)
@@ -587,7 +592,8 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
             const SizedBox(height: 12),
             Text('${_error!}', textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            const Text('Tekrar denemek için "Ara" tuşuna bas.'),
+            Text(tr('Tekrar denemek için "Ara" tuşuna bas.',
+                'Press "Search" to try again.')),
           ],
         ),
       );
@@ -596,7 +602,7 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
       return Center(
         child: _loading
             ? const CircularProgressIndicator()
-            : const Text('Sonuç bulunamadı.'),
+            : Text(tr('Sonuç bulunamadı.', 'No results found.')),
       );
     }
 
@@ -606,7 +612,8 @@ class _TvSearchScreenState extends State<TvSearchScreen> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            '"$_searchedQuery" sonuçları',
+            tr('"$_searchedQuery" sonuçları',
+                'Results for "$_searchedQuery"'),
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ),
@@ -655,8 +662,10 @@ class _QueryBox extends StatelessWidget {
           Expanded(
             child: Text(
               listening
-                  ? 'Dinleniyor...'
-                  : (query.isEmpty ? 'Video ara...' : query),
+                  ? tr('Dinleniyor...', 'Listening...')
+                  : (query.isEmpty
+                      ? tr('Video ara...', 'Search videos...')
+                      : query),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -721,7 +730,7 @@ class _RemoveButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
-      label: 'Geçmişten kaldır',
+      label: tr('Geçmişten kaldır', 'Remove from history'),
       button: true,
       selected: selected,
       child: GestureDetector(

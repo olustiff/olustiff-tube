@@ -1,6 +1,7 @@
 package com.olustiff.app.download
 
 import android.content.Context
+import com.olustiff.app.Lang
 import com.olustiff.app.diag.Tanilama
 import android.net.Uri
 import android.os.Handler
@@ -107,11 +108,11 @@ class DownloadController(
                 }
                 val selection = StreamSelector.select(info, audioOnly = true)
                 if (selection == null) {
-                    result.error("NO_STREAMS", "Ses kaynağı bulunamadı", null)
+                    result.error("NO_STREAMS", Lang.tr("Ses kaynağı bulunamadı", "No audio source found"), null)
                     return@launch
                 }
                 if (selection.isLive) {
-                    result.error("LIVE_STREAM", "Canlı yayınlar indirilemez", null)
+                    result.error("LIVE_STREAM", Lang.tr("Canlı yayınlar indirilemez", "Live streams can't be downloaded"), null)
                     return@launch
                 }
 
@@ -121,7 +122,7 @@ class DownloadController(
                     onRequestStoragePermission?.invoke()
                     result.error(
                         "NO_PERMISSION",
-                        "Müzik klasörüne kaydetmek için depolama izni gerekiyor",
+                        Lang.tr("Müzik klasörüne kaydetmek için depolama izni gerekiyor", "Storage permission is needed to save to the Music folder"),
                         null
                     )
                     return@launch
@@ -172,7 +173,7 @@ class DownloadController(
             } catch (e: Exception) {
                 // Teşhis için tam yığın izi; kullanıcıya yalnızca mesaj gider.
                 Tanilama.olay("AkisDownload", "MP3 indirme başarısız", e)
-                result.error("DOWNLOAD_FAILED", e.message ?: "İndirme başarısız", null)
+                result.error("DOWNLOAD_FAILED", e.message ?: Lang.tr("İndirme başarısız", "Download failed"), null)
             }
         }
     }

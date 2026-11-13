@@ -11,6 +11,7 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.olustiff.app.Lang
 import com.olustiff.app.MainActivity
 import com.olustiff.app.R
 
@@ -65,7 +66,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession
 
     private fun closeButton(): CommandButton = CommandButton.Builder()
-        .setDisplayName("Kapat")
+        .setDisplayName(Lang.tr("Kapat", "Close"))
         .setIconResId(R.drawable.ic_notification_close)
         .setSessionCommand(SessionCommand(ACTION_CLOSE, Bundle.EMPTY))
         // Düğme sırasının SAĞ ucuna yerleşsin. Bildirimin sağ ÜST köşesi

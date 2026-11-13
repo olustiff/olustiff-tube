@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.FileProvider
+import com.olustiff.app.Lang
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -116,7 +117,7 @@ class UpdateController(
                         install(apk)
                         result.success(null)
                     } catch (e: Exception) {
-                        result.error("UPDATE_FAILED", e.message ?: "İndirme başarısız", null)
+                        result.error("UPDATE_FAILED", e.message ?: Lang.tr("İndirme başarısız", "Download failed"), null)
                     }
                 }
             }
@@ -150,9 +151,9 @@ class UpdateController(
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw IllegalStateException("İndirilemedi (HTTP ${response.code})")
+                throw IllegalStateException(Lang.tr("İndirilemedi (HTTP ${response.code})", "Download failed (HTTP ${response.code})"))
             }
-            val body = response.body ?: throw IllegalStateException("Boş yanıt")
+            val body = response.body ?: throw IllegalStateException(Lang.tr("Boş yanıt", "Empty response"))
             val total = body.contentLength()
             var written = 0L
 
@@ -176,7 +177,7 @@ class UpdateController(
         }
 
         if (!part.renameTo(target)) {
-            throw IllegalStateException("İndirilen dosya taşınamadı")
+            throw IllegalStateException(Lang.tr("İndirilen dosya taşınamadı", "Couldn't move the downloaded file"))
         }
         return target
     }

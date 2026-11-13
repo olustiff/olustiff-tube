@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/data/library_store.dart';
 import '../../core/extraction/models.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../library/download_progress_bar.dart';
 import '../library/library_screen.dart';
@@ -78,19 +79,19 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             focusNode: _searchFocus,
             icon: const Icon(Icons.search),
-            tooltip: 'Ara',
+            tooltip: tr('Ara', 'Search'),
             onPressed: _openSearch,
           ),
           IconButton(
             icon: const Icon(Icons.library_music_outlined),
-            tooltip: 'Kitaplık',
+            tooltip: tr('Kitaplık', 'Library'),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const LibraryScreen()),
             ),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Ayarlar',
+            tooltip: tr('Ayarlar', 'Settings'),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
@@ -153,9 +154,12 @@ class _HomeScreenState extends State<HomeScreen> {
         hasMore: false,
         onLoadMore: () {},
         onTap: _open,
-        emptyMessage:
-            'Henüz favorin yok.\n'
-            'Çalan şarkıda ♥ simgesine dokunduğunda burada görünür.',
+        emptyMessage: tr(
+          'Henüz favorin yok.\n'
+              'Çalan şarkıda ♥ simgesine dokunduğunda burada görünür.',
+          'No favorites yet.\n'
+              'Tap ♥ on the playing song and it will show up here.',
+        ),
       );
     }
 
@@ -168,9 +172,12 @@ class _HomeScreenState extends State<HomeScreen> {
       hasMore: false,
       onLoadMore: () {},
       onTap: _open,
-      emptyMessage:
-          'Henüz tekrar dinlediğin bir şey yok.\n'
-          'Bir şarkıyı ikinci kez açtığında burada görünür.',
+      emptyMessage: tr(
+        'Henüz tekrar dinlediğin bir şey yok.\n'
+            'Bir şarkıyı ikinci kez açtığında burada görünür.',
+        "You haven't replayed anything yet.\n"
+            'Play a song a second time and it will show up here.',
+      ),
     );
   }
 }
@@ -192,13 +199,15 @@ class _EmptyFeed extends StatelessWidget {
             const Icon(Icons.explore_outlined, size: 48),
             const SizedBox(height: 16),
             Text(
-              'Dinledikçe burası dolacak',
+              tr('Dinledikçe burası dolacak',
+                  'This fills up as you listen'),
               style: Theme.of(context).textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'En çok dinlediklerin ve kalplediklerin burada görünür.',
+              tr('En çok dinlediklerin ve kalplediklerin burada görünür.',
+                  'Your most played and hearted songs show up here.'),
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -206,7 +215,7 @@ class _EmptyFeed extends StatelessWidget {
             FilledButton.icon(
               onPressed: onSearch,
               icon: const Icon(Icons.search),
-              label: const Text('Aramaya başla'),
+              label: Text(tr('Aramaya başla', 'Start searching')),
             ),
           ],
         ),

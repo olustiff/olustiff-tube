@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/data/downloads_store.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_client.dart';
 import '../search/video_list.dart';
 
@@ -14,9 +15,10 @@ class DownloadsTab extends StatelessWidget {
     final opened = await DownloadsStore.instance.openFolder();
     if (!opened) {
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Klasör açılamadı. Dosyalar: Müzik / oLusTifF',
+            tr('Klasör açılamadı. Dosyalar: Müzik / oLusTifF',
+                "Couldn't open the folder. Files: Music / oLusTifF"),
           ),
         ),
       );
@@ -31,13 +33,18 @@ class DownloadsTab extends StatelessWidget {
       builder: (context, _) {
         final items = store.items;
         if (items.isEmpty) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(32),
+              padding: const EdgeInsets.all(32),
               child: Text(
-                'Henüz indirilen yok.\n'
-                'Bir videoyu açıp menüden "MP3 indir" diyebilirsin.\n\n'
-                'İndirilenler telefonundaki Müzik / oLusTifF klasörüne kaydedilir.',
+                tr(
+                  'Henüz indirilen yok.\n'
+                      'Bir videoyu açıp menüden "MP3 indir" diyebilirsin.\n\n'
+                      'İndirilenler telefonundaki Müzik / oLusTifF klasörüne kaydedilir.',
+                  'No downloads yet.\n'
+                      'Open a video and choose "Download MP3" from the menu.\n\n'
+                      'Downloads are saved to the Music / oLusTifF folder on your phone.',
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -53,7 +60,8 @@ class DownloadsTab extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  Text('${items.length} dosya'),
+                  Text(tr('${items.length} dosya',
+                      items.length == 1 ? '1 file' : '${items.length} files')),
                   const SizedBox(width: 8),
                   Text('${totalMb.toStringAsFixed(0)} MB'),
                   const Spacer(),
@@ -62,7 +70,7 @@ class DownloadsTab extends StatelessWidget {
                   TextButton.icon(
                     onPressed: () => _openFolder(context),
                     icon: const Icon(Icons.folder_open, size: 18),
-                    label: const Text('Klasörü aç'),
+                    label: Text(tr('Klasörü aç', 'Open folder')),
                   ),
                 ],
               ),
@@ -124,12 +132,13 @@ Future<void> _confirmDelete(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('İndirmeyi sil'),
-      content: Text('"${item.title}" cihazdan silinecek.'),
+      title: Text(tr('İndirmeyi sil', 'Delete download')),
+      content: Text(tr('"${item.title}" cihazdan silinecek.',
+          '"${item.title}" will be deleted from this device.')),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Vazgeç'),
+          child: Text(tr('Vazgeç', 'Cancel')),
         ),
         TextButton(
           // Yıkıcı eylem tema hata rengiyle ayrışsın: kullanıcı hangi
@@ -138,7 +147,7 @@ Future<void> _confirmDelete(
             foregroundColor: Theme.of(context).colorScheme.error,
           ),
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Sil'),
+          child: Text(tr('Sil', 'Delete')),
         ),
       ],
     ),
@@ -151,6 +160,6 @@ Future<void> _confirmDelete(
   try {
     await store.delete(item);
   } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text('Silinemedi: $e')));
+    messenger.showSnackBar(SnackBar(content: Text(tr('Silinemedi: $e', "Couldn't delete: $e"))));
   }
 }

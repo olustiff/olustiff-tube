@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/data/settings_store.dart';
 import '../../core/playback/playback_client.dart';
 import '../../core/playback/playback_coordinator.dart';
+import '../../core/i18n/lang.dart';
 
 /// Kalite seçimi.
 ///
@@ -20,7 +21,7 @@ Future<void> showQualityMenu(BuildContext context) async {
 
   if (available.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bu video için kalite seçeneği yok.')),
+      SnackBar(content: Text(tr('Bu video için kalite seçeneği yok.', 'No quality options for this video.'))),
     );
     return;
   }
@@ -33,7 +34,7 @@ Future<void> showQualityMenu(BuildContext context) async {
       child: ListView(
         shrinkWrap: true,
         children: [
-          const ListTile(title: Text('Video kalitesi')),
+          ListTile(title: Text(tr('Video kalitesi', 'Video quality'))),
           const _AutoQualityTile(),
           for (final height in available)
             _QualityTile(
@@ -79,10 +80,10 @@ class _AutoQualityTile extends StatelessWidget {
       builder: (context, snapshot) {
         final height = snapshot.data?.videoHeight ?? 0;
         return _QualityTile(
-          label: 'Otomatik',
+          label: tr('Otomatik', 'Auto'),
           subtitle: height > 0
-              ? 'Ağ hızına göre — şu an ${height}p'
-              : 'Ağ hızına göre ayarlanır',
+              ? tr('Ağ hızına göre — şu an ${height}p', 'Based on network speed — now ${height}p')
+              : tr('Ağ hızına göre ayarlanır', 'Adjusts to network speed'),
           selected: SettingsStore.instance.maxHeight == null,
           height: null,
         );

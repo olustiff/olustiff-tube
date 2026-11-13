@@ -7,6 +7,7 @@ import '../../core/playback/ui_channel.dart';
 import 'double_tap_seek.dart';
 import 'quality_menu.dart';
 import 'video_surface.dart';
+import '../../core/i18n/lang.dart';
 
 /// Videonun ekrana nasıl sığdırılacağı.
 enum VideoFit {
@@ -96,8 +97,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
     setState(() {
       _seekHint = offset.isNegative
-          ? '${offset.inSeconds.abs()} sn geri'
-          : '${offset.inSeconds} sn ileri';
+          ? tr('${offset.inSeconds.abs()} sn geri', '${offset.inSeconds.abs()}s back')
+          : tr('${offset.inSeconds} sn ileri', '${offset.inSeconds}s forward');
     });
     _hintTimer?.cancel();
     _hintTimer = Timer(const Duration(milliseconds: 700), () {
@@ -211,7 +212,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
           padding: const EdgeInsets.all(12),
           child: _RoundButton(
             icon: Icons.lock_outline,
-            tooltip: 'Kontrolleri aç',
+            tooltip: tr('Kontrolleri aç', 'Unlock controls'),
             onPressed: () => setState(() => _locked = false),
           ),
         ),
@@ -232,13 +233,13 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
               children: [
                 _RoundButton(
                   icon: Icons.lock_open_outlined,
-                  tooltip: 'Kontrolleri kilitle',
+                  tooltip: tr('Kontrolleri kilitle', 'Lock controls'),
                   onPressed: () => setState(() => _locked = true),
                 ),
                 // Kalite, tam ekrandan çıkmadan değiştirilebilsin.
                 _RoundButton(
                   icon: Icons.high_quality_outlined,
-                  tooltip: 'Kalite',
+                  tooltip: tr('Kalite', 'Quality'),
                   onPressed: () => showQualityMenu(context),
                 ),
                 _RoundButton(
@@ -246,8 +247,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                       ? Icons.fit_screen_outlined
                       : Icons.crop_free,
                   tooltip: _fit == VideoFit.contain
-                      ? 'Ekranı doldur'
-                      : 'Sığdır',
+                      ? tr('Ekranı doldur', 'Fill screen')
+                      : tr('Sığdır', 'Fit'),
                   onPressed: () => setState(() {
                     _fit = _fit == VideoFit.contain
                         ? VideoFit.cover
@@ -257,7 +258,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                 if (widget.onEnterPip != null)
                   _RoundButton(
                     icon: Icons.picture_in_picture_alt_outlined,
-                    tooltip: 'Küçük pencere',
+                    tooltip: tr('Küçük pencere', 'Picture-in-picture'),
                     onPressed: widget.onEnterPip!,
                   ),
               ],
@@ -333,7 +334,7 @@ class _BottomBar extends StatelessWidget {
     return Row(
       children: [
         Text(
-          isLive ? 'CANLI' : _fmt(state.position),
+          isLive ? tr('CANLI', 'LIVE') : _fmt(state.position),
           style: const TextStyle(color: Colors.white, fontSize: 12),
         ),
         Expanded(
@@ -367,7 +368,7 @@ class _BottomBar extends StatelessWidget {
         if (onToggleFullscreen != null)
           _RoundButton(
             icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-            tooltip: isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran',
+            tooltip: isFullscreen ? tr('Tam ekrandan çık', 'Exit full screen') : tr('Tam ekran', 'Full screen'),
             onPressed: () {
               onToggleFullscreen!();
               onInteraction();

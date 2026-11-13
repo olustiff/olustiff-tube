@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/data/library_store.dart';
 import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../../core/playback/ui_channel.dart';
 import '../../core/ui/tv_mode.dart';
@@ -328,18 +329,20 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
         TabBar(
           controller: _tabs,
           tabs: [
-            const Tab(text: 'Videolar'),
+            Tab(text: tr('Videolar', 'Videos')),
             Tab(
               // Sayı sekmenin üstünde: kullanıcı dokunmadan önce orada bir
               // şey olup olmadığını görüyor.
               text: _playlists.isEmpty
-                  ? 'Listeler'
-                  : 'Listeler (${_playlists.length})',
+                  ? tr('Listeler', 'Playlists')
+                  : tr('Listeler (${_playlists.length})',
+                      'Playlists (${_playlists.length})'),
             ),
             Tab(
               text: _channels.isEmpty
-                  ? 'Kanallar'
-                  : 'Kanallar (${_channels.length})',
+                  ? tr('Kanallar', 'Channels')
+                  : tr('Kanallar (${_channels.length})',
+                      'Channels (${_channels.length})'),
             ),
           ],
         ),
@@ -352,7 +355,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
                 loading: _loading,
                 hasMore: _hasMore,
                 error: _error,
-                emptyMessage: 'Sonuç bulunamadı.',
+                emptyMessage: tr('Sonuç bulunamadı.', 'No results found.'),
                 onRetry: () => _search(_controller.text),
                 onLoadMore: _loadMore,
                 onTap: _open,
@@ -382,8 +385,8 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
           controller: _controller,
           focusNode: _focusNode,
           textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            hintText: 'Video ara...',
+          decoration: InputDecoration(
+            hintText: tr('Video ara...', 'Search videos...'),
             border: InputBorder.none,
           ),
           onSubmitted: _search,
@@ -394,7 +397,7 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
           if (_voiceAvailable)
             IconButton(
               icon: Icon(_voiceRunning ? Icons.mic : Icons.mic_none),
-              tooltip: 'Sesle ara',
+              tooltip: tr('Sesle ara', 'Search with your voice'),
               onPressed: _voiceRunning ? null : _startVoice,
             ),
           IconButton(
@@ -418,7 +421,8 @@ class _PhoneSearchScreenState extends State<PhoneSearchScreen>
                         videos: const [],
                         loading: false,
                         hasMore: false,
-                        emptyMessage: 'Aramak için yazmaya başla.',
+                        emptyMessage: tr('Aramak için yazmaya başla.',
+                            'Start typing to search.'),
                         onLoadMore: () {},
                         onTap: (_) {},
                       ),
@@ -457,14 +461,20 @@ class _SuggestionList extends StatelessWidget {
           remote: remote,
         );
         if (suggestions.isEmpty) {
-          return const Center(child: Text('Aramak için yazmaya başla.'));
+          return Center(
+            child: Text(
+              tr('Aramak için yazmaya başla.', 'Start typing to search.'),
+            ),
+          );
         }
         return ListView(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               child: Text(
-                query.trim().isEmpty ? 'Son aramalar' : 'Öneriler',
+                query.trim().isEmpty
+                    ? tr('Son aramalar', 'Recent searches')
+                    : tr('Öneriler', 'Suggestions'),
               ),
             ),
             for (final suggestion in suggestions)
@@ -511,11 +521,12 @@ class _PlaylistResults extends StatelessWidget {
       if (loading) {
         return const Center(child: CircularProgressIndicator());
       }
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
-            'Bu aramada çalma listesi bulunamadı.',
+            tr('Bu aramada çalma listesi bulunamadı.',
+                'No playlists found for this search.'),
             textAlign: TextAlign.center,
           ),
         ),
@@ -550,11 +561,12 @@ class _ChannelResults extends StatelessWidget {
       if (loading) {
         return const Center(child: CircularProgressIndicator());
       }
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
-            'Bu aramada kanal bulunamadı.',
+            tr('Bu aramada kanal bulunamadı.',
+                'No channels found for this search.'),
             textAlign: TextAlign.center,
           ),
         ),

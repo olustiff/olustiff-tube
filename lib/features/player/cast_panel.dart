@@ -4,6 +4,7 @@ import '../../core/cast/cast_controller.dart';
 import '../../core/extraction/models.dart';
 import '../../core/playback/playback_coordinator.dart';
 import 'cast_disconnect.dart';
+import '../../core/i18n/lang.dart';
 
 /// Yayın açıkken oynatma ekranının yerini alan kumanda.
 ///
@@ -70,7 +71,7 @@ class CastPanel extends StatelessWidget {
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      '${device.name} cihazında oynatılıyor',
+                      tr('${device.name} cihazında oynatılıyor', 'Playing on ${device.name}'),
                       style: theme.textTheme.titleSmall,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -95,12 +96,12 @@ class CastPanel extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    tooltip: 'Önceki',
+                    tooltip: tr('Önceki', 'Previous'),
                     icon: const Icon(Icons.skip_previous),
                     onPressed: cast.previous,
                   ),
                   IconButton(
-                    tooltip: '10 saniye geri',
+                    tooltip: tr('10 saniye geri', 'Back 10 seconds'),
                     icon: const Icon(Icons.replay_10),
                     onPressed: () => cast.seekTo(
                       _clamp(position - const Duration(seconds: 10)),
@@ -108,18 +109,18 @@ class CastPanel extends StatelessWidget {
                   ),
                   IconButton.filled(
                     iconSize: 36,
-                    tooltip: playing ? 'Duraklat' : 'Oynat',
+                    tooltip: playing ? tr('Duraklat', 'Pause') : tr('Oynat', 'Play'),
                     icon: Icon(playing ? Icons.pause : Icons.play_arrow),
                     onPressed: playing ? cast.pause : cast.resume,
                   ),
                   IconButton(
-                    tooltip: '10 saniye ileri',
+                    tooltip: tr('10 saniye ileri', 'Forward 10 seconds'),
                     icon: const Icon(Icons.forward_10),
                     onPressed: () =>
                         cast.seekTo(position + const Duration(seconds: 10)),
                   ),
                   IconButton(
-                    tooltip: 'Sonraki',
+                    tooltip: tr('Sonraki', 'Next'),
                     icon: const Icon(Icons.skip_next),
                     onPressed: cast.next,
                   ),
@@ -142,7 +143,7 @@ class CastPanel extends StatelessWidget {
               // sığmıyor hem de hangisinin ne yaptığı okunmuyordu.
               FilledButton.tonalIcon(
                 icon: const Icon(Icons.cast_connected),
-                label: const Text('Bağlantıyı kes'),
+                label: Text(tr('Bağlantıyı kes', 'Disconnect')),
                 onPressed: () => showCastDisconnectOptions(context),
               ),
               const SizedBox(height: 16),
@@ -266,7 +267,7 @@ class _RemoteVolumeState extends State<_RemoteVolume> {
     return Row(
       children: [
         IconButton(
-          tooltip: widget.isMuted ? 'Sesi aç' : 'Sesi kapat',
+          tooltip: widget.isMuted ? tr('Sesi aç', 'Unmute') : tr('Sesi kapat', 'Mute'),
           icon: Icon(_icon),
           onPressed: widget.onToggleMute,
         ),
@@ -285,7 +286,7 @@ class _RemoteVolumeState extends State<_RemoteVolume> {
         SizedBox(
           width: 44,
           child: Text(
-            '%${(value * 100).round()}',
+            tr('%${(value * 100).round()}', '${(value * 100).round()}%'),
             textAlign: TextAlign.end,
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -318,7 +319,7 @@ class _CastQueue extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Sırada', style: Theme.of(context).textTheme.titleSmall),
+            Text(tr('Sırada', 'Up next'), style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             for (var i = start; i < queue.length; i++)
               _CastQueueTile(

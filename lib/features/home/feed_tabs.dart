@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/lang.dart';
+
 /// Ana sayfadaki liste türü.
 enum HomeTab {
   /// En çok tekrar dinlenenler.
@@ -33,7 +35,7 @@ class FeedTabs extends StatelessWidget {
           Expanded(
             child: _TabChip(
               icon: Icons.auto_awesome,
-              label: 'Sana özel',
+              label: tr('Sana özel', 'For you'),
               isSelected: selected == HomeTab.forYou,
               onTap: () => onChanged(HomeTab.forYou),
             ),
@@ -42,7 +44,7 @@ class FeedTabs extends StatelessWidget {
           Expanded(
             child: _TabChip(
               icon: Icons.favorite,
-              label: 'Favoriler',
+              label: tr('Favoriler', 'Favorites'),
               isSelected: selected == HomeTab.favorites,
               onTap: () => onChanged(HomeTab.favorites),
             ),

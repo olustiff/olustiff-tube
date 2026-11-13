@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cast/youtube_cast_controller.dart';
+import '../../core/i18n/lang.dart';
 
 /// Televizyonun kendi YouTube'una gönderilirken oynatma ekranının yerini alan
 /// kumanda.
@@ -64,7 +65,7 @@ class YouTubeCastPanel extends StatelessWidget {
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      "${device.name} · YouTube'da oynatılıyor",
+                      tr("${device.name} · YouTube'da oynatılıyor", '${device.name} · Playing in YouTube'),
                       style: theme.textTheme.titleSmall,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -92,7 +93,7 @@ class YouTubeCastPanel extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    tooltip: 'Önceki',
+                    tooltip: tr('Önceki', 'Previous'),
                     icon: const Icon(Icons.skip_previous),
                     onPressed: cast.isBusy ? null : cast.previous,
                   ),
@@ -107,7 +108,7 @@ class YouTubeCastPanel extends StatelessWidget {
                         cast.isPlaying == true ? Icons.pause : Icons.play_arrow,
                       ),
                       label: Text(
-                        cast.isPlaying == true ? 'Duraklat' : 'Oynat',
+                        cast.isPlaying == true ? tr('Duraklat', 'Pause') : tr('Oynat', 'Play'),
                       ),
                       onPressed:
                           cast.isPlaying == true ? cast.pause : cast.play,
@@ -117,19 +118,19 @@ class YouTubeCastPanel extends StatelessWidget {
                     // iki düğme de her zaman ne yazdığını yapıyor.
                     FilledButton.tonalIcon(
                       icon: const Icon(Icons.play_arrow),
-                      label: const Text('Oynat'),
+                      label: Text(tr('Oynat', 'Play')),
                       onPressed: cast.isBusy ? null : cast.play,
                     ),
                     const SizedBox(width: 8),
                     FilledButton.tonalIcon(
                       icon: const Icon(Icons.pause),
-                      label: const Text('Duraklat'),
+                      label: Text(tr('Duraklat', 'Pause')),
                       onPressed: cast.isBusy ? null : cast.pause,
                     ),
                   ],
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: 'Sonraki',
+                    tooltip: tr('Sonraki', 'Next'),
                     icon: const Icon(Icons.skip_next),
                     onPressed: cast.isBusy ? null : cast.next,
                   ),
@@ -155,12 +156,12 @@ class YouTubeCastPanel extends StatelessWidget {
                 children: [
                   OutlinedButton.icon(
                     icon: const Icon(Icons.stop_circle_outlined),
-                    label: const Text('Televizyonda durdur'),
+                    label: Text(tr('Televizyonda durdur', 'Stop on TV')),
                     onPressed: cast.isBusy ? null : cast.stopRemote,
                   ),
                   TextButton.icon(
                     icon: const Icon(Icons.link_off),
-                    label: const Text('Bağlantıyı kes'),
+                    label: Text(tr('Bağlantıyı kes', 'Disconnect')),
                     onPressed: cast.isBusy ? null : cast.disconnect,
                   ),
                 ],
@@ -195,9 +196,13 @@ class _RemoteLimitsNote extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            "Televizyonun kendi YouTube'u çalıyor; kaldığı yeri telefona "
-            'bildirmiyor. Sarma işlemini televizyonun kumandasından '
-            'yapabilirsiniz.',
+            tr(
+              "Televizyonun kendi YouTube'u çalıyor; kaldığı yeri telefona "
+              'bildirmiyor. Sarma işlemini televizyonun kumandasından '
+              'yapabilirsiniz.',
+              "The TV's own YouTube app is playing and doesn't report its "
+              "position to the phone. Use the TV's remote to seek.",
+            ),
             style: theme.textTheme.bodySmall,
           ),
         ),
@@ -327,7 +332,7 @@ class _TvVolumeState extends State<_TvVolume> {
     return Row(
       children: [
         IconButton(
-          tooltip: widget.isMuted ? 'Sesi aç' : 'Sesi kapat',
+          tooltip: widget.isMuted ? tr('Sesi aç', 'Unmute') : tr('Sesi kapat', 'Mute'),
           icon: Icon(_icon),
           onPressed: widget.onToggleMute,
         ),
@@ -344,7 +349,7 @@ class _TvVolumeState extends State<_TvVolume> {
         SizedBox(
           width: 44,
           child: Text(
-            '%${(value * 100).round()}',
+            tr('%${(value * 100).round()}', '${(value * 100).round()}%'),
             textAlign: TextAlign.end,
             style: Theme.of(context).textTheme.bodySmall,
           ),

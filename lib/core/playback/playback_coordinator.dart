@@ -13,6 +13,7 @@ import 'playback_client.dart';
 import 'queue_builder.dart';
 import 'queue_order.dart';
 import 'stream_selection.dart';
+import '../i18n/lang.dart';
 
 /// "Ne çalıyor, sırada ne var" bilgisinin Dart tarafındaki yüzü.
 ///
@@ -238,7 +239,8 @@ class PlaybackCoordinator extends ChangeNotifier {
       if (!sent) {
         throw CastException(
           CastController.instance.lastError ??
-              'Video televizyona gönderilemedi.',
+              tr('Video televizyona gönderilemedi.',
+                  'Could not send the video to the TV.'),
         );
       }
 
@@ -269,7 +271,9 @@ class PlaybackCoordinator extends ChangeNotifier {
       if (_isStale(requestId)) return;
       if (!sent) {
         throw CastException(
-          youtubeCast.lastError ?? 'Video televizyona gönderilemedi.',
+          youtubeCast.lastError ??
+              tr('Video televizyona gönderilemedi.',
+                  'Could not send the video to the TV.'),
         );
       }
       _prepareQueue(seed, details, exactQueue, index, videoId);
@@ -300,9 +304,10 @@ class PlaybackCoordinator extends ChangeNotifier {
       maxHeight: _settings.maxHeight,
     );
     if (streams == null) {
-      throw const ExtractionException(
+      throw ExtractionException(
         'NO_STREAMS',
-        'Bu video için oynatılabilir kaynak bulunamadı.',
+        tr('Bu video için oynatılabilir kaynak bulunamadı.',
+            'No playable source was found for this video.'),
       );
     }
 

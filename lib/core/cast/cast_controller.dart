@@ -7,6 +7,7 @@ import '../playback/ui_channel.dart';
 import 'cast_client.dart';
 import 'cast_discovery.dart';
 import 'cast_protocol.dart';
+import '../i18n/lang.dart';
 
 /// "Şu an televizyona mı gönderiyoruz" durumunun tek sahibi.
 ///
@@ -228,8 +229,11 @@ class CastController extends ChangeNotifier {
     final delivered = await _send(CastCommand.stop);
     await disconnect();
     if (!delivered) {
-      _lastError = '${name ?? "Televizyon"} durdurulamadı; '
-          'oynatma orada sürüyor olabilir.';
+      _lastError = tr(
+          '${name ?? "Televizyon"} durdurulamadı; '
+              'oynatma orada sürüyor olabilir.',
+          'Could not stop ${name ?? "the TV"}; '
+              'playback may still be running there.');
       notifyListeners();
     }
     return delivered;
@@ -336,7 +340,8 @@ class CastController extends ChangeNotifier {
         if (++_missedPolls < _maxMissedPolls) return;
         final name = _device?.name;
         await disconnect();
-        _lastError = '${name ?? "Televizyon"} bağlantısı koptu.';
+        _lastError = tr('${name ?? "Televizyon"} bağlantısı koptu.',
+            'Lost connection to ${name ?? "the TV"}.');
         notifyListeners();
         return;
       }

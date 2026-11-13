@@ -1,6 +1,7 @@
 package com.olustiff.app.player
 
 import android.bluetooth.BluetoothA2dp
+import com.olustiff.app.Lang
 import com.olustiff.app.diag.Tanilama
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
@@ -113,7 +114,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
             // o anda kulaklık bağlayan kişi zil sesi duymak istiyor.
             if (!CallState.isFreeForMusic(context)) {
                 Log.d(TAG, "Görüşme sürüyor, otomatik çalma başlatılmadı")
-                return "Şu an bir görüşme sürüyor; müzik başlatılmadı."
+                return Lang.tr("Şu an bir görüşme sürüyor; müzik başlatılmadı.", "A call is in progress; music wasn't started.")
             }
 
             // Elde zaten bir şey varsa KUYRUĞA DOKUNMA, kaldığı yerden sürdür.
@@ -135,7 +136,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
             val videoId = prefs.getString(KEY_LAST_VIDEO, null)
             if (videoId.isNullOrBlank()) {
                 Log.d(TAG, "Çalınacak parça kayıtlı değil")
-                return "Önce bir şey çal — kayıtlı parça yok."
+                return Lang.tr("Önce bir şey çal — kayıtlı parça yok.", "Play something first — there's no saved track.")
             }
             return try {
                 context.startService(Intent(context, PlaybackService::class.java))
@@ -150,7 +151,7 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
                 null
             } catch (e: Exception) {
                 Tanilama.olay(TAG, "Otomatik çalma başarısız", e)
-                e.message ?: "Bilinmeyen hata"
+                e.message ?: Lang.tr("Bilinmeyen hata", "Unknown error")
             }
         }
 

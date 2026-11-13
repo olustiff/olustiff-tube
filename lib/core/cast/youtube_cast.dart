@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'cast_protocol.dart' show CastException;
 import 'youtube_cast_protocol.dart';
+import '../i18n/lang.dart';
 
 /// Televizyondaki YouTube'a komut gönderen Lounge oturumu.
 ///
@@ -107,21 +108,25 @@ class LoungeSessionClient {
     } catch (e) {
       debugPrint('youtube-cast: Lounge belirteci alınamadı: $e');
       // Buraya kadarki her şey yerel ağdaydı; ilk internet adımı burası.
-      throw const CastException(
+      throw CastException(tr(
         'YouTube ile bağlantı kurulamadı. Telefonun internet bağlantısını '
         'kontrol edin.',
-      );
+        "Could not connect to YouTube. Check the phone's internet "
+        'connection.',
+      ));
     }
 
     if (response.statusCode != 200) {
       throw CastException(
-        'YouTube eşleştirmeyi kabul etmedi (${response.statusCode}).',
+        tr('YouTube eşleştirmeyi kabul etmedi (${response.statusCode}).',
+            'YouTube rejected the pairing (${response.statusCode}).'),
       );
     }
 
     final token = parseLoungeToken(response.body, screenId: screenId);
     if (token == null) {
-      throw const CastException('Televizyondaki YouTube ile eşleşilemedi.');
+      throw CastException(tr('Televizyondaki YouTube ile eşleşilemedi.',
+          'Could not pair with YouTube on the TV.'));
     }
     return token;
   }
@@ -150,20 +155,26 @@ class LoungeSessionClient {
           .timeout(_timeout);
     } catch (e) {
       debugPrint('youtube-cast: Lounge oturumu açılamadı: $e');
-      throw const CastException('Televizyondaki YouTube ile bağlantı kurulamadı.');
+      throw CastException(tr('Televizyondaki YouTube ile bağlantı kurulamadı.',
+          'Could not connect to YouTube on the TV.'));
     }
 
     if (response.statusCode != 200) {
       throw CastException(
-        'Televizyondaki YouTube bağlantıyı kabul etmedi '
-        '(${response.statusCode}).',
+        tr(
+          'Televizyondaki YouTube bağlantıyı kabul etmedi '
+          '(${response.statusCode}).',
+          'YouTube on the TV rejected the connection '
+          '(${response.statusCode}).',
+        ),
       );
     }
 
     final events = parseLoungeEvents(response.bodyBytes);
     final session = extractLoungeSession(events, loungeToken: token);
     if (session == null) {
-      throw const CastException('Televizyondaki YouTube oturumu kurulamadı.');
+      throw CastException(tr('Televizyondaki YouTube oturumu kurulamadı.',
+          'Could not set up the YouTube session on the TV.'));
     }
     return session;
   }
@@ -217,9 +228,10 @@ class LoungeSessionClient {
       try {
         await _postCommand(command, parameters);
       } on _LoungeSessionLost {
-        throw const CastException(
+        throw CastException(tr(
           'Televizyonla bağlantı düştü. Videoyu yeniden gönderin.',
-        );
+          'The connection to the TV dropped. Send the video again.',
+        ));
       }
     }
   }
@@ -267,15 +279,18 @@ class LoungeSessionClient {
           .timeout(_timeout);
     } catch (e) {
       debugPrint('youtube-cast: $command gönderilemedi: $e');
-      throw const CastException('Televizyona komut gönderilemedi.');
+      throw CastException(tr('Televizyona komut gönderilemedi.',
+          'Could not send the command to the TV.'));
     }
 
     if (isLoungeSessionLost(response.statusCode, response.body)) {
       throw const _LoungeSessionLost();
     }
     if (response.statusCode != 200) {
-      throw CastException('Televizyon komutu kabul etmedi '
-          '(${response.statusCode}).');
+      throw CastException(tr(
+          'Televizyon komutu kabul etmedi '
+          '(${response.statusCode}).',
+          'The TV rejected the command (${response.statusCode}).'));
     }
 
     final events = parseLoungeEvents(response.bodyBytes);

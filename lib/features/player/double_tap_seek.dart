@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/playback/playback_client.dart';
+import '../../core/i18n/lang.dart';
 
 /// Kaç saniye sarılacağı. YouTube'un alışılmış davranışı.
 const kDoubleTapSeekSeconds = 10;
@@ -73,8 +74,8 @@ class _DoubleTapSeekState extends State<DoubleTapSeek> {
 
     setState(() {
       _hint = offset.isNegative
-          ? '${offset.inSeconds.abs()} sn geri'
-          : '${offset.inSeconds} sn ileri';
+          ? tr('${offset.inSeconds.abs()} sn geri', '${offset.inSeconds.abs()}s back')
+          : tr('${offset.inSeconds} sn ileri', '${offset.inSeconds}s forward');
     });
     _hintTimer?.cancel();
     _hintTimer = Timer(const Duration(milliseconds: 700), () {

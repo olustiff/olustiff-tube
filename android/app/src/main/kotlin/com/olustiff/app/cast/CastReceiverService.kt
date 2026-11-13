@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
+import com.olustiff.app.Lang
 
 /**
  * Yayın (cast) alıcısını AKTİVİTEDEN BAĞIMSIZ yaşatan ön plan servisi.
@@ -74,10 +75,10 @@ class CastReceiverService : Service() {
             // "servis çalışıyor" göstergesi.
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Yayın alıcısı",
+                Lang.tr("Yayın alıcısı", "Cast receiver"),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Telefondan gelen videoları karşılar"
+                description = Lang.tr("Telefondan gelen videoları karşılar", "Receives videos sent from your phone")
                 setShowBadge(false)
             }
             manager?.createNotificationChannel(channel)
@@ -91,8 +92,8 @@ class CastReceiverService : Service() {
         }
 
         return builder
-            .setContentTitle("oLusTifF yayına hazır")
-            .setContentText("Telefondan gönderilen videoları bekliyor")
+            .setContentTitle(Lang.tr("oLusTifF yayına hazır", "oLusTifF is ready to cast"))
+            .setContentText(Lang.tr("Telefondan gönderilen videoları bekliyor", "Waiting for videos sent from a phone"))
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setOngoing(true)
             .build()

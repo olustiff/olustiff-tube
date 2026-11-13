@@ -378,7 +378,7 @@ class MainActivity : FlutterActivity() {
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
             )
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Ne aramak istiyorsun?")
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, Lang.tr("Ne aramak istiyorsun?", "What do you want to search for?"))
 
     private fun isVoiceSearchAvailable(): Boolean =
         runCatching {

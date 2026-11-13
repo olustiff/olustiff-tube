@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../extraction/models.dart';
+import '../i18n/lang.dart';
 
 /// Bir videonun oynatılabilmesi için seçilen kaynak çifti.
 ///
@@ -31,7 +32,7 @@ class SelectedStreams {
 const int defaultMaxHeight = 1080;
 
 /// Kalite menüsünde ve oynatma ekranında gösterilen "Otomatik" etiketi.
-const String autoQualityLabel = 'Otomatik';
+String get autoQualityLabel => tr('Otomatik', 'Auto');
 
 /// Kalite rozetinde gösterilecek metni belirler; bilinmiyorsa null.
 ///
@@ -47,7 +48,7 @@ String? resolveQualityLabel({required bool audioOnly, String? label}) =>
 /// Sabit, çünkü iki yerden üretiliyor: kaynak seçimi sırasında ve oynatma
 /// kuyruk tarafından ilerletildiğinde. İkisinin ayrı metinler kullanması
 /// ekranda çelişkiye yol açmıştı.
-const String audioOnlyQualityLabel = 'Sadece ses';
+String get audioOnlyQualityLabel => tr('Sadece ses', 'Audio only');
 
 /// Uyarlanabilir manifestin taşındığı adres öneki.
 ///
@@ -213,7 +214,9 @@ SelectedStreams? selectStreams(
     return SelectedStreams(
       videoUrl: null,
       audioUrl: hlsUrl,
-      qualityLabel: audioOnly ? 'Canlı • sadece ses' : 'Canlı',
+      qualityLabel: audioOnly
+          ? tr('Canlı • sadece ses', 'Live • audio only')
+          : tr('Canlı', 'Live'),
       isLive: true,
     );
   }

@@ -12,6 +12,7 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
+import com.olustiff.app.Lang
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
@@ -105,11 +106,11 @@ object MusicLibrary {
         }
 
         val uri = resolver.insert(collection(), values)
-            ?: throw IllegalStateException("Müzik klasöründe kayıt açılamadı")
+            ?: throw IllegalStateException(Lang.tr("Müzik klasöründe kayıt açılamadı", "Couldn't create an entry in the Music folder"))
 
         try {
             val output = resolver.openOutputStream(uri)
-                ?: throw IllegalStateException("Müzik dosyası yazmaya açılamadı")
+                ?: throw IllegalStateException(Lang.tr("Müzik dosyası yazmaya açılamadı", "Couldn't open the music file for writing"))
             output.use(write)
             resolver.update(
                 uri,
@@ -134,12 +135,12 @@ object MusicLibrary {
         write: (OutputStream) -> Unit
     ): Entry {
         if (needsPermission(context)) {
-            throw SecurityException("Müzik klasörüne yazma izni verilmedi")
+            throw SecurityException(Lang.tr("Müzik klasörüne yazma izni verilmedi", "Permission to write to the Music folder was not granted"))
         }
 
         val dir = legacyDir()
         if (!dir.exists() && !dir.mkdirs()) {
-            throw IllegalStateException("$DISPLAY_PATH klasörü oluşturulamadı")
+            throw IllegalStateException(Lang.tr("$DISPLAY_PATH klasörü oluşturulamadı", "Couldn't create the $DISPLAY_PATH folder"))
         }
 
         val file = uniqueFile(dir, displayName)
@@ -165,7 +166,7 @@ object MusicLibrary {
         val resolver = context.contentResolver
         val uri = resolver.insert(collection(), values)
             ?: findByData(context, file.absolutePath)
-            ?: throw IllegalStateException("Şarkı müzik kitaplığına eklenemedi")
+            ?: throw IllegalStateException(Lang.tr("Şarkı müzik kitaplığına eklenemedi", "Couldn't add the song to the music library"))
 
         return Entry(uri, file.name, file.length())
     }

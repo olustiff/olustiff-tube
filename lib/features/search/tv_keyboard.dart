@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/lang.dart';
+
 /// Bir tuşun ne iş yaptığı.
 enum TvKeyKind { character, space, backspace, clear, search, voice, toggleMode }
 
@@ -118,13 +120,13 @@ class TvKeyboardLayout {
         TvKey.action(toggleKind, toggleLabel),
         // "Temizle" kaldırıldı: simgesi ne işe yaradığını anlatmıyordu ve
         // "Sil" zaten var. Boşluk genişleyip yerini kapatıyor.
-        const TvKey.action(TvKeyKind.space, 'Boşluk', span: 4),
-        const TvKey.action(TvKeyKind.backspace, 'Sil'),
+        TvKey.action(TvKeyKind.space, tr('Boşluk', 'Space'), span: 4),
+        TvKey.action(TvKeyKind.backspace, tr('Sil', 'Delete')),
         if (withVoice) ...[
-          const TvKey.action(TvKeyKind.search, 'Ara'),
-          const TvKey.action(TvKeyKind.voice, 'Mikrofon'),
+          TvKey.action(TvKeyKind.search, tr('Ara', 'Search')),
+          TvKey.action(TvKeyKind.voice, tr('Mikrofon', 'Microphone')),
         ] else
-          const TvKey.action(TvKeyKind.search, 'Ara', span: 2),
+          TvKey.action(TvKeyKind.search, tr('Ara', 'Search'), span: 2),
       ],
     ];
     return TvKeyboardLayout(rows);

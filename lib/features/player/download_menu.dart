@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/data/downloads_store.dart';
 import '../../core/playback/playback_coordinator.dart';
+import '../../core/i18n/lang.dart';
 
 /// MP3 indirme: kalite seçilir ve indirme başlar.
 ///
@@ -17,7 +18,7 @@ Future<void> showDownloadMenu(BuildContext context) async {
 
   if (details.isLive) {
     messenger.showSnackBar(
-      const SnackBar(content: Text('Canlı yayınlar indirilemez.')),
+      SnackBar(content: Text(tr('Canlı yayınlar indirilemez.', "Live streams can't be downloaded."))),
     );
     return;
   }
@@ -25,7 +26,7 @@ Future<void> showDownloadMenu(BuildContext context) async {
   final store = DownloadsStore.instance;
   if (store.hasDownload(details.videoId)) {
     messenger.showSnackBar(
-      const SnackBar(content: Text('Bu şarkı zaten indirilmiş.')),
+      SnackBar(content: Text(tr('Bu şarkı zaten indirilmiş.', 'This song is already downloaded.'))),
     );
     return;
   }
@@ -36,17 +37,17 @@ Future<void> showDownloadMenu(BuildContext context) async {
       child: ListView(
         shrinkWrap: true,
         children: [
-          const ListTile(
-            title: Text('MP3 indir'),
-            subtitle: Text('Yüksek kalite daha büyük dosya demektir.'),
+          ListTile(
+            title: Text(tr('MP3 indir', 'Download MP3')),
+            subtitle: Text(tr('Yüksek kalite daha büyük dosya demektir.', 'Higher quality means a larger file.')),
           ),
           for (final option in DownloadsStore.bitrateOptions)
             ListTile(
               leading: const Icon(Icons.audiotrack),
               title: Text('$option kbps'),
               subtitle: option == 320
-                  ? const Text('En yüksek kalite')
-                  : (option == 128 ? const Text('En küçük dosya') : null),
+                  ? Text(tr('En yüksek kalite', 'Highest quality'))
+                  : (option == 128 ? Text(tr('En küçük dosya', 'Smallest file')) : null),
               onTap: () => Navigator.of(context).pop(option),
             ),
         ],
@@ -57,7 +58,7 @@ Future<void> showDownloadMenu(BuildContext context) async {
   if (bitrate == null) return;
 
   messenger.showSnackBar(
-    const SnackBar(content: Text('MP3 hazırlanıyor…')),
+    SnackBar(content: Text(tr('MP3 hazırlanıyor…', 'Preparing MP3…'))),
   );
 
   try {
@@ -67,9 +68,9 @@ Future<void> showDownloadMenu(BuildContext context) async {
       title: details.title,
     );
     messenger.showSnackBar(
-      SnackBar(content: Text('İndirildi • ${item.sizeLabel}')),
+      SnackBar(content: Text(tr('İndirildi • ${item.sizeLabel}', 'Downloaded • ${item.sizeLabel}'))),
     );
   } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text('İndirilemedi: $e')));
+    messenger.showSnackBar(SnackBar(content: Text(tr('İndirilemedi: $e', 'Download failed: $e'))));
   }
 }

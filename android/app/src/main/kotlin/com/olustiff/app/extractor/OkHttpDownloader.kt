@@ -1,5 +1,6 @@
 package com.olustiff.app.extractor
 
+import com.olustiff.app.Lang
 import okhttp3.OkHttpClient
 import okhttp3.Request as OkRequest
 import okhttp3.RequestBody
@@ -70,7 +71,7 @@ class OkHttpDownloader private constructor(builder: OkHttpClient.Builder) : Down
 
         if (response.code == 429) {
             response.close()
-            throw ReCaptchaException("reCaptcha çözülmesi gerekiyor", url)
+            throw ReCaptchaException(Lang.tr("reCaptcha çözülmesi gerekiyor", "reCAPTCHA verification required"), url)
         }
 
         val body = response.body

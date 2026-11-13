@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
+import '../../core/i18n/lang.dart';
 import '../../core/playback/playback_coordinator.dart';
 import '../player/mini_player.dart';
 import '../player/player_route.dart';
@@ -118,7 +119,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final total = _streamCount ?? widget.playlist.streamCount;
     final subtitle = [
       ?_uploaderName,
-      if (total != null) '$total video',
+      if (total != null)
+        tr('$total video', total == 1 ? '1 video' : '$total videos'),
     ].join(' • ');
 
     return Scaffold(
@@ -151,7 +153,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               loading: _loading,
               hasMore: _hasMore,
               error: _error,
-              emptyMessage: 'Bu listede video yok.',
+              emptyMessage: tr('Bu listede video yok.',
+                  'This playlist has no videos.'),
               onRetry: _load,
               onLoadMore: _loadMore,
               onTap: _open,
@@ -241,7 +244,10 @@ class PlaylistTile extends StatelessWidget {
       subtitle: Text(
         [
           ?playlist.uploaderName,
-          if (count != null) '$count video' else 'Çalma listesi',
+          if (count != null)
+            tr('$count video', count == 1 ? '1 video' : '$count videos')
+          else
+            tr('Çalma listesi', 'Playlist'),
         ].join(' • '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

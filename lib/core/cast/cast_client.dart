@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'cast_protocol.dart';
+import '../i18n/lang.dart';
 
 /// Televizyondaki alıcıya komut gönderen istemci.
 ///
@@ -92,10 +93,12 @@ class CastClient {
     } catch (e) {
       // Ağ hatasının teknik metni kullanıcıya bir şey anlatmıyor; sebebi
       // anlatan tek bir cümleye çeviriyoruz.
-      throw CastException(
+      throw CastException(tr(
         '${device.name} cihazına ulaşılamadı. '
         'Televizyon açık ve aynı Wi-Fi ağında olmalı.',
-      );
+        'Could not reach ${device.name}. '
+        'The TV must be on and on the same Wi-Fi network.',
+      ));
     }
     if (response.statusCode != 200) {
       throw CastException(_errorMessage(response));
@@ -112,9 +115,11 @@ class CastClient {
   /// anlatmıyordu.
   static String _errorMessage(http.Response response) {
     if (_errorCode(response) == 'app_not_running') {
-      return 'Televizyonda çalan bir şey yok. Önce bir video gönder.';
+      return tr('Televizyonda çalan bir şey yok. Önce bir video gönder.',
+          'Nothing is playing on the TV. Send a video first.');
     }
-    return 'Televizyon isteği kabul etmedi (${response.statusCode}).';
+    return tr('Televizyon isteği kabul etmedi (${response.statusCode}).',
+        'The TV rejected the request (${response.statusCode}).');
   }
 
   /// Cevabın gövdesindeki hata kodu; okunamıyorsa null.

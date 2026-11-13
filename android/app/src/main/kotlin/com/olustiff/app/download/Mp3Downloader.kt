@@ -5,6 +5,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import com.naman14.androidlame.AndroidLame
 import com.naman14.androidlame.LameBuilder
+import com.olustiff.app.Lang
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.BufferedOutputStream
@@ -90,9 +91,9 @@ object Mp3Downloader {
                     // Uzunluk bilinmiyorken dosya sonunu aşan parça: bitti.
                     if (response.code == 416 && total < 0) return
                     if (!response.isSuccessful) {
-                        throw IllegalStateException("Ses indirilemedi (HTTP ${response.code})")
+                        throw IllegalStateException(Lang.tr("Ses indirilemedi (HTTP ${response.code})", "Couldn't download the audio (HTTP ${response.code})"))
                     }
-                    val body = response.body ?: throw IllegalStateException("Boş yanıt")
+                    val body = response.body ?: throw IllegalStateException(Lang.tr("Boş yanıt", "Empty response"))
                     body.byteStream().use { input ->
                         while (true) {
                             val read = input.read(buffer)
@@ -130,7 +131,7 @@ object Mp3Downloader {
                 extractor.getTrackFormat(index)
                     .getString(MediaFormat.KEY_MIME)
                     ?.startsWith("audio/") == true
-            } ?: throw IllegalStateException("Ses parçası bulunamadı")
+            } ?: throw IllegalStateException(Lang.tr("Ses parçası bulunamadı", "Audio track not found"))
 
             extractor.selectTrack(trackIndex)
             val inputFormat = extractor.getTrackFormat(trackIndex)
