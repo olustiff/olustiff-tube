@@ -30,6 +30,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        com.olustiff.app.Lang.init(this)
 
         val sessionActivityIntent = PendingIntent.getActivity(
             this,

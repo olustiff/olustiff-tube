@@ -74,6 +74,7 @@ class MainActivity : FlutterActivity() {
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Lang.init(this)
         Tanilama.init(this)
         if (!isTelevision()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -161,6 +162,12 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "enterPictureInPicture" -> result.success(enterPip())
+
+                // Arayüz dili değişti: bildirimler de aynı dilde olsun.
+                "setLanguage" -> {
+                    Lang.set(call.argument<String>("code") ?: "tr")
+                    result.success(null)
+                }
 
                 // Ayarlardaki "Tanılama kaydını paylaş": paylaşılacak dosyanın yolu.
                 "diagnosticsFile" -> result.success(Tanilama.exportFile(this)?.absolutePath)

@@ -8,6 +8,7 @@ import 'core/data/library_store.dart';
 import 'core/ui/tv_mode.dart';
 import 'core/update/update_service.dart';
 import 'core/data/settings_store.dart';
+import 'core/i18n/lang.dart';
 import 'core/playback/playback_client.dart';
 import 'core/playback/playback_coordinator.dart';
 import 'features/home/home_screen.dart';
@@ -18,6 +19,7 @@ Future<void> main() async {
   // Geçmiş ve tercihler arayüz çizilmeden önce hazır olsun.
   await LibraryStore.instance.load();
   await SettingsStore.instance.load();
+  await Lang.instance.load();
   await DownloadsStore.instance.load();
   await UpdateService.instance.load();
   // Televizyonda arayüz kumandaya göre uyarlanıyor.
@@ -154,7 +156,18 @@ class AkisApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dil değişince bütün ağaç baştan kuruluyor: metinler `tr()` ile çizim
+    // anında seçildiği için yeniden çizim yetiyor, ama `const` widget'lar
+    // yeniden çizilmez — anahtar değişince hepsi yeniden kuruluyor.
+    return ListenableBuilder(
+      listenable: Lang.instance,
+      builder: (context, _) => _buildApp(),
+    );
+  }
+
+  Widget _buildApp() {
     return MaterialApp(
+      key: ValueKey(Lang.instance.code),
       title: 'oLusTifF',
       navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,

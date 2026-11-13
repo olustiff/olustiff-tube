@@ -41,6 +41,7 @@ class CastReceiverService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        com.olustiff.app.Lang.init(this)
         // Bildirim ÖNCE: Android, `startForegroundService` ile başlatılan bir
         // servis 5 saniye içinde `startForeground` çağırmazsa süreci
         // ANR ile öldürüyor.

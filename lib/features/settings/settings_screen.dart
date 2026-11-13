@@ -8,6 +8,7 @@ import 'bluetooth_setting.dart';
 import 'cast_receiver_setting.dart';
 import 'diagnostics_tile.dart';
 import 'feedback_tile.dart';
+import 'language_tile.dart';
 import 'update_section.dart';
 
 /// Oynatma tercihleri: kalite tavanı, hız ve otomatik oynatma.
@@ -122,6 +123,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               const Divider(),
               const _SectionHeader('Uygulama'),
+              const LanguageTile(),
               const UpdateSection(),
               const FeedbackTile(),
               const DiagnosticsTile(),

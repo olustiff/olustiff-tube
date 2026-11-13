@@ -40,6 +40,11 @@ class UiChannel {
   Future<void> setCastVolumeKeys(bool enabled) =>
       _channel.invokeMethod<void>('setCastVolumeKeys', {'enabled': enabled});
 
+  /// Native tarafa arayüz dilini bildirir ("tr" / "en"): bildirimler ve
+  /// hata iletileri de o dilde üretilsin.
+  Future<void> setLanguage(String code) =>
+      _channel.invokeMethod<void>('setLanguage', {'code': code});
+
   /// Oynatma tanılama günlüğünü paylaşılabilir tek dosyada toplar; yolunu
   /// döndürür. Henüz kayıt yoksa null.
   Future<String?> diagnosticsFile() =>
