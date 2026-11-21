@@ -146,6 +146,9 @@ class BluetoothAutoPlayReceiver : BroadcastReceiver() {
                     buildQueue(videoId, prefs)
                 }
                 PlaybackQueue.set(queue, startIndex = -1)
+                // Süreç yeni başladıysa mod varsayılan "video"da; kullanıcının
+                // seçtiği modu yükle.
+                PlayerHolder.restoreSavedMode(context)
                 PlayerHolder.playNext(context)
                 Log.d(TAG, "Otomatik çalma başlatıldı: $videoId")
                 null

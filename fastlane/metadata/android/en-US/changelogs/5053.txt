@@ -1,0 +1,1 @@
+- When your car or headphones connect, playback now starts in the mode you last chose: auto-play over Bluetooth used to switch to video mode on its own when the app had been closed.

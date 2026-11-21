@@ -1,0 +1,1 @@
+- Arabada kontak açılınca müzik artık son seçtiğin modda başlıyor: uygulama kapalıyken Bluetooth ile başlayan çalma kendiliğinden video moduna geçiyordu.

@@ -874,6 +874,26 @@ object PlayerHolder {
     }
 
     /**
+     * Uygulama arayüzü açılmadan (Bluetooth otomatik çalma) başlayan
+     * oynatmada kullanıcının son seçtiği modu yükler.
+     *
+     * Bu olmadan süreç sıfırdan başladığında [audioOnlyMode] varsayılan
+     * `false` kalıyordu: arabada kontak açılınca sesli dinlenen müzik
+     * kendiliğinden VİDEO modunda açılıyordu (20 Kas). Kural Dart'taki
+     * açılış moduyla aynı: elle seçilen son mod, hiç seçilmediyse
+     * "müziği sesli aç" tercihi.
+     */
+    fun restoreSavedMode(context: Context) {
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        audioOnlyMode = if (prefs.contains("flutter.last_audio_only")) {
+            prefs.getBoolean("flutter.last_audio_only", false)
+        } else {
+            prefs.getBoolean("flutter.music_as_audio", true)
+        }
+        Tanilama.olay(TAG, "Kayıtlı mod yüklendi: ${if (audioOnlyMode) "ses" else "video"}")
+    }
+
+    /**
      * Kullanıcı modu elle değiştirdiğinde çağrılır (ör. "sadece ses"e geç).
      * Oynatma konumu korunur — kullanıcı kaldığı yerden devam eder.
      */
