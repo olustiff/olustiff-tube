@@ -1,0 +1,1 @@
+- Android 9–12 olan cihazlarda (çoğu TV kutusu) arama yapınca, video açınca ve telefondan TV'ye yansıtınca uygulamanın kapanması düzeltildi.

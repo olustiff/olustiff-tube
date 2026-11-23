@@ -11,6 +11,13 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Eski Android'lerde eksik Java metotlarını uygulamanın içine koyar.
+        //
+        // Çözümleyici (NewPipeExtractor) `URLEncoder.encode(String, Charset)`
+        // gibi Android 13'te gelen metotları kullanıyor. Bu olmadan Android
+        // 9'daki bir TCL televizyonda video açınca ve aramada uygulama
+        // çöküyordu (NoSuchMethodError, 23 Kas 2026). NewPipe de aynısını yapıyor.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -67,6 +74,8 @@ dependencies {
     // YouTube reklamsız stream çözümleme (NewPipe'ın kullandığı kütüphanenin aynısı)
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // `_nio` sürümü: URLEncoder/URLDecoder'ın Charset alan hâllerini de kapsıyor.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     // Çözümleyicinin canlı testi (bkz. LiveExtractorTest).
     testImplementation("junit:junit:4.13.2")
