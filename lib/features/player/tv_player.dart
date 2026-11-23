@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:olustiff/core/ui/thumb_image.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/data/library_store.dart';
@@ -1063,7 +1064,7 @@ class _QueueCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     ColoredBox(color: Colors.white10),
-                    if (thumb != null) Image.network(thumb, fit: BoxFit.cover),
+                    if (thumb != null) ThumbImage(thumb),
                     if (playing)
                       const ColoredBox(
                         color: Colors.black54,

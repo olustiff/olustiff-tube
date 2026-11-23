@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:olustiff/core/ui/thumb_image.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/data/library_store.dart';
@@ -785,7 +786,7 @@ class _ResultRow extends StatelessWidget {
             aspectRatio: 16 / 9,
             child: video.thumbnailUrl == null
                 ? Container(color: scheme.surfaceContainerHighest)
-                : Image.network(video.thumbnailUrl!, fit: BoxFit.cover),
+                : ThumbImage(video.thumbnailUrl!),
           ),
         ),
         const SizedBox(width: 16),

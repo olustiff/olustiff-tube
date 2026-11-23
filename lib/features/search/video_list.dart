@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:olustiff/core/ui/thumb_image.dart';
 
 import '../../core/extraction/models.dart';
 import '../../core/i18n/lang.dart';
@@ -265,7 +266,7 @@ class _ThumbnailState extends State<_Thumbnail> {
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
+    return ThumbImage(
       widget.url,
       key: ValueKey(_attempt),
       fit: BoxFit.cover,

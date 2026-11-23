@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:olustiff/core/ui/thumb_image.dart';
 
 import '../../core/playback/playback_coordinator.dart';
 import '../../core/cast/cast_controller.dart';
@@ -38,8 +39,7 @@ class MiniPlayer extends StatelessWidget {
                     width: 64,
                     child: details.thumbnailUrl == null
                         ? const Icon(Icons.music_note)
-                        : Image.network(details.thumbnailUrl!,
-                            fit: BoxFit.cover),
+                        : ThumbImage(details.thumbnailUrl!),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

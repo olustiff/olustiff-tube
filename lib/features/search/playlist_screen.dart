@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:olustiff/core/ui/thumb_image.dart';
 
 import '../../core/extraction/extraction_client.dart';
 import '../../core/extraction/models.dart';
@@ -194,7 +195,7 @@ class PlaylistTile extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (playlist.thumbnailUrl != null)
-                Image.network(
+                ThumbImage(
                   playlist.thumbnailUrl!,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const ColoredBox(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:olustiff/core/ui/thumb_image.dart';
 
 import 'core/cast/cast_receiver.dart';
 import 'core/data/downloads_store.dart';
@@ -24,6 +25,9 @@ Future<void> main() async {
   await UpdateService.instance.load();
   // Televizyonda arayüz kumandaya göre uyarlanıyor.
   await TvMode.detect();
+  // Televizyon kutularının çoğunda bellek az (1-2 GB): resim önbelleği
+  // küçük tutuluyor.
+  limitImageCache(lowMemory: TvMode.isTv.value);
 
   // Bluetooth bağlanınca ne çalacağını hazırla. Hiç bir şey çalınmadıysa
   // favorilerden (yoksa geçmişten) ilk parça yedek olarak ayarlanır;
